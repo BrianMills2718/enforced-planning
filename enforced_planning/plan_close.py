@@ -153,6 +153,15 @@ def _default_closer(claim: coordination_claims.ClaimRecord) -> dict[str, Any]:
     )
 
 
+def _contains_path(root: Path, candidate: Path) -> bool:
+    """Return whether ``candidate`` is equal to or beneath ``root``."""
+    try:
+        candidate.expanduser().resolve().relative_to(root.expanduser().resolve())
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
+
+
 def close_plan_lanes(
     *,
     qualified_plan_id: str,
@@ -161,8 +170,14 @@ def close_plan_lanes(
     preflight: Preflight = _default_preflight,
     closer: Closer = _default_closer,
     dry_run: bool = False,
+    protected_path: Path | None = None,
 ) -> PlanCloseResultV1:
-    """Preflight every live owned lane, then close all or mutate none."""
+    """Preflight every live owned lane, then close all or mutate none.
+
+    A live completion command may itself be running from a lane this function
+    would remove. ``protected_path`` makes that self-removal fail before any
+    closer runs; callers can then rerun from the canonical control checkout.
+    """
     project, plan_number = _split_qualified_plan_id(qualified_plan_id)
     candidates = claims if claims is not None else coordination_claims._load_claims()
     matched = sorted(
@@ -192,6 +207,17 @@ def close_plan_lanes(
             failures.append(
                 f"{claim.scope}: lifecycle status '{claim.status}' is not terminal or closeable"
             )
+
+    if protected_path is not None and not dry_run:
+        for claim in owned:
+            if claim.worktree_path and _contains_path(
+                Path(claim.worktree_path), protected_path
+            ):
+                failures.append(
+                    f"{claim.scope}: refusing to close the worktree containing protected "
+                    f"plan metadata path {protected_path}; rerun completion from the "
+                    "canonical repository root after integration"
+                )
 
     preflight_results: dict[str, dict[str, Any]] = {}
     for claim in owned:

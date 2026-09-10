@@ -806,6 +806,7 @@ def complete_plan(
         qualified_plan_id=qualified_plan_id,
         submitted_revision=commit,
         dry_run=dry_run,
+        protected_path=plan_file,
     )
     if not close_result.success:
         print(f"\nFAILED: Plan #{plan_number} has unresolved owned lanes.")

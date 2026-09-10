@@ -591,14 +591,20 @@ def test_complete_plan_does_not_transition_status_when_owned_lane_is_unresolved(
         "get_git_info",
         lambda project_root: ("abc123", "main"),
     )
-    monkeypatch.setattr(
-        complete_plan_module.plan_close,
-        "close_plan_lanes",
-        lambda **kwargs: type(
+    close_call: dict[str, object] = {}
+
+    def blocked_close(**kwargs):
+        close_call.update(kwargs)
+        return type(
             "CloseResult",
             (),
             {"success": False, "failures": ["dirty-lane: Worktree is dirty"]},
-        )(),
+        )()
+
+    monkeypatch.setattr(
+        complete_plan_module.plan_close,
+        "close_plan_lanes",
+        blocked_close,
     )
 
     result = complete_plan_module.complete_plan(
@@ -609,5 +615,6 @@ def test_complete_plan_does_not_transition_status_when_owned_lane_is_unresolved(
     )
 
     assert result is False
+    assert close_call["protected_path"] == plan_file
     assert plan_file.read_text(encoding="utf-8") == original
     assert "In Progress" in (plans_dir / "CLAUDE.md").read_text(encoding="utf-8")

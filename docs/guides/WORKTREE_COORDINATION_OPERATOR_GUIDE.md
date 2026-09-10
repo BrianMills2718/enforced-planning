@@ -328,6 +328,14 @@ mismatched process identity
 fails before the claim or tracker changes; never replace this contract with a
 process-name-wide kill.
 
+If validation fails before fencing begins, the reserved successor may run
+`session_resume.py --abort-unfenced-takeover-reservation` with the same lane
+identity. It refuses a journalized reservation, so a fence that ran (or a
+partially persisted custody transfer) remains replay-only. The abort leaves the
+claim `session_ended`, records the aborted reservation on that claim, and lets
+the successor retry with a corrected process identity or use terminal
+reconciliation; it never transfers custody or signals a process.
+
 After fencing, the reservation gains an exact-byte
 `claim_session_transfer_journal`. The journal binds the predecessor tracker,
 successor tracker, successor claim, claim epoch, and typed process-fence receipt

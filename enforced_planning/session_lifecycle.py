@@ -5059,6 +5059,43 @@ def resume_session(
     }
 
 
+def abort_unfenced_session_takeover(
+    *,
+    agent: str,
+    project: str,
+    scope: str,
+    worktree_path: str,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Recover a successor-owned reservation left before process fencing."""
+
+    _claim, _payload, claim_file, _claim_bytes = _claim_snapshot_any_status(
+        agent=agent, project=project, scope=scope
+    )
+    resolved_session_id = coordination_claims.resolve_session_id(agent, session_id)
+    if not resolved_session_id:
+        raise ValueError("Unable to resolve a session ID for takeover-reservation recovery.")
+    coordination_claims.validate_native_session_binding(
+        agent, resolved_session_id, require_native_marker=True
+    )
+    result = coordination_claims.abort_unfenced_session_takeover_reservation(
+        claim_file=claim_file,
+        agent=agent,
+        project=project,
+        scope=scope,
+        successor_session_id=resolved_session_id,
+        worktree_path=worktree_path,
+    )
+    return {
+        "action": "unfenced_takeover_aborted",
+        "session_id": resolved_session_id,
+        **result,
+        "coordination_mailbox": _poll_mailbox_after_committed_transition(
+            agent=agent, project=project, session_id=resolved_session_id
+        ),
+    }
+
+
 def handoff_session(
     *,
     agent: str,

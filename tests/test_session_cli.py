@@ -5992,6 +5992,75 @@ def test_takeover_reservation_blocks_predecessor_heartbeat_and_retry_reuses_fenc
     assert coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD not in transferred_claim
 
 
+def test_successor_can_abort_only_an_unfenced_session_ended_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="unfenced-reservation-recovery",
+        intent="recover a reservation left before process fencing",
+        repo_root=str(tmp_path),
+        worktree_path=str(worktree),
+        branch="unfenced-reservation-recovery",
+        broader_goal="Unfenced Reservation Recovery",
+        current_phase="fixture setup",
+        plan_ref="UNPLANNED",
+        session_id="codex:old-runtime",
+        tracker_dir=trackers_dir,
+    )
+    session_lifecycle.end_runtime_session(
+        agent="codex", session_id="codex:old-runtime", claims_dir=claims_dir
+    )
+    claim_path = claims_dir / "codex_enforced-planning_unfenced-reservation-recovery.yaml"
+    before_reservation = claim_path.read_bytes()
+    coordination_claims.reserve_session_takeover(
+        claim_file=claim_path,
+        agent="codex",
+        project="enforced-planning",
+        scope="unfenced-reservation-recovery",
+        predecessor_session_id="codex:old-runtime",
+        successor_session_id="codex:new-runtime",
+        worktree_path=str(worktree),
+        predecessor_pid=4242,
+        predecessor_process_start_ticks=123456,
+        reserved_at="2026-09-10T00:00:00+00:00",
+        pre_reservation_claim_bytes=before_reservation,
+    )
+
+    with _native_actor("codex", "codex:new-runtime"):
+        aborted = session_lifecycle.abort_unfenced_session_takeover(
+            agent="codex",
+            project="enforced-planning",
+            scope="unfenced-reservation-recovery",
+            worktree_path=str(worktree),
+            session_id="codex:new-runtime",
+        )
+
+    assert aborted["action"] == "unfenced_takeover_aborted"
+    recovered = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD not in recovered
+    assert recovered["last_unfenced_takeover_abort"]["reservation"]["pid"] == 4242
+    assert recovered["status"] == coordination_claims.SESSION_ENDED_STATUS
+
+    with _native_actor("codex", "codex:other-runtime"), pytest.raises(
+        ValueError, match="no active takeover reservation"
+    ):
+        session_lifecycle.abort_unfenced_session_takeover(
+            agent="codex",
+            project="enforced-planning",
+            scope="unfenced-reservation-recovery",
+            worktree_path=str(worktree),
+            session_id="codex:other-runtime",
+        )
+
+
 @pytest.mark.parametrize("mutation", ["heartbeat", "progress"])
 def test_takeover_reservation_rejects_claim_epoch_race_before_fencing(
     tmp_path: Path,

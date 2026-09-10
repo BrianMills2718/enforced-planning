@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "recorded_at": "2026-09-01T18:30:00Z",
+  "control": "isolated_execution_cursor_claim_ownership",
+  "runtime_path": ".company-planning/active-execution.json",
+  "eligibility_contract": {
+    "exact_path_only": true,
+    "same_canonical_repository": true,
+    "distinct_sanctioned_lane_paths": true,
+    "git_ignored": true,
+    "git_untracked": true,
+    "parent_claims_remain_conflicting": true
+  },
+  "focused_check": {
+    "command": "PYTHONPATH=. pytest -q tests/test_worktree_local_runtime_paths.py tests/test_append_only_write_paths.py tests/test_check_coordination_claims.py",
+    "result": "183 passed"
+  },
+  "lint_check": {
+    "command": "PYTHONPATH=. python -m ruff check enforced_planning/worktree_local_runtime_paths.py tests/test_worktree_local_runtime_paths.py",
+    "result": "All checks passed"
+  },
+  "integration_state": {
+    "status": "implemented",
+    "owner_branch": "label-conflict-sides",
+    "owner_revision": "1bc8843b9d6a89db2d869c115374962656150367",
+    "preservation": "The semantic branch incorporates the owner's message-label change, but keeps raw overlap paths unchanged for machine consumers and applies yours/theirs labels only at human rendering boundaries.",
+    "concurrent_claim_regression": "Two distinct standard linked-worktree paths with different native sessions and the exact ignored, untracked execution cursor produce zero hard conflicts; the same lanes still hard-conflict on README.md.",
+    "production_seam": "enforced_planning.coordination_claims._compute_overlapping_write_paths"
+  }
+}

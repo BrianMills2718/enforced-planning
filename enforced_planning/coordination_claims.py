@@ -51,6 +51,7 @@ from enforced_planning.claim_mutation_receipts import (
     CompletedClaimArchiveError,
     MutationAuditError,
 )
+from enforced_planning.worktree_local_runtime_paths import is_isolated_runtime_overlap
 
 _LOADED_WRITER_IDENTITY = claim_mutation_receipts.writer_identity(Path(__file__))
 
@@ -2283,10 +2284,26 @@ def _compute_overlapping_write_paths(candidate: ClaimRecord, other: ClaimRecord)
                 continue
             if _is_append_only_path(left) and _is_append_only_path(right):
                 continue
-            overlaps.append(
-                f"yours={_normalize_repo_path(left)} <-> theirs={_normalize_repo_path(right)}"
-            )
+            if is_isolated_runtime_overlap(
+                left_path=left,
+                right_path=right,
+                left_worktree_path=candidate.worktree_path,
+                right_worktree_path=other.worktree_path,
+                left_repo_root=candidate.repo_root,
+                right_repo_root=other.repo_root,
+            ):
+                continue
+            overlaps.append(f"{_normalize_repo_path(left)} <-> {_normalize_repo_path(right)}")
     return sorted(set(overlaps))
+
+
+def _render_overlap_sides(overlap: str) -> str:
+    """Label candidate and owner paths without changing machine path data."""
+
+    left, separator, right = overlap.partition(" <-> ")
+    if not separator:
+        return overlap
+    return f"yours={left} <-> theirs={right}"
 
 
 def _overlap_relations(candidate: ClaimRecord, other: ClaimRecord) -> tuple[str, ...]:
@@ -2298,6 +2315,15 @@ def _overlap_relations(candidate: ClaimRecord, other: ClaimRecord) -> tuple[str,
             if not _paths_overlap(left_raw, right_raw):
                 continue
             if _is_append_only_path(left_raw) and _is_append_only_path(right_raw):
+                continue
+            if is_isolated_runtime_overlap(
+                left_path=left_raw,
+                right_path=right_raw,
+                left_worktree_path=candidate.worktree_path,
+                right_worktree_path=other.worktree_path,
+                left_repo_root=candidate.repo_root,
+                right_repo_root=other.repo_root,
+            ):
                 continue
             left = _normalize_repo_path(left_raw)
             right = _normalize_repo_path(right_raw)
@@ -3012,7 +3038,8 @@ def _refresh_exact_owner_claim(
         check_result = evaluate_claim(candidate, active_claims=active_claims)
         if check_result.hard_conflicts:
             formatted = "; ".join(
-                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)})"
+                f"{item.other_agent} ({item.other_scope}: "
+                f"{', '.join(_render_overlap_sides(path) for path in item.overlapping_write_paths)})"
                 for item in check_result.hard_conflicts
             )
             return False, f"CONFLICT: active write claim overlap in '{project}' — {formatted}. Check which side is YOURS before attributing cause: the path prefixed 'yours=' is the one this lane declared, not the other agent's. Narrowing your own write path is often the fix, and an append-only store never contends with itself."
@@ -3324,7 +3351,8 @@ def create_claim(
         check_result = evaluate_claim(candidate, active_claims=active_claims)
         if check_result.hard_conflicts:
             formatted = "; ".join(
-                f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)}"
+                f"{item.other_agent} ({item.other_scope}: "
+                f"{', '.join(_render_overlap_sides(path) for path in item.overlapping_write_paths)}"
                 f"; owner {describe_session_activity(item.other_session_last_active_at)})"
                 for item in check_result.hard_conflicts
             )
@@ -4759,7 +4787,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("Candidate interactions:")
                 for item in result.interactions:
-                    overlaps = ", ".join(item.overlapping_write_paths) or "none"
+                    overlaps = ", ".join(
+                        _render_overlap_sides(path) for path in item.overlapping_write_paths
+                    ) or "none"
                     print(
                         f"  - {item.severity}: {item.other_agent} {item.other_scope} "
                         f"({item.reason}; overlap={overlaps}; "

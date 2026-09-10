@@ -1431,7 +1431,11 @@ def _persist_claim_session_transfer_receipt(
         raise ValueError("Claim custody transfer requires distinct predecessor and successor sessions")
     if not claim.repo_root:
         raise ValueError("Claim custody transfer requires the canonical repository root")
-    if claim.agent == "codex" and process_fence is None:
+    if (
+        claim.agent == "codex"
+        and claim.status != coordination_claims.SESSION_ENDED_STATUS
+        and process_fence is None
+    ):
         raise ValueError("Codex custody transfer requires exact predecessor process-fence evidence")
     process_fence_binding: dict[str, object] | None = None
     if process_fence is not None:
@@ -4852,7 +4856,12 @@ def resume_session(
     if not same_runtime:
         if tracker_path is None or not tracker_path.is_file():
             raise ValueError("cross-session resume requires one existing exact session tracker")
-        if agent == "codex":
+        # A recorded session end is the terminal custody signal.  Its process
+        # may still be an idle Codex UI rooted at the workspace rather than the
+        # linked worktree, so fencing it would reject a lane that the registry
+        # has already declared safe for successor custody.  Live/handoff
+        # transfers still require the exact process fence below.
+        if agent == "codex" and claim.status != coordination_claims.SESSION_ENDED_STATUS:
             if predecessor_process_pid is None:
                 raise ValueError(
                     "Cross-session Codex resume requires --predecessor-process-pid so the exact "
@@ -4894,7 +4903,7 @@ def resume_session(
                 raise ValueError("selected outcome transfer resolved a different tracker path")
         elif not isinstance(existing_transfer_journal, dict):
             raise TypeError("session takeover reservation has malformed transfer journal state")
-        if agent == "codex":
+        if agent == "codex" and claim.status != coordination_claims.SESSION_ENDED_STATUS:
             assert takeover_reservation is not None
             assert predecessor_process_pid is not None
             assert predecessor_process_start_ticks is not None

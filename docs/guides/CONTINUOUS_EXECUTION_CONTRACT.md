@@ -8,16 +8,21 @@ rules here are authoritative. Local CLAUDE.md sections may summarize; this doc
 defines the precise terms.
 
 This contract is an instance of **loop engineering**: designing a repeatable
-agent workflow with explicit stopping conditions, where the agent continues
-while a safe, authorized, outcome-advancing action remains.
+agent workflow with explicit stopping conditions. Continue while authorized,
+dependency-ready, outcome-advancing work remains and the next action is not
+irreversibly dangerous.
+
+Here, “not irreversibly dangerous” is a boundary condition, not a general
+quality claim: the next action must not cross an irreversible shared-state,
+external-action or publication, spend, authority/permission, or human-decision
+boundary. Circuit breakers independently limit repeated failure and thrashing.
 
 ---
 
 ## When This Contract Applies
 
-This contract applies whenever the operator says "never stop," "run
-continuously," "run all night," or any equivalent instruction authorizing
-multi-phase autonomous execution without human checkpoints between phases.
+This contract applies whenever the operator authorizes continuous, overnight,
+or multi-phase autonomous execution without human checkpoints between phases.
 
 ---
 
@@ -47,11 +52,11 @@ commercial intent does not by itself select `continuous-release`.
 ## Core Rule
 
 Execute the authorized outcome path without pausing merely because one phase,
-test run, or commit completed. Continue to the next bounded action only while it
-materially advances the stable initiative example, removes a reproduced direct
-blocker, or completes a control required by the selected profile. A locally new
-variation of an already-proven mechanism is not automatically strategic
-progress.
+test run, or commit completed. Continue to the next bounded action only while
+it is authorized, dependency-ready, not irreversibly dangerous, and materially
+advances the stable initiative example, removes a reproduced direct blocker, or
+completes a control required by the selected profile. A locally new variation
+of an already-proven mechanism is not automatically strategic progress.
 
 Process artifacts, gate repair, cleanup, reconciliation, and hardening do not
 count as product progress unless current evidence shows they directly block the
@@ -68,16 +73,18 @@ canonical behavior or selected terminal claim.
    active authority and choose the safer alternative. Do not stop to ask.
 
 2. **A genuine architectural decision not pre-made in the active authority
-   that cannot be safely defaulted.** If the plan pre-makes the decision (even
-   implicitly), proceed. If the plan does not, and there is no safe default,
-   document the gap and move to the next unblocked slice.
+   that cannot be defaulted without crossing an irreversibly dangerous
+   boundary.** If the plan pre-makes the decision (even implicitly), proceed.
+   If the plan does not, and no default avoids that boundary, document the gap
+   and move to the next unblocked slice.
    Do not stop to ask unless every remaining slice is blocked by the same gap.
 
-3. **No safe, authorized, evidence-supported, goal-advancing next action remains
-   after bounded investigation.** Do not invent a new phase merely to remain
-   active, retain a write claim while waiting, or repeatedly poll unchanged
-   external state. Persist the current state, evidence, owner or blocker, and
-   exact resume event; release or narrow claims; then return control.
+3. **No authorized, dependency-ready, evidence-supported,
+   goal-advancing next action remains that is not irreversibly dangerous after
+   bounded investigation.** Do not invent a new phase merely to remain active,
+   retain a write claim while waiting, or repeatedly poll unchanged external
+   state. Persist the current state, evidence, owner or blocker, and exact
+   resume event; release or narrow claims; then return control.
 
 Everything else — uncertainty, tool failure, partial results, blocked
 individual task, "should I continue?" — is NOT a stop condition while a bounded
@@ -188,7 +195,8 @@ policy artifact is enabling evidence rather than strategic progress by itself.
 A blocked individual task is not a stop condition. When a task is blocked:
 1. Record the blocker precisely in the active authority
 2. Move to the next highest-value unblocked slice
-3. Keep executing until there is no safe high-value unblocked work remaining
+3. Keep executing until there is no high-value, authorized, dependency-ready
+   unblocked work remaining that is not irreversibly dangerous
 
 Only stop when every remaining action in the authorized run is blocked by the
 same gap that qualifies as stop condition #2, or bounded investigation confirms
@@ -207,7 +215,8 @@ paths. The agent must:
 4. Record a reconciliation obligation when the deferred path indexes,
    summarizes, or governs an authoritative artifact that is ready to land.
 5. Report the whole goal blocked only after evaluating the complete authorized
-   ready queue and finding no safe, high-value work.
+   ready queue and finding no high-value, authorized, dependency-ready work that
+   is not irreversibly dangerous.
 
 Checkpointing a branch, opening a draft PR, or waiting to reconcile one index
 can be an integration dependency. None is, by itself, a reason to leave other

@@ -52,13 +52,24 @@ def warning_context(session_file: Path, report: Any, recovery_bundle: Path | Non
     first = report.issues[0]
     suffix = "" if len(report.issues) == 1 else f"; {len(report.issues) - 1} additional malformed record(s) found"
     bundle_context = f"Recovery bundle: {display_path(recovery_bundle)}. " if recovery_bundle else ""
+    prompt_context = (
+        f"Ready-to-paste fresh-session recovery prompt: {display_path(recovery_bundle / 'READY_TO_PASTE.md')}. "
+        f"Paste: Recover the interrupted Codex task from `{display_path(recovery_bundle)}`. "
+        "Read HANDOFF.md first, then integrity-report.json and transcript.md. "
+        "Treat the original session log and original-snapshot.jsonl as immutable evidence. "
+        "Do not edit session logs or Codex SQLite databases. Reconstruct the current task "
+        "state from the handoff, repository instructions, active plan/worktree, and transcript. "
+        "State what is known and unknown, then continue without repeating completed work. "
+        if recovery_bundle
+        else ""
+    )
     return (
         "CODEX SESSION INTEGRITY WARNING: "
         f"{display_path(session_file)} line {first.line}, byte offset {first.byte_offset}: {first.kind} ({first.detail}){suffix}. "
         "This guard did not modify the session log and cannot repair Codex host persistence. "
         "The current turn was stopped because resumed history after this point is not trustworthy. "
         "Preserve the original file and start a fresh session. "
-        f"{bundle_context}"
+        f"{bundle_context}{prompt_context}"
         "For a metadata-only diagnostic, run scripts/codex_session_integrity_hook.py --session-file <path> --report <path>."
     )
 

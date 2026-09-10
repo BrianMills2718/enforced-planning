@@ -217,6 +217,7 @@ def _matching_existing_bundle(
         "transcript.md",
         "integrity-report.json",
         "HANDOFF.md",
+        "READY_TO_PASTE.md",
     }
     for report_path in sorted(session_root.glob("auto-*/integrity-report.json")):
         try:
@@ -329,4 +330,15 @@ def create_recovery_bundle(
         "Continue in a fresh Codex thread. Do not replace the live rollout or manually edit Codex SQLite databases.\n"
     )
     _atomic_write_once(bundle / "HANDOFF.md", handoff.encode("utf-8"))
+    ready_to_paste = (
+        "# Paste this into a fresh Codex session\n\n"
+        f"Recover the interrupted Codex task from `{bundle}`.\n\n"
+        "Read `HANDOFF.md` first, then `integrity-report.json` and `transcript.md`. "
+        "Treat the original session log and `original-snapshot.jsonl` as immutable evidence. "
+        "Do not edit session logs or Codex SQLite databases. Reconstruct the current task state "
+        "from the handoff, repository instructions, active plan/worktree, and transcript. "
+        "State what is known and unknown, then continue the unfinished task without repeating "
+        f"completed work. The interrupted session ID is `{session_id}`.\n"
+    )
+    _atomic_write_once(bundle / "READY_TO_PASTE.md", ready_to_paste.encode("utf-8"))
     return bundle

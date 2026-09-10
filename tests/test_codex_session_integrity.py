@@ -86,6 +86,24 @@ def test_hook_emits_context_and_metadata_only_report_for_corruption(tmp_path: Pa
     assert json.loads(report.read_text(encoding="utf-8"))["issues"][0]["kind"] == "nul_only_record"
 
 
+def test_metadata_only_diagnostic_does_not_require_hook_event(tmp_path: Path) -> None:
+    session = tmp_path / "rollout-session-abc.jsonl"
+    session.write_bytes(b'{"type":"session_meta"}\n\0\0\n')
+    report = tmp_path / "report.json"
+
+    completed = subprocess.run(
+        [sys.executable, str(HOOK), "--session-file", str(session), "--report", str(report)],
+        input="",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    assert json.loads(report.read_text(encoding="utf-8"))["issues"][0]["kind"] == "nul_only_record"
+
+
 def test_hook_is_silent_for_clean_file(tmp_path: Path) -> None:
     session = tmp_path / "clean.jsonl"
     session.write_text('{"type":"session_meta"}\n', encoding="utf-8")

@@ -208,7 +208,7 @@ def close_plan_lanes(
                 f"{claim.scope}: lifecycle status '{claim.status}' is not terminal or closeable"
             )
 
-    if protected_path is not None and not dry_run:
+    if protected_path is not None:
         for claim in owned:
             if claim.worktree_path and _contains_path(
                 Path(claim.worktree_path), protected_path

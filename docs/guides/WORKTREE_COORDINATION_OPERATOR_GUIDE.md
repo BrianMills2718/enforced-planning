@@ -302,6 +302,11 @@ Codex-to-Codex custody transfer additionally requires
 changing claim custody, `session-resume` proves that exact PID generation is a
 direct Codex resume of the predecessor session, is using the successor runtime's
 exact Codex executable, and has the claimed worktree as its current directory.
+An exact claim already marked `session_ended` is different: that terminal
+registry state is the custody boundary, so its successor resumes without
+fencing the former client process. This avoids treating an idle client rooted at
+the workspace as a live worktree owner. Live or handoff Codex custody still
+uses the exact PID fence described below.
 The state key also binds the exact pre-transfer claim-bytes SHA-256 so evidence
 cannot cross custody epochs. It binds `/proc` start ticks against PID
 reuse, opens an exact kernel pidfd before validation, and sends bounded

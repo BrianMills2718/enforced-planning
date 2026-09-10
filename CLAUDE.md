@@ -19,8 +19,9 @@ Continuous authorization uses one of three profiles from
   publication, migration, deployment, or another consequential terminal claim.
 
 All profiles commit and push verified increments, preserve the user outcome,
-and continue past a completed phase while a safe, authorized, outcome-advancing
-next action remains. Keep one stable initiative example above smaller plan
+and continue past a completed phase while authorized, dependency-ready,
+outcome-advancing work remains and the next action is not irreversibly
+dangerous. Keep one stable initiative example above smaller plan
 examples. Optimize for expected user-visible value or decisive learning per
 wall-clock hour. At roughly 15 minutes, at the next natural tool boundary,
 compare the artifact being built with the accepted outcome and canonical
@@ -40,9 +41,10 @@ Only these stop conditions are legitimate:
 
 1. an irreversible action that affects shared state
 2. a genuine architectural decision not already pre-made in the active plan
-3. no safe, authorized, evidence-supported, goal-advancing next action remains
-   after bounded investigation; persist a resumable handoff and return control
-   instead of manufacturing work or passively polling
+3. no authorized, dependency-ready, evidence-supported, goal-advancing next
+   action remains that is not irreversibly dangerous after bounded
+   investigation; persist a resumable handoff and return control instead of
+   manufacturing work or passively polling
 
 ## Canonical Surfaces
 

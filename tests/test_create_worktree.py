@@ -580,6 +580,148 @@ def test_create_worktree_rejects_conflicting_scoped_write_claim(
     assert not worktree_path.exists()
 
 
+def test_create_worktree_allows_overlapping_paths_in_distinct_linked_worktrees(
+    tmp_path: Path,
+) -> None:
+    """The complete wrapper should preserve the registry's isolated-worktree advisory."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    claims_dir = tmp_path / "claims"
+    candidate_worktree = repo_root / "worktrees" / "candidate-lane"
+    owner_worktree = repo_root / "worktrees" / "owner-lane"
+    _init_temp_repo(repo_root)
+    owner_worktree.parent.mkdir()
+    owner_result = _run_git(
+        repo_root,
+        "worktree",
+        "add",
+        "-b",
+        "owner-lane",
+        str(owner_worktree),
+    )
+    assert owner_result.returncode == 0, owner_result.stdout + owner_result.stderr
+
+    _write_claim(
+        claims_dir,
+        "candidate.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["repo"],
+            "scope": "candidate-lane",
+            "intent": "Patch the shared file independently",
+            "claim_type": "program",
+            "write_paths": ["README.md"],
+            "branch": "candidate-lane",
+            "repo_root": str(repo_root),
+            "worktree_path": str(candidate_worktree),
+            "session_id": "codex-session",
+            "session_name": "candidate-lane",
+            "broader_goal": "Prove isolated worktree admission",
+            "plan_ref": "UNPLANNED",
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-02T08:05:00+00:00",
+            "expires_at": "2099-04-02T09:05:00+00:00",
+            "projects": ["repo"],
+            "scope": "owner-lane",
+            "intent": "Patch the same shared file",
+            "claim_type": "write",
+            "write_paths": ["README.md"],
+            "branch": "owner-lane",
+            "repo_root": str(repo_root),
+            "worktree_path": str(owner_worktree),
+            "session_id": "claude-session",
+            "session_name": "owner-lane",
+            "status": "active",
+        },
+    )
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=candidate_worktree,
+        branch="candidate-lane",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_write_claim=True,
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["README.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert result.ok, result.message
+    assert candidate_worktree.exists()
+
+
+def test_create_worktree_rejects_same_planned_worktree_overlap(tmp_path: Path) -> None:
+    """Two claims targeting the same physical worktree remain a hard conflict."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    claims_dir = tmp_path / "claims"
+    worktree_path = repo_root / "worktrees" / "shared-lane"
+    _init_temp_repo(repo_root)
+
+    base_claim = {
+        "claimed_at": "2026-04-02T08:00:00+00:00",
+        "expires_at": "2099-04-02T09:00:00+00:00",
+        "projects": ["repo"],
+        "scope": "shared-lane",
+        "intent": "Patch the shared file",
+        "claim_type": "program",
+        "write_paths": ["README.md"],
+        "branch": "shared-lane",
+        "repo_root": str(repo_root),
+        "worktree_path": str(worktree_path),
+        "session_name": "shared-lane",
+        "broader_goal": "Prove same-worktree conflict",
+        "plan_ref": "UNPLANNED",
+        "status": "active",
+    }
+    _write_claim(
+        claims_dir,
+        "candidate.yaml",
+        {**base_claim, "agent": "codex", "session_id": "codex-session"},
+    )
+    _write_claim(
+        claims_dir,
+        "owner.yaml",
+        {
+            **base_claim,
+            "agent": "claude-code",
+            "session_id": "claude-session",
+            "claimed_at": "2026-04-02T08:05:00+00:00",
+        },
+    )
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="shared-lane",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        require_write_claim=True,
+        claim_agent="codex",
+        claim_project="repo",
+        claim_write_paths=["README.md"],
+        claims_dir=claims_dir,
+    )
+
+    assert not result.ok
+    assert result.classification == "coordination-error"
+    assert "conflicting active write claim" in result.message
+    assert not worktree_path.exists()
+
+
 def test_verify_clean_main_root_reports_dirty_primary_checkout(tmp_path: Path) -> None:
     """Publish-lane creation should fail loud when the canonical main checkout is dirty."""
 

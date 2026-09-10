@@ -603,6 +603,72 @@ def reserve_session_takeover(
         return claim, payload, reserved_claim_bytes, reservation
 
 
+def abort_unfenced_session_takeover_reservation(
+    *,
+    claim_file: Path,
+    agent: str,
+    project: str,
+    scope: str,
+    successor_session_id: str,
+    worktree_path: str,
+    claims_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Cancel one successor-owned reservation before fencing ever began.
+
+    A reservation with a transfer journal has crossed the process-fence boundary
+    and must be replayed, never discarded.  This narrow escape only restores a
+    retryable session-ended lane when validation failed *before* that boundary.
+    """
+
+    resolved_claims_dir = (claims_dir or CLAIMS_DIR).expanduser().resolve()
+    resolved_claim_file = claim_file.expanduser().resolve()
+    expected_worktree = str(Path(worktree_path).expanduser().resolve())
+    with claim_registry_lock(resolved_claims_dir):
+        raw_bytes = resolved_claim_file.read_bytes()
+        payload = yaml.safe_load(raw_bytes)
+        if not isinstance(payload, dict):
+            raise TypeError("session takeover claim must be a YAML mapping")
+        claim = normalize_claim(payload, source_file=str(resolved_claim_file))
+        if claim is None or claim.status != SESSION_ENDED_STATUS:
+            raise ValueError("unfenced takeover abort requires one exact session_ended claim")
+        if (
+            claim.agent != agent
+            or project not in claim.projects
+            or claim.scope != scope
+            or (claim.worktree_path and str(Path(claim.worktree_path).expanduser().resolve()) != expected_worktree)
+        ):
+            raise ValueError("unfenced takeover abort claim identity changed")
+        reservation = active_session_takeover_reservation(payload)
+        if reservation is None:
+            raise ValueError("claim has no active takeover reservation to abort")
+        if reservation["successor_session_id"] != successor_session_id:
+            raise ValueError("only the reserved successor session may abort this takeover")
+        if reservation.get("transfer_journal") is not None:
+            raise ValueError("journalized takeover reservation must be replayed, not aborted")
+        registry_digest_before = _registry_digest(resolved_claims_dir)
+        aborted = dict(reservation)
+        payload.pop(SESSION_TAKEOVER_RESERVATION_FIELD)
+        payload["last_unfenced_takeover_abort"] = {
+            "record_type": "claim_session_takeover_abort",
+            "reservation": aborted,
+            "aborted_at": datetime.now(timezone.utc).isoformat(),
+            "aborted_by_session_id": successor_session_id,
+        }
+        _atomic_write_claim(resolved_claim_file, payload)
+        _projection_path, projection_digest_after = refresh_prewrite_authority_projection(resolved_claims_dir)
+        record_claim_mutation(
+            operation="session_upsert",
+            claims_dir=resolved_claims_dir,
+            registry_digest_before=registry_digest_before,
+            target_project=claim.primary_project(),
+            target_scope=claim.scope,
+            target_claim_path=resolved_claim_file,
+            session_id=claim.session_id,
+            projection_digest_after=projection_digest_after,
+        )
+    return {"aborted_reservation": aborted, "claim_path": str(resolved_claim_file)}
+
+
 def record_claim_narrow_mutation(
     *,
     claims_dir: Path,

@@ -73,6 +73,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--note")
     parser.add_argument(
+        "--abort-unfenced-takeover-reservation",
+        action="store_true",
+        help="Cancel only this successor's unjournalized reservation after a pre-fence validation failure.",
+    )
+    parser.add_argument(
         "--repair-worktree-path",
         action="store_true",
         help=(
@@ -148,6 +153,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.successor_custody_offer is not None
         else None
     )
+    if args.abort_unfenced_takeover_reservation:
+        if has_offer or args.predecessor_process_pid is not None or args.predecessor_process_start_ticks is not None:
+            raise ValueError("unfenced takeover abort cannot be combined with transfer or predecessor-process arguments")
+        payload = session_lifecycle.abort_unfenced_session_takeover(
+            agent=args.agent,
+            project=args.project,
+            scope=args.scope,
+            worktree_path=args.worktree_path,
+            session_id=args.session_id,
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(f"{payload['action']}: {payload['session_id']}")
+        return 0
     successor_session_id = args.session_id
     if args.verify_successor_custody_offer_only:
         payload = session_lifecycle.verify_successor_custody_offer_state(

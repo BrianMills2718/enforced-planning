@@ -22,8 +22,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def read_event() -> dict[str, Any]:
-    payload = json.loads(sys.stdin.read())
+def read_event(*, optional: bool = False) -> dict[str, Any] | None:
+    if optional and sys.stdin.isatty():
+        return None
+    raw = sys.stdin.read()
+    if optional and not raw.strip():
+        return None
+    payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise TypeError("hook input must be a JSON object")
     if payload.get("hook_event_name") != "SessionStart":
@@ -61,7 +66,14 @@ def warning_context(session_file: Path, report: Any, recovery_bundle: Path | Non
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        payload = read_event()
+        diagnostic_without_event = args.session_file is not None and args.report is not None
+        payload = read_event(optional=diagnostic_without_event)
+        if payload is None:
+            report = inspect_session_jsonl(args.session_file)
+            report_path = args.report.expanduser().resolve()
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(json.dumps(report.as_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            return 0
         session_file = args.session_file or find_session_file(args.sessions_root, payload["session_id"])
         if session_file is None:
             return 0

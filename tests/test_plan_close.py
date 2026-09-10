@@ -71,27 +71,29 @@ def test_preflight_failure_prevents_every_close_action():
 
 def test_protected_plan_metadata_path_prevents_every_close_action():
     """Completion must not remove the worktree that contains its plan file."""
-    closed: list[str] = []
-    preflighted: list[str] = []
+    for dry_run in (False, True):
+        closed: list[str] = []
+        preflighted: list[str] = []
 
-    result = close_plan_lanes(
-        qualified_plan_id="alpha#12",
-        submitted_revision="abc123",
-        claims=[_claim(scope="lane-a")],
-        protected_path=Path("/repo/worktrees/lane-a/docs/plans/12_example.md"),
-        preflight=lambda claim: preflighted.append(claim.scope)
-        or {"disposition": "merged"},
-        closer=lambda claim: closed.append(claim.scope) or {"action": "closed"},
-    )
+        result = close_plan_lanes(
+            qualified_plan_id="alpha#12",
+            submitted_revision="abc123",
+            claims=[_claim(scope="lane-a")],
+            protected_path=Path("/repo/worktrees/lane-a/docs/plans/12_example.md"),
+            preflight=lambda claim: preflighted.append(claim.scope)
+            or {"disposition": "merged"},
+            closer=lambda claim: closed.append(claim.scope) or {"action": "closed"},
+            dry_run=dry_run,
+        )
 
-    assert result.success is False
-    assert preflighted == ["lane-a"]
-    assert closed == []
-    assert result.actions_performed == []
-    assert result.final_plan_status_transition == "blocked"
-    assert "refusing to close the worktree containing protected plan metadata path" in (
-        result.failures[0]
-    )
+        assert result.success is False
+        assert preflighted == ["lane-a"]
+        assert closed == []
+        assert result.actions_performed == []
+        assert result.final_plan_status_transition == "blocked"
+        assert "refusing to close the worktree containing protected plan metadata path" in (
+            result.failures[0]
+        )
 
 
 def test_all_preflighted_lanes_close_and_report_terminal_disposition():

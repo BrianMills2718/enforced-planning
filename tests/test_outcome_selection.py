@@ -59,6 +59,55 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
+def _stub_predecessor_codex_fence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, int]:
+    """Supply durable typed fence evidence for a fixture-only Codex handoff.
+
+    These selected-outcome tests exercise lifecycle mutation and recovery, not
+    Linux process signaling.  The process-fencing suite owns the real /proc and
+    pidfd behavior; this stub still creates the receipt that the custody
+    transaction consumes, so it cannot bypass the receipt contract.
+    """
+
+    receipt_path = tmp_path / "predecessor-process-fence.json"
+
+    def fence_predecessor_process(**kwargs: object) -> dict[str, object]:
+        if receipt_path.exists():
+            receipt = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1.model_validate_json(
+                receipt_path.read_bytes()
+            )
+        else:
+            receipt = session_lifecycle.session_process_fencing.ProcessFenceReceiptV1(
+                predecessor_session_id=str(kwargs["predecessor_session_id"]),
+                successor_session_id=str(kwargs["successor_session_id"]),
+                worktree_path=str(Path(str(kwargs["worktree_path"])).resolve()),
+                pid=int(kwargs["predecessor_pid"]),
+                transfer_epoch_sha256=str(kwargs["transfer_epoch_sha256"]),
+                process_start_ticks=int(kwargs["predecessor_process_start_ticks"]),
+                command_sha256="c" * 64,
+                signal="SIGTERM",
+                fenced_at=datetime.now(UTC),
+            )
+            receipt_path.write_text(receipt.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        return {
+            **receipt.model_dump(mode="json"),
+            "receipt_path": str(receipt_path),
+            "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+        }
+
+    monkeypatch.setattr(
+        session_lifecycle.session_process_fencing,
+        "fence_predecessor_process",
+        fence_predecessor_process,
+    )
+    return {
+        "predecessor_process_pid": 4242,
+        "predecessor_process_start_ticks": 123456,
+    }
+
+
 def _scenario(
     *, scenario_id: str = "plan117-progress", outcome_id: str = "durable-outcome"
 ) -> OutcomeContinuationScenarioV1:
@@ -1606,6 +1655,7 @@ def test_cross_session_resume_retains_progress_head_and_successor_extends_it(
     )
     successor_session = "codex:plan119-successor"
     monkeypatch.setenv("CODEX_THREAD_ID", successor_session.removeprefix("codex:"))
+    fence_identity = _stub_predecessor_codex_fence(tmp_path, monkeypatch)
     resumed = session_lifecycle.resume_session(
         agent="codex",
         project="enforced-planning",
@@ -1614,6 +1664,7 @@ def test_cross_session_resume_retains_progress_head_and_successor_extends_it(
         branch="plan117-test",
         current_phase="extend retained selected progress",
         session_id=successor_session,
+        **fence_identity,
     )
     assert resumed["outcome_session_transfer"]["progress_transition_count"] == 1
     assert (
@@ -1816,6 +1867,7 @@ def test_cross_session_resume_transfers_selected_outcome_without_reset(
 
     successor_session = "codex:plan118-successor"
     monkeypatch.setenv("CODEX_THREAD_ID", successor_session.removeprefix("codex:"))
+    fence_identity = _stub_predecessor_codex_fence(tmp_path, monkeypatch)
     resumed = session_lifecycle.resume_session(
         agent="codex",
         project="enforced-planning",
@@ -1824,6 +1876,7 @@ def test_cross_session_resume_transfers_selected_outcome_without_reset(
         branch="plan117-test",
         current_phase="continue the retained selected outcome",
         session_id=successor_session,
+        **fence_identity,
     )
 
     assert resumed["action"] == "resumed"
@@ -1896,7 +1949,7 @@ def test_legacy_claim_only_resume_reproduces_selected_tracker_failure(
     assert caught.value.code == "tracker_claim_mismatch"
 
 
-def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transfer_fails(
+def test_cross_session_resume_retains_recovery_journal_when_tracker_transfer_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1924,12 +1977,16 @@ def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transf
     def fail_tracker_transfer(*_args: object, **_kwargs: object) -> None:
         raise OSError("injected tracker replacement failure")
 
-    monkeypatch.setattr(
-        session_contracts,
-        "_atomic_write_session_tracker",
-        fail_tracker_transfer,
-    )
+    original_restore = session_lifecycle._atomic_restore_bytes
+
+    def fail_successor_tracker_restore(path: Path, payload: bytes) -> None:
+        if path == tracker_path:
+            fail_tracker_transfer()
+        original_restore(path, payload)
+
+    monkeypatch.setattr(session_lifecycle, "_atomic_restore_bytes", fail_successor_tracker_restore)
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-failed-successor")
+    fence_identity = _stub_predecessor_codex_fence(tmp_path, monkeypatch)
     with pytest.raises(OSError, match="injected tracker replacement failure"):
         session_lifecycle.resume_session(
             agent="codex",
@@ -1939,14 +1996,21 @@ def test_cross_session_resume_restores_exact_preflight_state_when_tracker_transf
             branch="plan117-test",
             current_phase="this phase must roll back",
             session_id="codex:plan118-failed-successor",
+            **fence_identity,
         )
 
-    assert claim_path.read_bytes() == claim_before
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = claim_payload[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert claim_payload["session_id"] == SESSION
+    assert reservation[session_lifecycle.SESSION_TRANSFER_JOURNAL_FIELD]["record_type"] == (
+        "claim_session_transfer_journal"
+    )
+    assert claim_path.read_bytes() != claim_before
     assert tracker_path.read_bytes() == tracker_before
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
-def test_cross_session_resume_restores_exact_preflight_state_when_successor_claim_is_invalid(
+def test_cross_session_resume_retains_takeover_reservation_when_successor_claim_is_invalid(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1983,6 +2047,7 @@ def test_cross_session_resume_restores_exact_preflight_state_when_successor_clai
 
     monkeypatch.setattr(coordination_claims, "normalize_claim", invalidate_successor_claim)
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-invalid-successor")
+    fence_identity = _stub_predecessor_codex_fence(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="could not be normalized"):
         session_lifecycle.resume_session(
             agent="codex",
@@ -1992,14 +2057,19 @@ def test_cross_session_resume_restores_exact_preflight_state_when_successor_clai
             branch="plan117-test",
             current_phase="this phase must roll back",
             session_id="codex:plan118-invalid-successor",
+            **fence_identity,
         )
 
-    assert claim_path.read_bytes() == claim_before
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = claim_payload[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert claim_payload["session_id"] == SESSION
+    assert session_lifecycle.SESSION_TRANSFER_JOURNAL_FIELD not in reservation
+    assert claim_path.read_bytes() != claim_before
     assert tracker_path.read_bytes() == tracker_before
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
-def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
+def test_cross_session_resume_retains_recovery_journal_if_projection_refresh_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2026,15 +2096,22 @@ def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
     original_refresh = coordination_claims.refresh_prewrite_authority_projection
     refresh_calls = 0
 
-    def fail_first_projection_refresh(*args: object, **kwargs: object) -> tuple[str, str]:
+    def fail_journal_projection_refresh(*args: object, **kwargs: object) -> tuple[str, str]:
         nonlocal refresh_calls
         refresh_calls += 1
-        if refresh_calls == 1:
+        # The reservation refresh must succeed; fail after the journal write so
+        # the next exact retry has recovery state rather than an erased fence.
+        if refresh_calls == 2:
             raise OSError("injected projection refresh failure")
         return original_refresh(*args, **kwargs)
 
-    monkeypatch.setattr(coordination_claims, "refresh_prewrite_authority_projection", fail_first_projection_refresh)
+    monkeypatch.setattr(
+        coordination_claims,
+        "refresh_prewrite_authority_projection",
+        fail_journal_projection_refresh,
+    )
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-projection-failure")
+    fence_identity = _stub_predecessor_codex_fence(tmp_path, monkeypatch)
     with pytest.raises(OSError, match="injected projection refresh failure"):
         session_lifecycle.resume_session(
             agent="codex",
@@ -2044,14 +2121,21 @@ def test_cross_session_resume_rolls_back_if_claim_projection_refresh_fails(
             branch="plan117-test",
             current_phase="this phase must roll back",
             session_id="codex:plan118-projection-failure",
+            **fence_identity,
         )
 
-    assert claim_path.read_bytes() == claim_before
+    claim_payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    reservation = claim_payload[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert claim_payload["session_id"] == SESSION
+    assert reservation[session_lifecycle.SESSION_TRANSFER_JOURNAL_FIELD]["record_type"] == (
+        "claim_session_transfer_journal"
+    )
+    assert claim_path.read_bytes() != claim_before
     assert tracker_path.read_bytes() == tracker_before
-    assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+    assert not prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
 
 
-def test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fails(
+def test_cross_session_resume_retains_recovery_journal_if_tracker_application_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2076,23 +2160,23 @@ def test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fa
     def fail_tracker_transfer(*_args: object, **_kwargs: object) -> None:
         raise OSError("injected tracker replacement failure")
 
-    def fail_rollback(**_kwargs: object) -> None:
-        raise OSError("injected rollback failure")
+    tracker_path = Path(_selected.tracker_path)
+    original_restore = session_lifecycle._atomic_restore_bytes
 
-    monkeypatch.setattr(
-        session_contracts,
-        "_atomic_write_session_tracker",
-        fail_tracker_transfer,
-    )
+    def fail_successor_tracker_restore(path: Path, payload: bytes) -> None:
+        if path == tracker_path:
+            fail_tracker_transfer()
+        original_restore(path, payload)
+
     monkeypatch.setattr(
         session_lifecycle,
         "_atomic_restore_bytes",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("injected internal rollback failure")),
+        fail_successor_tracker_restore,
     )
-    monkeypatch.setattr(session_lifecycle, "_rollback_outcome_session_transfer", fail_rollback)
     monkeypatch.setenv("CODEX_THREAD_ID", "plan118-incomplete-successor")
+    fence_identity = _stub_predecessor_codex_fence(tmp_path, monkeypatch)
 
-    with pytest.raises(session_lifecycle.SessionTransferIncompleteError) as caught:
+    with pytest.raises(OSError, match="injected tracker replacement failure"):
         session_lifecycle.resume_session(
             agent="codex",
             project="enforced-planning",
@@ -2101,9 +2185,14 @@ def test_cross_session_resume_reports_typed_incomplete_transition_if_rollback_fa
             branch="plan117-test",
             current_phase="incomplete transition must be visible",
             session_id="codex:plan118-incomplete-successor",
+            **fence_identity,
         )
-    assert caught.value.code == "session_transfer_incomplete"
-    assert "rollback was incomplete" in str(caught.value)
+    claim_payload = yaml.safe_load(_claim_path.read_text(encoding="utf-8"))
+    reservation = claim_payload[coordination_claims.SESSION_TAKEOVER_RESERVATION_FIELD]
+    assert claim_payload["session_id"] == SESSION
+    assert reservation[session_lifecycle.SESSION_TRANSFER_JOURNAL_FIELD]["record_type"] == (
+        "claim_session_transfer_journal"
+    )
 
 
 def test_session_upsert_keeps_goal_on_actual_write_claim_without_graph(
@@ -2121,8 +2210,16 @@ def test_session_upsert_keeps_goal_on_actual_write_claim_without_graph(
     )
     monkeypatch.setenv("CODEX_THREAD_ID", "plan117-test")
     repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.name", "Test User")
+    _git(repo_root, "config", "user.email", "test@example.com")
+    (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "seed")
     worktree = repo_root / "worktrees" / "owner-week"
-    worktree.mkdir(parents=True)
+    worktree.parent.mkdir()
+    _git(repo_root, "worktree", "add", "-b", "owner-week", str(worktree))
 
     action = session_lifecycle._upsert_session_claim(
         agent="codex",

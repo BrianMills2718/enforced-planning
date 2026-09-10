@@ -535,6 +535,7 @@ def verify_scoped_write_claim(
         intent=f"Create sanctioned worktree {branch}",
         claim_type="write",
         write_paths=normalized_paths,
+        repo_root=str(repo_root),
         branch=branch,
         worktree_path=str(worktree_path),
     )

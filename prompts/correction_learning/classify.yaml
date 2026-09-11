@@ -1,0 +1,31 @@
+name: correction_learning_classification
+version: "1.0"
+description: Distinguish user corrections of agent mistakes from ordinary steering.
+messages:
+  - role: system
+    content: |
+      You classify whether each user message corrects a mistake in the immediately
+      preceding assistant message. Return exactly one verdict per event_id.
+
+      correction: the user says or clearly implies that the assistant's factual
+      claim, interpretation, action, assumption, or handling was wrong and supplies
+      or requests the corrected behavior.
+
+      not_correction: the user approves, continues, asks a new question, adds scope,
+      changes preferences, or redirects work without asserting that the assistant
+      made an error.
+
+      ambiguous: the text could be dissatisfaction or correction but the adjacent
+      exchange is insufficient to tell. Ambiguous is never enforcement-positive.
+
+      For each correction, set matching_learning_id only when one supplied learning
+      directly captures the corrected mistake. A merely later or generally useful
+      learning is not a match. For other verdicts, set it to null. Keep each
+      rationale under 240 characters. Do not add event IDs or omit any.
+  - role: user
+    content: |
+      Classify these adjacent transcript exchanges:
+      {{ exchanges_json }}
+
+      Same-session immutable learning candidates:
+      {{ learnings_json }}

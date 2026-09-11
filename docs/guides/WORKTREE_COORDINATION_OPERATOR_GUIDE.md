@@ -1887,6 +1887,32 @@ readiness command is explicit because the portable framework does not assume a
 personal workspace location; governed workspace repositories may provide a
 repo-local default through their own canonical configuration.
 
+## Correction-learning audit canary
+
+Plan 135 adds a typed, privacy-reduced audit of adjacent assistant/user transcript
+exchanges. Semantic correction classification runs through `llm_client`; the
+learning completion hook only reads a validated audit receipt and never invokes a
+model or parses transcript prose on its Stop hot path.
+
+The source CLI is intentionally manual and observe-only until the labeled threshold
+and both native-client canaries pass:
+
+```bash
+python scripts/correction_learning_audit.py \
+  --agent codex \
+  --session-id codex:<native-session-id> \
+  --transcript <resolved-native-transcript.jsonl> \
+  --learning-entries-dir <project-meta>/learnings/entries \
+  --receipt <machine-local-receipt.json>
+```
+
+`audit_error` is visible but non-blocking. Do not configure
+`ENFORCED_PLANNING_CORRECTION_MODE=block` until Plan 135 records the required
+precision, recall, latency, and Codex/Claude native evidence. Timestamp ordering
+alone cannot resolve a correction: the model must name a semantically matching
+learning ID, and deterministic code then verifies same-session identity, ordering,
+and unique use.
+
 ## Session-End Hooks, Observability, And Feedback
 
 The source-owned adapter is:

@@ -82,6 +82,9 @@ def test_hook_emits_context_and_metadata_only_report_for_corruption(tmp_path: Pa
     assert "did not modify" in context
     assert "current turn was stopped" in context
     assert "Recovery bundle:" in context
+    assert "READY_TO_PASTE.md" in context
+    assert "Paste: Recover the interrupted Codex task" in context
+    assert "Do not edit session logs or Codex SQLite databases" in context
     assert session.read_bytes() == b'{"type":"session_meta"}\n\0\0\n'
     assert json.loads(report.read_text(encoding="utf-8"))["issues"][0]["kind"] == "nul_only_record"
 
@@ -145,6 +148,10 @@ def test_recovery_bundle_preserves_source_and_omits_only_bad_records(tmp_path: P
     assert "## User" in transcript and "hello" in transcript
     assert "## Assistant (final_answer)" in transcript and "hi" in transcript
     assert "Do not replace the live rollout" in (bundle / "HANDOFF.md").read_text(encoding="utf-8")
+    prompt = (bundle / "READY_TO_PASTE.md").read_text(encoding="utf-8")
+    assert "Paste this into a fresh Codex session" in prompt
+    assert str(bundle) in prompt
+    assert "Do not edit session logs or Codex SQLite databases" in prompt
     report = json.loads((bundle / "integrity-report.json").read_text(encoding="utf-8"))
     assert report["issues"][0]["line"] == 2
 

@@ -25,6 +25,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from pydantic import ValidationError
+
+from enforced_planning.correction_learning import CorrectionAuditReceiptV1
+
 try:
     from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
 except ModuleNotFoundError:  # package-style tests import scripts.learning_capture_hook
@@ -34,6 +42,7 @@ DEFAULT_STATE_DIR = Path("~/.claude/coordination/learning-capture-v1")
 DEFAULT_CODEX_CONFIG = Path("~/.codex/config.toml")
 DEFAULT_CLAUDE_SETTINGS = Path("~/.claude/settings.json")
 DEFAULT_OPENCLAW_RUNNER = Path("~/.openclaw/bin/run_task.py")
+DEFAULT_CORRECTION_RECEIPT_DIR = Path("~/.claude/coordination/correction-learning-v1")
 SUPPORTED_AGENTS = ("claude-code", "codex", "openclaw")
 SCRIPT_PATH = Path(__file__).resolve()
 
@@ -57,7 +66,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--codex-config", type=Path, default=DEFAULT_CODEX_CONFIG)
     parser.add_argument("--claude-settings", type=Path, default=DEFAULT_CLAUDE_SETTINGS)
     parser.add_argument("--openclaw-runner", type=Path, default=DEFAULT_OPENCLAW_RUNNER)
+    parser.add_argument(
+        "--correction-mode",
+        choices=("off", "observe", "block"),
+        default=os.environ.get("ENFORCED_PLANNING_CORRECTION_MODE", "off"),
+    )
+    parser.add_argument(
+        "--correction-receipt-dir",
+        type=Path,
+        default=DEFAULT_CORRECTION_RECEIPT_DIR,
+    )
     return parser.parse_args(argv)
+
+
+def correction_receipt_path(root: Path, *, agent: str, session_id: str) -> Path:
+    """Return the collision-resistant correction receipt for one native session."""
+    digest = hashlib.sha256(f"{agent}\0{session_id}".encode()).hexdigest()[:32]
+    return root.expanduser().resolve() / f"{digest}.json"
+
+
+def read_correction_receipt(
+    root: Path, *, agent: str, session_id: str
+) -> CorrectionAuditReceiptV1 | None:
+    """Load one validated correction receipt without inspecting transcript prose."""
+    path = correction_receipt_path(root, agent=agent, session_id=session_id)
+    if not path.is_file():
+        return None
+    receipt = CorrectionAuditReceiptV1.model_validate_json(path.read_text(encoding="utf-8"))
+    if receipt.agent != agent or receipt.session_id != session_id:
+        raise ValueError("correction receipt identity does not match Stop event")
+    return receipt
 
 
 def _is_learning_hook_command(value: object, agent: str) -> bool:
@@ -441,6 +479,29 @@ def main(argv: list[str] | None = None) -> int:
             if prior is not None:
                 decision = "recorded_prior_receipt"
                 detail = f"Verified by earlier learning-capture receipt {prior.name}."
+        if (
+            args.correction_mode != "off"
+            and decision != "not_completed_work"
+            and not decision.startswith("block_")
+        ):
+            try:
+                correction_receipt = read_correction_receipt(
+                    args.correction_receipt_dir,
+                    agent=args.agent,
+                    session_id=payload["session_id"],
+                )
+            except (OSError, ValidationError, ValueError):
+                correction_receipt = None
+            if (
+                correction_receipt is not None
+                and correction_receipt.status == "correction_unresolved"
+                and args.correction_mode == "block"
+            ):
+                decision = "block_unresolved_correction"
+                detail = (
+                    "A validated correction audit found a user correction without a "
+                    "matching same-session immutable learning. Record it with the learned skill."
+                )
         telemetry_decision = "block" if decision.startswith("block_") else "allow"
         telemetry_reason = decision
         if decision != "not_completed_work":

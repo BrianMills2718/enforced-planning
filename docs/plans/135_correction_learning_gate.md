@@ -1,6 +1,8 @@
 # Plan #135: Correction-Aware Learning Gate
 
-**Status:** Planned
+**Status:** In Progress — typed audit and deterministic Stop verifier
+implemented; native classifier remains observe-only after latency and schema
+canary failures
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -62,7 +64,12 @@ privacy-reduced rationale. After the learning is recorded with this session's
 learning ID. The Stop verifier accepts the resolved receipt and rejects an
 unresolved receipt only when block mode is explicitly enabled.
 
-**Behavioral evidence:** Unobserved.
+**Behavioral evidence:** Partial. Typed Codex and Claude transcript fixtures,
+same-session semantic learning reconciliation, and both-sign Stop replays pass.
+A real Codex transcript audit exposed and drove repair of an unrelated-learning
+false resolution. The corrected native rerun then exceeded the intended
+lifecycle latency and ended in a structured-result error, so no host wiring or
+blocking mode was activated.
 
 **Substrate/process evidence:** Existing native transcript resolvers, the
 Project Meta `learning/v3` register, `llm_client` structured output and trace
@@ -268,26 +275,30 @@ works would only multiply an unproven control.
 ## Acceptance Criteria
 
 - [ ] The Taulant correction fixture is detected and a pure scope change is not.
-- [ ] Same-session immutable learning provenance is required for resolution.
-- [ ] No model call or transcript parsing occurs in the Stop hot path.
-- [ ] Model/transcript failure is visible and cannot block completion.
+- [x] Same-session immutable learning provenance is required for resolution.
+- [x] No model call or transcript parsing occurs in the Stop hot path.
+- [x] Model/transcript failure is visible and cannot block completion.
 - [ ] The labeled set meets the stated precision and recall thresholds.
 - [ ] One authentic traced structured call stays within the $0.05 audit budget.
 - [ ] Codex and Claude Code each emit a verified native observe receipt.
-- [ ] Block-mode native-shaped both-sign replays pass before host promotion.
-- [ ] Focused tests and `python scripts/self_test.py` pass.
+- [x] Block-mode native-shaped both-sign replays pass before host promotion.
+- [x] Focused tests and `python scripts/self_test.py` pass.
 - [ ] Installed hook checking reports the activated mode accurately.
 
 ## Open Questions
 
 - [ ] Which exact current transcript event shapes carry user and assistant text
-  for Codex and Claude Code? — **Status: OPEN**; settle with privacy-preserving
-  inspection of one current transcript from each client.
+  for Codex and Claude Code? — **Status: PARTIAL**; current Codex extraction is
+  proven from a native transcript and Claude extraction is fixture-covered, but
+  a privacy-preserving native Claude canary remains.
 - [ ] Can `session_end.py` launch the audit durably without adding a new native
   hook entry? — **Status: OPEN**; prefer extension, prove process lifetime with
   a native canary.
 - [ ] Does the first sanctioned light-model route meet the threshold? —
-  **Status: OPEN**; one route is evaluated before any comparison.
+  **Status: REJECTED FOR ACTIVATION**; subscription-backed Claude Haiku was
+  correct enough to reveal a reconciliation flaw, but native batches took
+  roughly 27–88 seconds and the corrected rerun ended in a structured-result
+  error. A faster reliable route or revised asynchronous lifecycle is required.
 
 ## Notes
 
@@ -295,3 +306,18 @@ Brian explicitly authorized proceeding in the conversation that created this
 plan. Authorization covers reversible implementation and native observe
 canaries. Blocking activation remains conditional on the plan's measured safety
 thresholds, not on another approval checkpoint.
+
+Implementation checkpoint (2026-09-11):
+
+- 35 focused correction-audit and learning-hook tests pass, including an
+  unrelated later same-session learning as a negative control.
+- The audit CLI imports the claimed worktree implementation when executed
+  directly; it does not silently import an installed package copy.
+- The configured host retains only the existing learning-disposition gate.
+  Correction audit wiring and correction blocking remain uninstalled/off.
+- Native Codex trace
+  `correction-learning/codex/01a09111-50bc-7b21-944b-1e597e6247ce/1c2488daa252b5f95631`
+  exposed the unrelated-learning false resolution. Corrected trace
+  `correction-learning/codex/01a09111-50bc-7b21-944b-1e597e6247ce/3f819cac1da3e2246883`
+  ended in an audit error after one slow successful batch; both remain
+  non-blocking evidence against activation.

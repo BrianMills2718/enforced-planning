@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -10,7 +11,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "learning_capture_hook.py"
 
 
-def run_hook(tmp_path: Path, report: str, *, agent: str = "codex") -> subprocess.CompletedProcess[str]:
+def run_hook(
+    tmp_path: Path,
+    report: str,
+    *,
+    agent: str = "codex",
+    correction_mode: str = "off",
+) -> subprocess.CompletedProcess[str]:
     """Run one native-shaped Stop event through the hook."""
     return subprocess.run(
         [
@@ -22,6 +29,10 @@ def run_hook(tmp_path: Path, report: str, *, agent: str = "codex") -> subprocess
             str(tmp_path),
             "--hook-receipt-dir",
             str(tmp_path / "hook-receipts"),
+            "--correction-mode",
+            correction_mode,
+            "--correction-receipt-dir",
+            str(tmp_path / "correction-receipts"),
         ],
         input=json.dumps(
             {
@@ -34,6 +45,84 @@ def run_hook(tmp_path: Path, report: str, *, agent: str = "codex") -> subprocess
         text=True,
         check=False,
     )
+
+
+def write_correction_receipt(tmp_path: Path, *, status: str) -> None:
+    digest = hashlib.sha256(b"codex\0session-123").hexdigest()[:32]
+    root = tmp_path / "correction-receipts"
+    root.mkdir()
+    (root / f"{digest}.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "record_type": "correction_learning_audit",
+                "agent": "codex",
+                "session_id": "session-123",
+                "analyzed_at": "2026-09-11T20:00:00Z",
+                "status": status,
+                "correction_event_hashes": ["corr_example"],
+                "rationale_hashes": ["reason_example"],
+                "learning_ids": [],
+                "error_code": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_block_mode_requires_resolved_correction_receipt(tmp_path: Path) -> None:
+    write_correction_receipt(tmp_path, status="correction_unresolved")
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n- **Learnings** — None because no reusable finding emerged.",
+        correction_mode="block",
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "same-session immutable learning" in payload["reason"]
+
+
+def test_observe_mode_never_blocks_unresolved_correction(tmp_path: Path) -> None:
+    write_correction_receipt(tmp_path, status="correction_unresolved")
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n- **Learnings** — None because no reusable finding emerged.",
+        correction_mode="observe",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_invalid_correction_receipt_never_blocks_completion(tmp_path: Path) -> None:
+    write_correction_receipt(tmp_path, status="correction_unresolved")
+    receipt = next((tmp_path / "correction-receipts").glob("*.json"))
+    receipt.write_text("{}", encoding="utf-8")
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n- **Learnings** — None because no reusable finding emerged.",
+        correction_mode="block",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_incoherent_correction_receipt_never_blocks_completion(tmp_path: Path) -> None:
+    write_correction_receipt(tmp_path, status="correction_unresolved")
+    receipt = next((tmp_path / "correction-receipts").glob("*.json"))
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    payload["rationale_hashes"] = []
+    receipt.write_text(json.dumps(payload), encoding="utf-8")
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n- **Learnings** — None because no reusable finding emerged.",
+        correction_mode="block",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
 
 
 def receipts(tmp_path: Path) -> list[dict[str, object]]:

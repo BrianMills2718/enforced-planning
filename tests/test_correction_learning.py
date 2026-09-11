@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
+
+import pytest
 
 from enforced_planning.correction_learning import (
     CorrectionClassification,
@@ -12,6 +15,7 @@ from enforced_planning.correction_learning import (
     audit_exchanges,
     extract_transcript_exchanges,
 )
+from scripts import correction_learning_audit
 
 
 def _exchange(event_id: str, *, at: str = "2026-09-11T18:00:00Z") -> TranscriptExchange:
@@ -273,3 +277,91 @@ def test_audit_cli_loads_the_claimed_worktree_package() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Audit one native transcript" in result.stdout
+
+
+def test_classifier_route_disables_agent_context_and_ordinary_tools(monkeypatch) -> None:
+    captured = {}
+
+    def fake_call(model, messages, **kwargs):
+        captured.update({"model": model, "messages": messages, **kwargs})
+        return (
+            CorrectionClassification(
+                verdicts=[
+                    CorrectionVerdict(
+                        event_id="turn-1",
+                        classification="not_correction",
+                        rationale="No correction.",
+                    )
+                ]
+            ),
+            object(),
+        )
+
+    monkeypatch.setattr(correction_learning_audit, "call_llm_structured", fake_call)
+    result = correction_learning_audit.classify_with_model(
+        [_exchange("turn-1")],
+        [],
+        model="claude-code/sonnet",
+        trace_id="test/stripped-agent-context",
+    )
+
+    assert result.verdicts[0].classification == "not_correction"
+    assert captured["max_turns"] == 2
+    assert captured["tools"] == []
+    assert captured["setting_sources"] == []
+    assert captured["cwd"] == str(correction_learning_audit.ROOT)
+
+
+def test_pilot_case_set_has_preregistered_held_out_counts() -> None:
+    path = Path("prompts/correction_learning/pilot_cases_v1.json")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    held_out = [case for case in payload["cases"] if case["split"] == "held_out"]
+
+    assert len({case["case_id"] for case in payload["cases"]}) == len(payload["cases"])
+    assert sum(case["expected"] == "correction" for case in held_out) == 10
+    assert sum(case["expected"] == "not_correction" for case in held_out) == 20
+
+
+@pytest.mark.skipif(
+    not os.environ.get("CORRECTION_LEARNING_INTEGRATION"),
+    reason="set CORRECTION_LEARNING_INTEGRATION=1 for the frozen live pilot",
+)
+def test_frozen_sonnet_classifier_pilot() -> None:
+    payload = json.loads(
+        Path("prompts/correction_learning/pilot_cases_v1.json").read_text(encoding="utf-8")
+    )
+    exchanges = [
+        TranscriptExchange(
+            event_id=case["case_id"],
+            occurred_at=datetime.fromisoformat("2026-09-11T21:00:00Z"),
+            assistant_text=case["assistant"],
+            user_text=case["user"],
+        )
+        for case in payload["cases"]
+    ]
+    result = correction_learning_audit.classify_in_batches(
+        exchanges,
+        [],
+        model="claude-code/sonnet",
+        trace_id="correction-learning/pilot-v1/sonnet",
+        batch_size=6,
+    )
+    by_id = {verdict.event_id: verdict for verdict in result.verdicts}
+    assert set(by_id) == {case["case_id"] for case in payload["cases"]}
+
+    held_out = [case for case in payload["cases"] if case["split"] == "held_out"]
+    negatives = [case for case in held_out if case["expected"] == "not_correction"]
+    positives = [case for case in held_out if case["expected"] == "correction"]
+    boundaries = [case for case in payload["cases"] if case["split"] == "boundary"]
+    false_positives = sum(
+        by_id[case["case_id"]].classification == "correction" for case in negatives
+    )
+    true_positives = sum(
+        by_id[case["case_id"]].classification == "correction" for case in positives
+    )
+    boundary_positives = sum(
+        by_id[case["case_id"]].classification == "correction" for case in boundaries
+    )
+    assert false_positives == 0
+    assert true_positives / len(positives) >= 0.9
+    assert boundary_positives == 0

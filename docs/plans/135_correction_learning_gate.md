@@ -321,3 +321,39 @@ Implementation checkpoint (2026-09-11):
   `correction-learning/codex/01a09111-50bc-7b21-944b-1e597e6247ce/3f819cac1da3e2246883`
   ended in an audit error after one slow successful batch; both remain
   non-blocking evidence against activation.
+
+### Classifier pilot pre-registration
+
+**Claim and decision:** On the frozen synthetic pilot set, the stripped
+subscription-backed Sonnet route can return a complete typed classification
+with zero enforcement-positive false positives across 20 held-out ordinary
+non-corrections and at least 90% recall across 10 held-out corrections. A pass
+permits work on native observe-only audit launching; it does not permit Stop
+blocking. A failed or invalid run keeps the classifier manual/off and triggers
+route or prompt revision on a fresh held-out set.
+
+**Unit and population:** One adjacent assistant/user exchange in Brian's coding
+agent conversations. The versioned cases cover factual, action, constraint,
+status, ownership, and interpretation corrections; approvals, continuations,
+new questions, added scope, preference changes, status requests, and topic
+switches; plus ambiguous dissatisfaction. Synthetic cases are a pilot and do
+not establish real-world prevalence or production accuracy.
+
+**System and controls:** `prompts/correction_learning/pilot_cases_v1.json` is
+frozen before execution. `dev-positive-taulant` and `dev-negative-proceed` are
+known development controls and excluded from the held-out score. Every other
+positive/negative case is held out from prompt iteration. Ambiguous cases must
+not be classified as corrections but are a separately reported boundary group.
+The system is `claude-code/sonnet`, low reasoning, six cases per batch, at most
+two agent turns, no ordinary tools, no loaded setting sources, and the existing
+strict Pydantic schema. Haiku is the rejected baseline: one-turn output was
+schema-invalid and a repaired one-exchange result took about 31 seconds.
+
+**Readout:** Primary metrics are held-out false-positive count and positive
+recall. Secondary metrics are ambiguous enforcement-positive count, exact
+event-ID coverage, total wall time, per-call latency, and route/schema errors.
+Any missing/duplicate verdict, route error, schema error, or changed case bytes
+invalidates the run. The artifact SHA-256, source commit, prompt bytes, schema,
+model, trace IDs, and call metadata are retained for replay. Maximum execution
+is one frozen-set run before any prompt change; post-run analysis is diagnostic
+only. Any promotion decision requires independent `eval-decision-signoff`.

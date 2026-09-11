@@ -1858,7 +1858,7 @@ def resolve_canonical_work_unit_binding(
     plan_start_point: str | None = None,
     target_repository_id: str | None = None,
 ) -> CanonicalWorkUnitBinding:
-    """Validate a target graph and its plan authority at independent commits."""
+    """Validate an owning plan graph and its target revision independently."""
 
     from enforced_planning.plan_validation import validate_plan_integrity_at_revision
 
@@ -1898,9 +1898,11 @@ def resolve_canonical_work_unit_binding(
         raise ValueError("Planning integrity resolved a different revision than the retained plan authority")
     if not Path(normalized_path).name.startswith(f"{plan_number}_"):
         raise ValueError(f"Work graph {normalized_path!r} does not match {plan_ref}; expected a {plan_number}_ prefix")
-    rendered = _run_git(root, ["show", f"{target_revision}:{normalized_path}"])
+    graph_root = authority_root if cross_repository else root
+    graph_revision = authority_revision if cross_repository else target_revision
+    rendered = _run_git(graph_root, ["show", f"{graph_revision}:{normalized_path}"])
     if rendered.returncode != 0:
-        raise ValueError(f"Canonical work graph {normalized_path!r} is unavailable at {target_revision}")
+        raise ValueError(f"Canonical work graph {normalized_path!r} is unavailable at {graph_revision}")
     try:
         payload = json.loads(rendered.stdout)
     except json.JSONDecodeError as exc:

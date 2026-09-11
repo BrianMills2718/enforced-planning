@@ -1610,8 +1610,8 @@ without a proxy copy of that plan in AES. Keep these inputs distinct:
 
 | Custody | Make inputs | Committed bytes validated |
 |---|---|---|
-| Mutation target | `WORKTREE_REPO_ROOT`, `WORKTREE_PROJECT`, `WORKTREE_START_POINT` | target work graph, work-unit readiness, approvals, branch/worktree start |
-| Plan authority | `PLAN_PROJECT`, `PLAN_REPO_ROOT`, `PLAN_START_POINT` | numbered plan and its integrity configuration |
+| Mutation target | `WORKTREE_REPO_ROOT`, `WORKTREE_PROJECT`, `WORKTREE_START_POINT` | branch/worktree start and claimed mutation paths |
+| Plan authority | `PLAN_PROJECT`, `PLAN_REPO_ROOT`, `PLAN_START_POINT` | numbered plan, work graph, work-unit readiness and approvals, and integrity configuration |
 | Bounded execution | `SESSION_WORK_GRAPH`, `SESSION_WORK_UNIT_ID`, native session and claimed paths | the selected target unit and that session's mutation ownership |
 
 `PLAN_REPO_ROOT` must be an explicit absolute canonical repository matching the
@@ -1622,6 +1622,9 @@ tips for a new lane. The target unit's `design_revision` must equal
 inputs deny before claim/branch/worktree mutation; a launch directory supplies
 neither identity nor authority. The same CLI inputs are `--plan-repo-root` and
 `--plan-start-point` on readiness, claim, and session-start entrypoints.
+The work graph is resolved at the exact plan-authority revision; the mutation
+target neither needs nor may substitute a proxy copy of that graph. Its start
+revision remains independently bound as the implementation baseline.
 
 External claims retain `plan_repo_root`, `plan_revision`, and `plan_sha256`
 alongside the target `start_revision` and graph digest (claim schema v5,

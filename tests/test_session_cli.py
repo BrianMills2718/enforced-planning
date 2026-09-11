@@ -338,11 +338,10 @@ def test_cross_repository_session_retains_plan_custody_and_rejects_rebinding(
         (root / "README.md").write_text("seed\n", encoding="utf-8")
         _git(root, "add", ".")
         _git(root, "commit", "-m", "seed")
-    plan_revision = _git(plan_root, "rev-parse", "HEAD")
     plan_sha256 = "d" * 64
     graph_path = "docs/plans/249_cross_repository_work_graph.json"
-    (target_root / graph_path).parent.mkdir(parents=True)
-    (target_root / graph_path).write_text(
+    (plan_root / graph_path).parent.mkdir(parents=True)
+    (plan_root / graph_path).write_text(
         json.dumps(
             {
                 "units": [
@@ -357,9 +356,11 @@ def test_cross_repository_session_retains_plan_custody_and_rejects_rebinding(
         ),
         encoding="utf-8",
     )
-    _git(target_root, "add", ".")
-    _git(target_root, "commit", "-m", "target graph")
+    _git(plan_root, "add", ".")
+    _git(plan_root, "commit", "-m", "plan work graph")
+    plan_revision = _git(plan_root, "rev-parse", "HEAD")
     target_revision = _git(target_root, "rev-parse", "HEAD")
+    assert not (target_root / graph_path).exists()
     worktree = target_root / "worktrees" / "plan249-aes01"
     _git(target_root, "worktree", "add", "-b", "plan249-aes01", str(worktree), target_revision)
 

@@ -6,7 +6,7 @@
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
 **goal_ref:** "correction-aware-agent-learning"
 **adrs_referenced:** []
-**research_citations:** ["project-meta/learnings/entries/lrn-20260911T191710248178Z-cd8a3f4fc7.json", "project-meta/learnings/entries/lrn-20260911T192757844201Z-c45c554f56.json"]
+**research_citations:** []
 **Landscape disposition:** inline
 **Blocked By:** None
 **Blocks:** None
@@ -75,6 +75,8 @@ runs inside the Stop hook.
 
 ## References Reviewed
 
+- `CLAUDE.md` — repository workflow, claimed-worktree, validation, and closeout
+  authority.
 - `scripts/learning_capture_hook.py` and
   `tests/test_learning_capture_hook.py` — installed disposition gate and its
   deterministic receipt behavior.
@@ -87,13 +89,20 @@ runs inside the Stop hook.
   bounded and recurring hook failures route through Plan #111.
 - `docs/plans/133_shared-surface-change-disclosure.md` — measured rejection of
   prose regex and precedent for structured output, model adjudication, or off.
+- `docs/plans/132_overbroad_claim_narrowing.md` — strict claim-surface authority
+  for the implementation lane.
+- Project Meta learning entries
+  `lrn-20260911T191710248178Z-cd8a3f4fc7` and
+  `lrn-20260911T192757844201Z-c45c554f56` — concrete same-session correction
+  and tool-checking lessons; these are learning/v3 evidence, not episodic
+  memory citations.
 - `llm_client/CLAUDE.md` and `llm_client/README.md` — required task, trace, and
   budget tags plus Pydantic structured output.
 - `/home/brian/.codex/config.toml` and `/home/brian/.claude/settings.json` — live
   three-second learning Stop hooks and native SessionEnd wiring.
-- `agent-memory recall 'correction learning gate user correction classifier'
-  --project enforced-planning` — unavailable because the installed command
-  cannot import `agent_memory`; no findings were inferred.
+- Memory recall for `correction learning gate user correction classifier` in
+  `enforced-planning` — unavailable because the installed command could not
+  import its Python package; no findings were inferred.
 
 ## Research Basis For This Slice
 
@@ -167,7 +176,7 @@ transcript boundary is separately demonstrated.
 | Semantic classification | exploration_required | Structured light-model verdict | Stop after threshold set passes or route is rejected | observe/block mode |
 | Learning reconciliation | fully_specifiable_now | `learning/v3.source_ref` equals native session identity and `recorded_at` follows correction | both-sign tests | deterministic verifier |
 | Stop behavior | fully_specifiable_now | receipt reads only; model/audit failure cannot block | native-shaped replay | hook extension |
-| Host activation | human_authorized | Brian said “proceed” in this session | both client canaries pass before block mode | generated hook wiring |
+| Host activation | fully_specifiable_now | Brian said “proceed” in this session; promotion is bounded by the acceptance thresholds | both client canaries pass before block mode | generated hook wiring |
 
 ## Reassessment Contract
 

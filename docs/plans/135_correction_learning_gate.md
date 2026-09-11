@@ -1,8 +1,8 @@
 # Plan #135: Correction-Aware Learning Gate
 
 **Status:** In Progress — typed audit and deterministic Stop verifier
-implemented; native classifier remains observe-only after latency and schema
-canary failures
+implemented; native classifier remains manual/off pending representative native
+evidence
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -274,12 +274,12 @@ works would only multiply an unproven control.
 
 ## Acceptance Criteria
 
-- [ ] The Taulant correction fixture is detected and a pure scope change is not.
+- [x] The Taulant correction fixture is detected and a pure scope change is not.
 - [x] Same-session immutable learning provenance is required for resolution.
 - [x] No model call or transcript parsing occurs in the Stop hot path.
 - [x] Model/transcript failure is visible and cannot block completion.
 - [ ] The labeled set meets the stated precision and recall thresholds.
-- [ ] One authentic traced structured call stays within the $0.05 audit budget.
+- [x] One authentic traced structured call stays within the $0.05 audit budget.
 - [ ] Codex and Claude Code each emit a verified native observe receipt.
 - [x] Block-mode native-shaped both-sign replays pass before host promotion.
 - [x] Focused tests and `python scripts/self_test.py` pass.
@@ -295,10 +295,10 @@ works would only multiply an unproven control.
   hook entry? — **Status: OPEN**; prefer extension, prove process lifetime with
   a native canary.
 - [ ] Does the first sanctioned light-model route meet the threshold? —
-  **Status: REJECTED FOR ACTIVATION**; subscription-backed Claude Haiku was
-  correct enough to reveal a reconciliation flaw, but native batches took
-  roughly 27–88 seconds and the corrected rerun ended in a structured-result
-  error. A faster reliable route or revised asynchronous lifecycle is required.
+  **Status: PARTIAL, NOT PROMOTABLE**; subscription-backed Haiku was unreliable
+  and slow. A stripped Sonnet route passed the frozen synthetic threshold, but
+  independent sign-off rejected promotion because no representative native
+  held-out corpus established generalization. The route remains manual/off.
 
 ## Notes
 
@@ -357,3 +357,21 @@ invalidates the run. The artifact SHA-256, source commit, prompt bytes, schema,
 model, trace IDs, and call metadata are retained for replay. Maximum execution
 is one frozen-set run before any prompt change; post-run analysis is diagnostic
 only. Any promotion decision requires independent `eval-decision-signoff`.
+
+**Pilot result:** The frozen run at source revision `8a7df95` returned exact
+coverage for 36/36 cases, detected 10/10 synthetic held-out corrections, falsely
+flagged 0/20 synthetic held-out non-corrections, and treated 0/4 ambiguous cases
+as corrections. Six calls took 125.347 seconds in aggregate (12.304–38.928
+seconds each). The privacy-reduced result is
+`prompts/correction_learning/pilot_result_v1.json`; traces are
+`correction-learning/pilot-v1/sonnet/batch-1` through `batch-6`.
+
+**Independent sign-off: REJECTED.** A fresh verifier confirmed artifact hashes,
+case counts, deterministic harness checks, route availability, and one
+independent three-sign live control (22.664 seconds). It rejected the promotion
+decision because all scored cases were hand-authored synthetic examples and no
+fresh native cases unseen during prompt/route selection established
+representativeness or generalization. Therefore the classifier remains
+manual/off; native launching, Stop blocking, and host wiring are not authorized
+by this pilot. The next valid evidence is a frozen authentically sampled native
+corpus with replayable per-case verdicts and another independent sign-off.

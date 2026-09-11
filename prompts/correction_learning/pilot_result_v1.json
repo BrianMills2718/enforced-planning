@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "evaluated_at": "2026-09-11T21:31:30Z",
+  "source_revision": "8a7df954286fc9d041319fd9ee504d93a6560fc7",
+  "case_set": "prompts/correction_learning/pilot_cases_v1.json",
+  "case_set_sha256": "7b1c994324c5122eae1fcc0e0b0ecd30e34bcdd0567d06cc0067e942810ae048",
+  "prompt": "prompts/correction_learning/classify.yaml",
+  "prompt_sha256": "1760a204f91ec7fc8a7636935b2c466075daeb300a0025d59baa306a6bbd788f",
+  "model": "claude-code/sonnet",
+  "reasoning_effort": "low",
+  "batch_size": 6,
+  "max_turns": 2,
+  "ordinary_tools": [],
+  "setting_sources": [],
+  "trace_prefix": "correction-learning/pilot-v1/sonnet",
+  "call_latencies_s": [19.31, 12.304, 12.669, 13.869, 38.928, 28.267],
+  "total_call_latency_s": 125.347,
+  "pytest_wall_time_s": 130.48,
+  "metrics": {
+    "exact_event_coverage": "36/36",
+    "held_out_correction_recall": "10/10",
+    "held_out_non_correction_false_positives": "0/20",
+    "boundary_enforcement_positives": "0/4",
+    "route_or_schema_errors": 0
+  },
+  "run_status": "valid_pass",
+  "decision_status": "rejected_by_independent_signoff",
+  "independent_signoff": {
+    "verdict": "REJECTED",
+    "validity": "pass",
+    "representativeness": "fail",
+    "diagnosis": "not_applicable",
+    "generalization": "fail",
+    "decision": "fail",
+    "independent_control": {
+      "case_count": 3,
+      "classes": ["known_positive", "held_out_negative", "boundary"],
+      "exact_ids": true,
+      "correct_classifications": true,
+      "latency_s": 22.664,
+      "route_or_schema_errors": 0
+    },
+    "required_next_evidence": "A fresh authentically sampled native corpus unseen during route and prompt selection, with replayable per-case verdict evidence."
+  },
+  "non_claims": [
+    "Synthetic cases do not establish real-world prevalence or production accuracy.",
+    "This result does not authorize synchronous Stop blocking or host activation.",
+    "Observed latency is suitable only for asynchronous or manual auditing."
+  ]
+}

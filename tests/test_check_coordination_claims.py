@@ -1710,17 +1710,16 @@ def test_cross_repository_work_unit_binding_separates_target_and_plan_revisions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A target graph and external plan are frozen and validated independently."""
+    """An external plan graph and target revision are frozen independently."""
 
     target_root = tmp_path / "agentic-engineering-system"
     plan_root = tmp_path / "project-meta"
     _init_git_repo(target_root)
     _init_git_repo(plan_root)
     (target_root / "tests").mkdir()
-    plan_revision = _git_head(plan_root)
     plan_sha256 = "d" * 64
     graph = _commit_work_graph(
-        target_root,
+        plan_root,
         plan=249,
         unit={
             "id": "P249-AES01",
@@ -1734,7 +1733,9 @@ def test_cross_repository_work_unit_binding_separates_target_and_plan_revisions(
             },
         },
     )
+    plan_revision = _git_head(plan_root)
     target_revision = _git_head(target_root)
+    assert not (target_root / graph).exists()
     calls: list[dict] = []
     _patch_cross_repo_plan_integrity(
         monkeypatch,
@@ -1820,7 +1821,7 @@ def test_cross_repository_binding_retains_plan_bytes_when_integrity_is_off(tmp_p
     )
     plan_sha256 = hashlib.sha256(plan_bytes).hexdigest()
     graph = _commit_work_graph(
-        target_root,
+        plan_root,
         plan=249,
         unit={
             "id": "P249-AES01",
@@ -1886,7 +1887,7 @@ def test_cross_repository_work_unit_binding_rejects_plan_digest_mismatch(
     _init_git_repo(target_root)
     _init_git_repo(plan_root)
     graph = _commit_work_graph(
-        target_root,
+        plan_root,
         plan=249,
         unit={
             "id": "P249-AES01",
@@ -1937,10 +1938,9 @@ def test_cross_repository_claim_denials_leave_no_residue(
     plan_root = tmp_path / "project-meta"
     _init_git_repo(target_root)
     _init_git_repo(plan_root)
-    plan_revision = _git_head(plan_root)
     plan_sha256 = "d" * 64
     graph = _commit_work_graph(
-        target_root,
+        plan_root,
         plan=249,
         unit={
             "id": "P249-AES01",
@@ -1949,6 +1949,7 @@ def test_cross_repository_claim_denials_leave_no_residue(
             "readiness": {"status": "ready", "required_approval_types": [], "approvals": []},
         },
     )
+    plan_revision = _git_head(plan_root)
     if corruption == "stale_revision":
         (plan_root / "README.md").write_text("new authority tip\n", encoding="utf-8")
         subprocess.run(
@@ -2030,10 +2031,9 @@ def test_cross_repository_claim_persists_external_plan_authority_custody(
     _init_git_repo(target_root)
     _init_git_repo(plan_root)
     (target_root / "tests").mkdir()
-    plan_revision = _git_head(plan_root)
     plan_sha256 = "c" * 64
     graph = _commit_work_graph(
-        target_root,
+        plan_root,
         plan=249,
         unit={
             "id": "P249-AES01",
@@ -2047,6 +2047,7 @@ def test_cross_repository_claim_persists_external_plan_authority_custody(
             },
         },
     )
+    plan_revision = _git_head(plan_root)
     _patch_cross_repo_plan_integrity(
         monkeypatch,
         plan_revision=plan_revision,

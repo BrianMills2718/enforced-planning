@@ -293,6 +293,63 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     assert json.loads(missing_openclaw.stdout)["openclaw_completion_gate"] is False
 
 
+def test_install_check_accepts_symlink_equivalent_hook_path(tmp_path: Path) -> None:
+    """A configured checkout alias is live when it resolves to this hook."""
+    codex = tmp_path / "config.toml"
+    claude = tmp_path / "settings.json"
+    openclaw = tmp_path / "run_task.py"
+    checkout_alias = tmp_path / "active-enforced-planning"
+    checkout_alias.symlink_to(SCRIPT.parent.parent, target_is_directory=True)
+    aliased_script = checkout_alias / "scripts" / SCRIPT.name
+    codex.write_text(
+        '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ncommand = "python3 '
+        f'{aliased_script} --agent codex"\n',
+        encoding="utf-8",
+    )
+    claude.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "Stop": [
+                        {
+                            "hooks": [
+                                {"command": f"python3 {aliased_script} --agent claude-code"},
+                            ]
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    openclaw.write_text(
+        "OPENCLAW_LEARNING_CAPTURE_HOOK = True\n"
+        "OPENCLAW_LEARNING_CAPTURE_REQUIRED = True\n"
+        "def _apply_learning_capture_gate(): ...\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--check-install",
+            "--codex-config",
+            str(codex),
+            "--claude-settings",
+            str(claude),
+            "--openclaw-runner",
+            str(openclaw),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["live"] is True
+
+
 def _report(learnings: str) -> str:
     return f"- **Done** — shipped a change.\n- **Learnings** — {learnings}\n"
 

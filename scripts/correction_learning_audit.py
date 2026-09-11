@@ -35,9 +35,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transcript", required=True, type=Path)
     parser.add_argument("--learning-entries-dir", required=True, type=Path)
     parser.add_argument("--receipt", required=True, type=Path)
-    parser.add_argument("--model", default="claude-code/haiku")
+    parser.add_argument("--model", default="claude-code/sonnet")
     parser.add_argument("--max-exchanges", type=int, default=40)
-    parser.add_argument("--batch-size", type=int, default=5)
+    parser.add_argument("--batch-size", type=int, default=6)
     return parser.parse_args()
 
 
@@ -82,6 +82,10 @@ def classify_with_model(
         task="correction_classification",
         trace_id=trace_id,
         max_budget=0.05,
+        max_turns=2,
+        tools=[],
+        setting_sources=[],
+        cwd=str(ROOT),
     )
     return result
 

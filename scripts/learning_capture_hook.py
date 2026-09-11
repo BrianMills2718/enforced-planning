@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 import tempfile
 import tomllib
@@ -59,13 +60,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _contains_command(value: object, expected: str) -> bool:
-    """Return whether a parsed client config contains one exact command."""
+def _is_learning_hook_command(value: object, agent: str) -> bool:
+    """Return whether one config value invokes this hook for ``agent``."""
+    if not isinstance(value, str):
+        return False
+    try:
+        tokens = shlex.split(value)
+    except ValueError:
+        return False
+    if len(tokens) != 4 or tokens[0] != "python3" or tokens[2:] != ["--agent", agent]:
+        return False
+    return Path(tokens[1]).expanduser().resolve() == SCRIPT_PATH
+
+
+def _contains_command(value: object, agent: str) -> bool:
+    """Return whether a parsed client config contains this hook command."""
     if isinstance(value, dict):
-        return any(_contains_command(item, expected) for item in value.values())
+        return any(_contains_command(item, agent) for item in value.values())
     if isinstance(value, list):
-        return any(_contains_command(item, expected) for item in value)
-    return value == expected
+        return any(_contains_command(item, agent) for item in value)
+    return _is_learning_hook_command(value, agent)
 
 
 def check_install(
@@ -81,10 +95,10 @@ def check_install(
     claude_payload = json.loads(claude_path.read_text(encoding="utf-8"))
     openclaw_path = openclaw_runner.expanduser().resolve()
     openclaw_source = openclaw_path.read_text(encoding="utf-8")
-    codex_command = f"python3 {SCRIPT_PATH} --agent codex"
-    claude_command = f"python3 {SCRIPT_PATH} --agent claude-code"
-    codex_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), codex_command)
-    claude_live = _contains_command(claude_payload.get("hooks", {}).get("Stop", []), claude_command)
+    codex_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), "codex")
+    claude_live = _contains_command(
+        claude_payload.get("hooks", {}).get("Stop", []), "claude-code"
+    )
     openclaw_live = all(
         marker in openclaw_source
         for marker in (

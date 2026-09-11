@@ -1,0 +1,186 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "clg-01-typed-audit-and-native-canary",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "correction-aware-agent-learning",
+      "design_revision": "234186b7677db6719fac29472e6afaae9613bff1",
+      "spec_revision": "plan-135-work-graph-v1",
+      "title": "Build and canary the correction-aware learning gate",
+      "class": "implementation",
+      "objective": "Carry one user correction from a native transcript through structured model classification, same-session immutable learning reconciliation, a content-minimized receipt, and deterministic Stop verification without putting model work on the Stop hot path.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Typed Codex and Claude transcript extraction",
+          "Structured correction classification through llm_client",
+          "Same-session Project Meta learning reconciliation",
+          "Observe and block modes with both-sign tests",
+          "Native observe canaries and reproducible hook wiring"
+        ],
+        "excluded": [
+          "A parallel learning or feedback store",
+          "Semantic prose matching with regex",
+          "Model calls on the Stop hot path",
+          "OpenClaw block-mode activation without its own transcript canary",
+          "Deployment or package publication"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "plan",
+          "id": "enforced-planning#135",
+          "revision": "234186b7677db6719fac29472e6afaae9613bff1"
+        }
+      ],
+      "outputs": [
+        "Typed correction audit and privacy-reduced receipt",
+        "Deterministic same-session learning reconciliation",
+        "Observe and block completion behavior",
+        "Measured Codex and Claude native canary evidence"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/correction_learning.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/correction_learning_audit.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/learning_capture_hook.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "scripts/session_end.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/hook_wiring.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_correction_learning.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_learning_capture_hook.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_generate_hook_wiring.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_session_cli.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/135_correction_learning_gate.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/135_correction_learning_gate_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/CLAUDE.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "prompts/correction_learning",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "CLG01-A1",
+          "criterion": "A structured classifier detects the canonical correction while rejecting scope changes and ambiguous cases as enforcement-positive.",
+          "evidence_required": [
+            "Labeled both-sign fixture results",
+            "Authentic traced llm_client execution within budget"
+          ],
+          "negative_control": "No regex or substring check infers whether user prose is a correction."
+        },
+        {
+          "id": "CLG01-A2",
+          "criterion": "Only an immutable learning recorded after the correction with the same native session source_ref resolves the receipt.",
+          "evidence_required": [
+            "Same-session resolution test",
+            "Older and other-session rejection tests"
+          ],
+          "negative_control": "A final-report claim or unrelated learning cannot satisfy the gate."
+        },
+        {
+          "id": "CLG01-A3",
+          "criterion": "Observe mode cannot block and block mode reads validated receipts without model or transcript work on Stop.",
+          "evidence_required": [
+            "Native-shaped Stop both-sign replay",
+            "Measured Stop latency",
+            "Model-failure non-blocking test"
+          ],
+          "negative_control": "Classifier latency, route failure, or missing transcript never interrupts an agent turn."
+        },
+        {
+          "id": "CLG01-A4",
+          "criterion": "Codex and Claude Code each produce a verified native observe receipt before any blocking host promotion.",
+          "evidence_required": [
+            "Codex native receipt and trace",
+            "Claude Code native receipt and trace",
+            "Installed hook liveness output"
+          ],
+          "negative_control": "Source tests alone cannot establish native adoption."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-11T20:35:00Z",
+      "updated_at": "2026-09-11T20:35:00Z"
+    }
+  ]
+}

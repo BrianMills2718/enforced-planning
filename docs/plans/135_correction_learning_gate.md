@@ -197,6 +197,7 @@ transcript boundary is separately demonstrated.
 ## Files Affected
 
 - `docs/plans/135_correction_learning_gate.md`
+- `docs/plans/135_correction_learning_gate_work_graph.json`
 - `enforced_planning/correction_learning.py` (create)
 - `scripts/correction_learning_audit.py` (create)
 - `scripts/learning_capture_hook.py`

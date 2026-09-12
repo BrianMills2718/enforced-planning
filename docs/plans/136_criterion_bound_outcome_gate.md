@@ -170,7 +170,9 @@ journey both discriminate.
 ## Files Affected
 
 - `enforced_planning/outcome_continuation.py`
+- `enforced_planning/outcome_portfolio.py`
 - `tests/test_criterion_bound_outcomes.py`
+- `tests/test_outcome_portfolio.py`
 - `docs/plans/136_criterion_bound_outcome_gate.md`
 - `docs/plans/136_criterion_bound_outcome_gate_work_graph.json`
 - `docs/plans/CLAUDE.md`

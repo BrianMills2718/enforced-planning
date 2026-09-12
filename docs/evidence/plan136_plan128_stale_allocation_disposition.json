@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-128-runtime-consumer-orphan-parked-for-plan-136",
+  "requested_at": "2026-09-12T08:57:17Z",
+  "allocation_id": "plan-128-runtime-consumer-allocation",
+  "allocation_sha256": "5c43edf83780bb074d511e04253d5de869a4cd2783f897e4d81be48ddd3ec676",
+  "disposition": "parked",
+  "decision_ref": "user:2026-09-12-approve-criterion-bound-outcome-enforcement",
+  "reason": "The allocation has no live claim or retained worktree, and the user explicitly prioritized Plan 136 criterion-bound outcome enforcement. Park the orphaned allocation without deleting its history."
+}

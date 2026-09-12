@@ -7,7 +7,7 @@
     "owner_class": "brian",
     "project_id": "enforced-planning",
     "lineage_id": "plan-136-criterion-bound-outcome-gate",
-    "portfolio_class": "product",
+    "portfolio_class": "maintenance",
     "predecessor_lineage_ids": [],
     "intended_consumer": "Brian reviewing the Plan 52 company-work and purpose-map dashboard",
     "outcome": "Review readiness is impossible until independent evidence closes every frozen success criterion on the exact non-rejected artifact.",
@@ -27,7 +27,9 @@
       "docs/plans/CLAUDE.md",
       "ROADMAP.md",
       "enforced_planning/outcome_continuation.py",
-      "tests/test_criterion_bound_outcomes.py"
+      "enforced_planning/outcome_portfolio.py",
+      "tests/test_criterion_bound_outcomes.py",
+      "tests/test_outcome_portfolio.py"
     ],
     "progress_dimensions": [
       "criterion-bound source contract",

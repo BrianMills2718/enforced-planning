@@ -52,7 +52,19 @@
         },
         {
           "kind": "repository_path",
+          "target": "enforced_planning/outcome_portfolio.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
           "target": "tests/test_criterion_bound_outcomes.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_portfolio.py",
           "repository": "enforced-planning",
           "access": "exclusive"
         },

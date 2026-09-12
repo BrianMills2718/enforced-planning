@@ -169,6 +169,9 @@ authentic consumer before any rollout.
 - Exact receipts, the partial denial, final decision, and rejected-revival
   negative control are retained in
   `docs/evidence/plan136_criterion_bound_outcome_verification.json`.
+- The bounded maintenance allocation is closed as `complete` by
+  `docs/evidence/plan136_criterion_bound_outcome_disposition.json` after the
+  source and browser evidence were retained.
 
 This is local implementation and consumer evidence. It does not claim that the
 branch is merged, installed, or active across ordinary Codex sessions.
@@ -198,6 +201,7 @@ journey both discriminate.
 - `tests/test_criterion_bound_outcomes.py`
 - `tests/test_outcome_portfolio.py`
 - `docs/evidence/plan136_criterion_bound_outcome_verification.json`
+- `docs/evidence/plan136_criterion_bound_outcome_disposition.json`
 - `docs/plans/136_criterion_bound_outcome_gate.md`
 - `docs/plans/136_criterion_bound_outcome_gate_work_graph.json`
 - `docs/plans/CLAUDE.md`

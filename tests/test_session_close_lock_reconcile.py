@@ -184,6 +184,7 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
     module = _load(script, f"session_close_order_{script.parent.name}")
     helper = tmp_path / "canonical_lock.py"
     helper.write_text("# retained path\n", encoding="utf-8")
+    durable_root = tmp_path / "canonical"
     events: list[str] = []
     args = SimpleNamespace(
         project="enforced-planning",
@@ -196,6 +197,11 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
     monkeypatch.setattr(module, "parse_args", lambda _argv: args)
     monkeypatch.setattr(module, "_lane_range_basis", lambda *_args: (None, "merge_base"))
     monkeypatch.setattr(module, "_supported_closeout_kwargs", lambda _args: {})
+    monkeypatch.setattr(
+        module,
+        "_resolve_durable_repo_root",
+        lambda: events.append("durable-root") or durable_root,
+    )
     monkeypatch.setattr(
         module,
         "_resolve_canonical_lock_module",
@@ -221,7 +227,12 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
         assert module_path == helper
 
     monkeypatch.setattr(module, "_reconcile_canonical_lock", reconcile)
-    monkeypatch.setattr(module, "_report_shared_ref_movement", lambda *_args: None)
+
+    def report(*_args, repo_root: Path) -> None:
+        events.append("report")
+        assert repo_root == durable_root
+
+    monkeypatch.setattr(module, "_report_shared_ref_movement", report)
 
     assert module.main([]) == 0
-    assert events == ["resolve", "close", "reconcile"]
+    assert events == ["durable-root", "resolve", "close", "reconcile", "report"]

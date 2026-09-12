@@ -157,6 +157,11 @@ authentic consumer before any rollout.
 
 - Enforced Planning focused suite: 63 tests pass across criterion transitions,
   portfolio admission, selection, and retained consumer replay.
+- Integration preflight after custody transfer: 117 tests pass across criterion
+  transitions, portfolio admission, continuation, and selection. The preflight
+  caught and repaired legacy Plan 114 digest drift caused by materialized empty
+  criterion-extension defaults; retained contract, receipt, lease, and scenario
+  hashes now remain stable when the criterion extension is inactive.
 - Dashboard `make ui-check`: 67 tests pass, including Chromium probes for
   downward dependency geometry and separate Company Work / Purpose Map panels.
 - Rejected dashboard revision `8d663c75b15136bd389a06171c7fea167b2ab749`

@@ -125,6 +125,7 @@
   },
   "checks": {
     "dashboard_ui_check": "67 passed",
-    "criterion_gate_focused_tests": "62 passed"
+    "criterion_gate_focused_tests": "62 passed",
+    "integration_preflight": "117 passed across criterion-bound outcomes, portfolio, continuation, and selection; legacy Plan 114 retained hashes preserved"
   }
 }

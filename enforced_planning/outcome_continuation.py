@@ -132,10 +132,66 @@ def _portable_path(value: str, *, field_name: str, directory_allowed: bool = Fal
         raise ValueError(f"{field_name} must contain portable root-relative paths")
 
 
+def _canonical_compatibility_payload(value: Any) -> Any:
+    """Remove inactive extension defaults from pre-extension durable identities.
+
+    Plan 136 adds criterion fields to models whose hashes already bind retained
+    Plan 114 records. Pydantic materializes absent defaults while loading those
+    records, so hashing the raw model dump would invalidate their existing
+    contract, receipt, lease, and scenario digests. Criterion-bearing records
+    retain every new field; only the all-default inactive extension is omitted.
+    """
+
+    if isinstance(value, list):
+        return [_canonical_compatibility_payload(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    payload = {
+        key: _canonical_compatibility_payload(item)
+        for key, item in value.items()
+    }
+    if (
+        "outcome_id" in payload
+        and "canonical_journey" in payload
+        and payload.get("schema_version") in {"1.0.0", "1.1.0"}
+        and payload.get("success_criteria") == []
+    ):
+        payload.pop("success_criteria")
+
+    receipt_defaults: dict[str, Any] = {
+        "artifact_sha256": None,
+        "artifact_disposition": None,
+        "criterion_ids": [],
+        "producer_id": None,
+        "verifier_id": None,
+        "verification_role": None,
+    }
+    if "receipt_id" in payload and all(
+        payload.get(key) == default for key, default in receipt_defaults.items()
+    ):
+        for key in receipt_defaults:
+            payload.pop(key, None)
+
+    lease_defaults: dict[str, Any] = {
+        "current_artifact_sha256": None,
+        "passed_criterion_ids": [],
+        "rejected_artifact_sha256s": [],
+        "review_status": "working",
+    }
+    if "lease_id" in payload and all(
+        payload.get(key) == default for key, default in lease_defaults.items()
+    ):
+        for key in lease_defaults:
+            payload.pop(key, None)
+    return payload
+
+
 def canonical_sha256(value: BaseModel | dict[str, Any]) -> str:
     """Hash a model or JSON-compatible mapping with stable serialization."""
 
-    payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+    raw_payload = value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+    payload = _canonical_compatibility_payload(raw_payload)
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 

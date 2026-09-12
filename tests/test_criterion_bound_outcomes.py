@@ -107,6 +107,21 @@ def test_v12_contract_requires_success_criteria() -> None:
         OutcomeContractV1.model_validate(payload)
 
 
+def test_legacy_scenario_hashes_ignore_inactive_criterion_defaults() -> None:
+    scenario_path = ROOT / "examples" / "cleanroom-ecosystem" / "outcome-continuation-progress.json"
+    payload = json.loads(scenario_path.read_text(encoding="utf-8"))
+    scenario = load_scenario(str(scenario_path))
+
+    assert canonical_sha256(scenario) == canonical_sha256(payload)
+    assert canonical_sha256(scenario.contract) == payload["starting_lease"][
+        "outcome_contract_sha256"
+    ]
+    assert canonical_sha256(scenario.starting_lease) == canonical_sha256(
+        payload["starting_lease"]
+    )
+    assert canonical_sha256(scenario.receipts[0]) == canonical_sha256(payload["receipts"][0])
+
+
 def test_review_ready_requires_every_criterion_on_exact_artifact() -> None:
     selected = contract()
     lease = issue_initial_lease(selected)

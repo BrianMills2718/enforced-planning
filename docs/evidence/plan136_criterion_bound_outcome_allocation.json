@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-136-criterion-bound-outcome-product",
+  "requested_at": "2026-09-12T08:52:00Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-136-criterion-bound-outcome",
+  "outcome_contract_sha256": "04e14603a7feaa75f93f04d470ffb9b865eaf868935f3150935776fa1263d77c",
+  "outcome_id": "criterion-bound-outcome-enforcement",
+  "outcome_lineage_id": "plan-136-criterion-bound-outcome-gate",
+  "portfolio_class": "product",
+  "decision_ref": "enforced-planning#136@75393299",
+  "purpose": "Prevent supporting work or rejected artifacts from substituting for Brian's exact visible dashboard outcome.",
+  "stopping_condition": "Complete or park the allocation after the source gate and the Plan 52 browser negative and positive controls are retained."
+}

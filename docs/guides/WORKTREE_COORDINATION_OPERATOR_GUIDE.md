@@ -1903,6 +1903,14 @@ exchanges. Semantic correction classification runs through `llm_client`; the
 learning completion hook only reads a validated audit receipt and never invokes a
 model or parses transcript prose on its Stop hot path.
 
+The same learning hook may also run on `UserPromptSubmit`. That path injects an
+immediate reminder to assess whether the new prompt corrected the preceding
+assistant turn and records only hashed event identity plus timing. It does not
+classify or retain prompt prose. The later Stop disposition receipt includes the
+number of prompt-time checkpoints observed for the session. Prompt-time
+attention is safe to activate independently; it does not authorize semantic
+correction blocking or weaken the audit thresholds below.
+
 The source CLI is intentionally manual and observe-only until the labeled threshold
 and both native-client canaries pass:
 

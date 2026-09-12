@@ -47,6 +47,40 @@ def run_hook(
     )
 
 
+def run_prompt_hook(
+    tmp_path: Path,
+    prompt: str,
+    *,
+    agent: str = "codex",
+    turn_id: str = "turn-123",
+) -> subprocess.CompletedProcess[str]:
+    """Run one native-shaped prompt event through the attention path."""
+
+    return subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--agent",
+            agent,
+            "--state-dir",
+            str(tmp_path),
+            "--hook-receipt-dir",
+            str(tmp_path / "hook-receipts"),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "session-123",
+                "turn_id": turn_id,
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": prompt,
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 def write_correction_receipt(tmp_path: Path, *, status: str) -> None:
     digest = hashlib.sha256(b"codex\0session-123").hexdigest()[:32]
     root = tmp_path / "correction-receipts"
@@ -128,6 +162,85 @@ def test_incoherent_correction_receipt_never_blocks_completion(tmp_path: Path) -
 def receipts(tmp_path: Path) -> list[dict[str, object]]:
     """Load every emitted disposition receipt."""
     return [json.loads(path.read_text(encoding="utf-8")) for path in tmp_path.glob("*/*.json")]
+
+
+def test_prompt_hook_injects_immediate_learning_checkpoint_without_storing_prose(
+    tmp_path: Path,
+) -> None:
+    prompt = "No, Taulant is a specialized Claude Code agent definition."
+    result = run_prompt_hook(tmp_path, prompt)
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    context = payload["hookSpecificOutput"]["additionalContext"]
+    assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert "record the reusable lesson" in context
+    attention = list(tmp_path.glob("*/attention/*.json"))
+    assert len(attention) == 1
+    assert prompt not in attention[0].read_text(encoding="utf-8")
+
+
+def test_prompt_hook_is_idempotent_for_one_native_turn(tmp_path: Path) -> None:
+    first = run_prompt_hook(tmp_path, "First delivery")
+    second = run_prompt_hook(tmp_path, "Duplicate delivery")
+
+    assert first.returncode == second.returncode == 0
+    assert len(list(tmp_path.glob("*/attention/*.json"))) == 1
+
+
+def test_prompt_hook_state_failure_warns_but_does_not_block_user_turn(
+    tmp_path: Path,
+) -> None:
+    state_file = tmp_path / "not-a-directory"
+    state_file.write_text("occupied", encoding="utf-8")
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--agent",
+            "codex",
+            "--state-dir",
+            str(state_file),
+            "--hook-receipt-dir",
+            str(tmp_path / "hook-receipts"),
+        ],
+        input=json.dumps(
+            {
+                "session_id": "session-123",
+                "turn_id": "turn-123",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Correction",
+            }
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    context = payload["hookSpecificOutput"]["additionalContext"]
+    assert "receipt was unavailable" in context
+    assert "decision" not in payload
+
+
+def test_stop_receipt_counts_prompt_time_attention_events(tmp_path: Path) -> None:
+    run_prompt_hook(tmp_path, "Please continue", turn_id="turn-one")
+    run_prompt_hook(tmp_path, "That assumption was wrong", turn_id="turn-two")
+
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n"
+        "- **Learnings** — None — this fixture exercises receipt accounting only.",
+    )
+
+    assert result.returncode == 0
+    disposition = next(
+        receipt
+        for receipt in receipts(tmp_path)
+        if receipt.get("decision") == "none"
+    )
+    assert disposition["attention_events"] == 2
 
 
 def test_non_completed_response_is_not_gated(tmp_path: Path) -> None:
@@ -289,7 +402,13 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     claude = tmp_path / "settings.json"
     openclaw = tmp_path / "run_task.py"
     codex.write_text(
-        '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ncommand = "python3 '
+        '[[hooks.UserPromptSubmit]]\n'
+        '[[hooks.UserPromptSubmit.hooks]]\n'
+        'command = "python3 '
+        f'{SCRIPT} --agent codex"\n'
+        '[[hooks.Stop]]\n'
+        '[[hooks.Stop.hooks]]\n'
+        'command = "python3 '
         f'{SCRIPT} --agent codex"\n',
         encoding="utf-8",
     )
@@ -297,6 +416,13 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
         json.dumps(
             {
                 "hooks": {
+                    "UserPromptSubmit": [
+                        {
+                            "hooks": [
+                                {"command": f"python3 {SCRIPT} --agent claude-code"},
+                            ]
+                        }
+                    ],
                     "Stop": [
                         {
                             "hooks": [
@@ -357,7 +483,16 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
 
     claude.write_text(
         json.dumps(
-            {"hooks": {"Stop": [{"hooks": [{"command": f"python3 {SCRIPT} --agent claude-code"}]}]}},
+            {
+                "hooks": {
+                    "UserPromptSubmit": [
+                        {"hooks": [{"command": f"python3 {SCRIPT} --agent claude-code"}]}
+                    ],
+                    "Stop": [
+                        {"hooks": [{"command": f"python3 {SCRIPT} --agent claude-code"}]}
+                    ],
+                }
+            },
         ),
         encoding="utf-8",
     )
@@ -391,7 +526,13 @@ def test_install_check_accepts_symlink_equivalent_hook_path(tmp_path: Path) -> N
     checkout_alias.symlink_to(SCRIPT.parent.parent, target_is_directory=True)
     aliased_script = checkout_alias / "scripts" / SCRIPT.name
     codex.write_text(
-        '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ncommand = "python3 '
+        '[[hooks.UserPromptSubmit]]\n'
+        '[[hooks.UserPromptSubmit.hooks]]\n'
+        'command = "python3 '
+        f'{aliased_script} --agent codex"\n'
+        '[[hooks.Stop]]\n'
+        '[[hooks.Stop.hooks]]\n'
+        'command = "python3 '
         f'{aliased_script} --agent codex"\n',
         encoding="utf-8",
     )
@@ -399,6 +540,13 @@ def test_install_check_accepts_symlink_equivalent_hook_path(tmp_path: Path) -> N
         json.dumps(
             {
                 "hooks": {
+                    "UserPromptSubmit": [
+                        {
+                            "hooks": [
+                                {"command": f"python3 {aliased_script} --agent claude-code"},
+                            ]
+                        }
+                    ],
                     "Stop": [
                         {
                             "hooks": [

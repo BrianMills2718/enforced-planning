@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require a learning disposition when an agent reports completed work.
+"""Prompt for and require a learning disposition around completed work.
 
 The hook does not try to decide whether a reusable learning exists. It enforces
 the observable boundary around that judgment: a completed-work report must say
@@ -45,6 +45,12 @@ DEFAULT_OPENCLAW_RUNNER = Path("~/.openclaw/bin/run_task.py")
 DEFAULT_CORRECTION_RECEIPT_DIR = Path("~/.claude/coordination/correction-learning-v1")
 SUPPORTED_AGENTS = ("claude-code", "codex", "openclaw")
 SCRIPT_PATH = Path(__file__).resolve()
+ATTENTION_MESSAGE = (
+    "Learning checkpoint: decide now whether this user message corrects a claim, "
+    "assumption, action, or handling mistake from the preceding assistant turn. "
+    "If it does, record the reusable lesson through the learned skill in this turn; "
+    "do not defer it to session close. If it does not, continue normally."
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -133,9 +139,15 @@ def check_install(
     claude_payload = json.loads(claude_path.read_text(encoding="utf-8"))
     openclaw_path = openclaw_runner.expanduser().resolve()
     openclaw_source = openclaw_path.read_text(encoding="utf-8")
-    codex_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), "codex")
-    claude_live = _contains_command(
+    codex_stop_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), "codex")
+    claude_stop_live = _contains_command(
         claude_payload.get("hooks", {}).get("Stop", []), "claude-code"
+    )
+    codex_prompt_live = _contains_command(
+        codex_payload.get("hooks", {}).get("UserPromptSubmit", []), "codex"
+    )
+    claude_prompt_live = _contains_command(
+        claude_payload.get("hooks", {}).get("UserPromptSubmit", []), "claude-code"
     )
     openclaw_live = all(
         marker in openclaw_source
@@ -147,9 +159,17 @@ def check_install(
     )
     return {
         "schema_version": 1,
-        "live": codex_live and claude_live and openclaw_live,
-        "codex_stop_hook": codex_live,
-        "claude_code_stop_hook": claude_live,
+        "live": (
+            codex_stop_live
+            and claude_stop_live
+            and codex_prompt_live
+            and claude_prompt_live
+            and openclaw_live
+        ),
+        "codex_stop_hook": codex_stop_live,
+        "claude_code_stop_hook": claude_stop_live,
+        "codex_prompt_hook": codex_prompt_live,
+        "claude_code_prompt_hook": claude_prompt_live,
         "openclaw_completion_gate": openclaw_live,
         "openclaw_runner": str(openclaw_path),
         "script": str(SCRIPT_PATH),
@@ -157,16 +177,71 @@ def check_install(
 
 
 def read_event() -> dict[str, Any]:
-    """Read the shared subset of native Claude Code and Codex Stop payloads."""
+    """Read a native Claude Code or Codex prompt/Stop payload."""
     payload = json.loads(sys.stdin.read())
     if not isinstance(payload, dict):
         raise TypeError("hook input must be a JSON object")
-    if payload.get("hook_event_name") != "Stop":
-        raise ValueError("learning capture hook requires hook_event_name=Stop")
-    for field in ("session_id", "last_assistant_message"):
+    event_name = payload.get("hook_event_name")
+    if event_name not in {"Stop", "UserPromptSubmit"}:
+        raise ValueError(
+            "learning capture hook requires hook_event_name=Stop or UserPromptSubmit"
+        )
+    required = ("session_id", "last_assistant_message") if event_name == "Stop" else ("session_id", "prompt")
+    for field in required:
         if not isinstance(payload.get(field), str) or not payload[field].strip():
-            raise ValueError(f"Stop payload requires non-empty {field!r}")
+            raise ValueError(f"{event_name} payload requires non-empty {field!r}")
     return payload
+
+
+def write_attention_receipt(
+    *, state_dir: Path, agent: str, session_id: str, payload: dict[str, Any]
+) -> Path:
+    """Persist a privacy-reduced prompt-time checkpoint for later liveness audit."""
+
+    state_root = state_dir.expanduser().resolve()
+    session_digest = hashlib.sha256(f"{agent}\0{session_id}".encode()).hexdigest()[:32]
+    turn_identity = str(payload.get("turn_id") or payload["prompt"])
+    event_digest = hashlib.sha256(
+        f"{agent}\0{session_id}\0{turn_identity}".encode()
+    ).hexdigest()[:32]
+    receipt_path = state_root / session_digest / "attention" / f"{event_digest}.json"
+    _atomic_write(
+        receipt_path,
+        {
+            "schema_version": 1,
+            "record_type": "learning_attention",
+            "agent": agent,
+            "session_id_sha256": hashlib.sha256(session_id.encode()).hexdigest(),
+            "event_id_sha256": event_digest,
+            "event_name": "UserPromptSubmit",
+            "observed_at": datetime.now(UTC).isoformat(),
+        },
+    )
+    return receipt_path
+
+
+def attention_receipt_count(*, state_dir: Path, agent: str, session_id: str) -> int:
+    """Count valid prompt-time checkpoints for one exact session."""
+
+    state_root = state_dir.expanduser().resolve()
+    session_digest = hashlib.sha256(f"{agent}\0{session_id}".encode()).hexdigest()[:32]
+    attention_dir = state_root / session_digest / "attention"
+    if not attention_dir.is_dir():
+        return 0
+    count = 0
+    for path in attention_dir.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if (
+            payload.get("record_type") == "learning_attention"
+            and payload.get("agent") == agent
+            and payload.get("session_id_sha256")
+            == hashlib.sha256(session_id.encode()).hexdigest()
+        ):
+            count += 1
+    return count
 
 
 def report_field(report: str, name: str) -> str | None:
@@ -383,6 +458,7 @@ def write_receipt(
     report: str,
     decision: str,
     detail: str,
+    attention_events: int = 0,
 ) -> Path:
     """Persist one digest-addressed disposition without storing transcript text."""
     state_root = state_dir.expanduser().resolve()
@@ -403,6 +479,7 @@ def write_receipt(
                 "report_sha256": report_digest,
                 "decision": decision,
                 "detail": detail[:500],
+                "attention_events": attention_events,
                 "observed_at": datetime.now(UTC).isoformat(),
             },
         )
@@ -454,6 +531,47 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = read_event()
+        if payload["hook_event_name"] == "UserPromptSubmit":
+            attention_message = ATTENTION_MESSAGE
+            attention_receipt_available = True
+            try:
+                invocation = start_hook_invocation(
+                    hook_name="learning-attention",
+                    hook_version="1",
+                    script_path=Path(__file__).resolve(),
+                    payload=payload,
+                    receipt_root=args.hook_receipt_dir,
+                )
+                write_attention_receipt(
+                    state_dir=args.state_dir,
+                    agent=args.agent,
+                    session_id=payload["session_id"],
+                    payload=payload,
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                attention_receipt_available = False
+                attention_message += (
+                    " The attention receipt was unavailable; assess and record the "
+                    f"learning manually ({type(exc).__name__})."
+                )
+            telemetry_decision = "allow"
+            telemetry_reason = (
+                "attention_injected"
+                if attention_receipt_available
+                else "attention_receipt_unavailable"
+            )
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "UserPromptSubmit",
+                            "additionalContext": attention_message,
+                        }
+                    },
+                    sort_keys=True,
+                )
+            )
+            return 0
         if payload.get("stop_hook_active"):
             # A re-fired Stop must not depend on receipt or state availability.
             # The first refusal already delivered the recovery instruction.
@@ -512,6 +630,11 @@ def main(argv: list[str] | None = None) -> int:
                 report=report,
                 decision=decision,
                 detail=detail,
+                attention_events=attention_receipt_count(
+                    state_dir=args.state_dir,
+                    agent=args.agent,
+                    session_id=payload["session_id"],
+                ),
             )
         if decision.startswith("block_"):
             print(

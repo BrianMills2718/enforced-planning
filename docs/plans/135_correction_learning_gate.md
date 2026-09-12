@@ -622,3 +622,19 @@ cost. `plan135_native_v4_schema_canary.json` retains only IDs and classification
 This passes the mechanism-repair boundary but does not score v4 or establish
 full-run reliability. A new unseen holdout is now the next permitted evaluation
 action.
+
+### Native corpus v5 pre-registration
+
+V5 is the first holdout after the structured-schema repair. It samples the
+disjoint, previously uninspected interval 2026-08-24 through 2026-08-30.
+`plan135_native_v5_selection.py` deterministically ranks eligible sessions with
+seed `plan135-native-v5`, selects 16 sessions per client, and selects one
+four-exchange window per session without inspecting prose. This selector and
+contract must be committed before candidate generation. Candidate, independent
+A/B labels, blind disagreement adjudication, and final corpus must be committed
+in that order before replay.
+
+Prompt 1.2, four-case batches, exact-ID and exception invalidation, the v3/v4
+quality thresholds, and fresh independent decision sign-off remain unchanged.
+Fewer than ten adjudicated corrections requires a precommitted extension. V5
+permits one held-out replay only and may not be retried or retuned.

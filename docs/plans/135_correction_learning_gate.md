@@ -645,3 +645,15 @@ adjudicated disagreements. Executable reconstruction yields 34 corrections,
 resolved all 128 events across the 32 frozen sessions. Candidate selection,
 privacy-reduced A/B labels, privacy-reduced adjudication, and the final corpus
 were committed in the preregistered order before replay.
+
+**Native v5 result: VALID FAIL.** The one frozen replay returned exact verdict
+coverage for all 128 events without an invalidating route or schema error. It
+detected 24/34 corrections (70.6% recall), produced three enforcement-positive
+false positives across 88 adjudicated non-corrections, and produced no
+enforcement-positive verdict across six ambiguous boundaries. Codex recall was
+12/18 with all three false positives; Claude Code recall was 12/16 with zero
+false positives. The result fails both the 90% recall gate and the zero-false-
+positive gate, so the classifier remains manual/off. No prompt, labels,
+threshold, or admission rule changed after the run. The frozen privacy-reduced
+result is `prompts/correction_learning/native_result_v5.json`; a fresh
+independent verifier must sign off before any final decision or integration.

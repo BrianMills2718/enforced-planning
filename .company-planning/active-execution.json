@@ -1,11 +1,11 @@
 {
   "active_slice": {
     "description": "Implement and verify the stable execution projection, divergence observation, and canonical completion proposal.",
-    "next_action": "Write focused failing tests for stable identity, replay, stale evidence, incomplete completion, and divergence before implementing the contract.",
+    "next_action": "Commit the verified contract, record XCET-01 acceptance at its exact revision, and run the repository gate.",
     "requires_external_action": false,
     "requires_spend": false,
     "slice_id": "xcet-01-neutral-contract",
-    "status": "executing",
+    "status": "verifying",
     "target_revision": "22664715dfb995210073a9fca54b38555f78b5e0"
   },
   "authority": {
@@ -29,7 +29,7 @@
     "verifier_outcome": null
   },
   "cursor_id": "plan137-xcet01-contract-implementation",
-  "cursor_revision": 1,
+  "cursor_revision": 2,
   "failure_state": {
     "boundary": null,
     "last_failure_ref": null,
@@ -37,7 +37,15 @@
   },
   "goal_ref": "cross-client-outcome-alignment",
   "lifecycle_state": "active",
-  "observations": [],
+  "observations": [
+    {
+      "boundary": "neutral-contract",
+      "evidence_ref": "pytest:123-passed+source-mypy+affected-ruff@2026-09-12",
+      "kind": "supporting_work",
+      "observation_id": "xcet01-focused-both-sign-tests",
+      "outcome": "pass"
+    }
+  ],
   "plan_revision": "22664715dfb995210073a9fca54b38555f78b5e0",
   "ready_alternatives": [
     {

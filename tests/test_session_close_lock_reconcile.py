@@ -110,6 +110,66 @@ def test_reconcile_actually_clears_a_stale_lock(tmp_path):
         )
 
 
+@pytest.mark.parametrize("script_directory", (Path("scripts"), Path("scripts/meta")))
+def test_resolver_returns_executable_helper_outside_disposable_worktree(
+    script_directory: Path,
+    tmp_path: Path,
+) -> None:
+    """The retained helper must still execute after the lane is removed."""
+
+    module = _load(
+        SHIPPED_COPIES[0],
+        f"session_close_durable_{str(script_directory).replace('/', '_')}",
+    )
+    canonical = tmp_path / "canonical"
+    canonical.mkdir()
+    subprocess.run(["git", "init", "-q", str(canonical)], check=True)
+    helper = canonical / script_directory / "worktree-coordination" / "canonical_lock.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text("print('durable-helper')\n", encoding="utf-8")
+    script = canonical / script_directory / "session_close.py"
+    script.write_text("# fixture\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(canonical), "add", "-A"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(canonical),
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "init",
+        ],
+        check=True,
+    )
+    worktree = tmp_path / "lane"
+    subprocess.run(
+        ["git", "-C", str(canonical), "worktree", "add", "-qb", "lane", str(worktree)],
+        check=True,
+    )
+
+    resolved = module._resolve_canonical_lock_module(
+        repo_root=worktree,
+        script_path=worktree / script_directory / "session_close.py",
+    )
+    assert resolved == helper
+    subprocess.run(
+        ["git", "-C", str(canonical), "worktree", "remove", str(worktree)],
+        check=True,
+    )
+    executed = subprocess.run(
+        [sys.executable, str(resolved)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert executed.returncode == 0
+    assert executed.stdout.strip() == "durable-helper"
+
+
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
 def test_main_resolves_reconcile_helper_before_close_removes_worktree(
     script: Path,

@@ -422,3 +422,42 @@ as not-correction under trace
 `correction-learning/dev-v2/adjacent-and-process/batch-1` (29.656 seconds, no
 retry or error, recorded marginal cost `$0.00`). This is development evidence,
 not a fresh holdout or promotion result.
+
+### Native corpus v2 pre-registration
+
+This is a single-system product evidence gate, not a comparative benchmark.
+The falsifiable claim is that prompt 1.1 plus typed native-message admission can
+identify Brian's corrections in previously unseen authentic adjacent exchanges
+with at least 90% recall and no enforcement-positive false positives. Passing
+may authorize a reversible native observe-only launch; it cannot authorize Stop
+blocking. Failure or invalid evidence retains manual/off and triggers a new
+mechanism revision on development data only.
+
+The source sample was frozen in
+`docs/evidence/plan135_native_v2_candidates.json` before annotation or replay.
+It excludes every v1/development session and covers eight Codex plus eight
+Claude Code sessions. Eligible transcript windows run from 2026-09-07 through
+the prompt-1.1 commit time. Within each client, transcript paths with at least
+four eligible user-authored adjacent exchanges are ordered by SHA-256 of the
+fixed seed, client, and home-relative path; the lowest eight are selected, and
+a hash-derived contiguous four-exchange window is retained. This yields 64
+cases without inspecting their prose during selection.
+
+Two blind annotators independently label every exact adjacent pair using only
+information available to the classifier. A third blind adjudicator resolves
+disagreements. Agreement and disagreements are reported; model rationales and
+conversation prose are not retained in the corpus. If fewer than ten adjudicated
+corrections exist, classifier replay is forbidden: selection must be extended
+using the next paths in the same deterministic order and all added labels frozen
+before replay. Otherwise the one permitted held-out run uses the committed
+prompt, typed schema, stripped Sonnet route, six cases per batch, no tools or
+setting sources, and a `$0.05` maximum marginal budget.
+
+The primary gates are at least 90% correction recall, zero correction verdicts
+among adjudicated non-corrections, and zero correction verdicts among ambiguous
+boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source
+windows, admission of typed meta/protocol records, route/schema errors, label
+leakage, or annotation below the ten-positive floor invalidates the run. Exact
+coverage, agreement, subgroup results by client, call latency/cost, prompt and
+corpus hashes, and trace IDs are secondary readouts. Any consequential decision
+requires fresh adversarial `eval-decision-signoff`.

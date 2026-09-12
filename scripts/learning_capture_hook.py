@@ -126,6 +126,69 @@ def _contains_command(value: object, agent: str) -> bool:
     return _is_learning_hook_command(value, agent)
 
 
+def _codex_hook_hash(event_name: str, group: dict[str, Any], handler: dict[str, Any]) -> str:
+    """Reproduce Codex's normalized command-hook trust fingerprint."""
+    timeout = handler.get("timeout", 600)
+    normalized_handler: dict[str, Any] = {
+        "type": "command",
+        "command": handler["command"],
+        "timeout": max(1, int(timeout)),
+        "async": bool(handler.get("async", False)),
+    }
+    if handler.get("statusMessage") is not None:
+        normalized_handler["statusMessage"] = handler["statusMessage"]
+    context_limit = handler.get("additionalContextLimit")
+    if context_limit not in (None, 2500) and event_name == "UserPromptSubmit":
+        normalized_handler["additionalContextLimit"] = context_limit
+    identity: dict[str, Any] = {
+        "event_name": re.sub(r"(?<!^)(?=[A-Z])", "_", event_name).lower(),
+        "hooks": [normalized_handler],
+    }
+    matcher = group.get("matcher")
+    if matcher:
+        identity["matcher"] = matcher
+    serialized = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    return f"sha256:{hashlib.sha256(serialized).hexdigest()}"
+
+
+def _codex_hook_operational_status(
+    payload: dict[str, Any], config_path: Path, event_name: str
+) -> dict[str, object]:
+    """Report whether an exact configured Codex hook is enabled and trusted."""
+    states = payload.get("hooks", {}).get("state", {})
+    candidates: list[dict[str, object]] = []
+    for group_index, group in enumerate(payload.get("hooks", {}).get(event_name, [])):
+        if not isinstance(group, dict):
+            continue
+        for handler_index, handler in enumerate(group.get("hooks", [])):
+            if not isinstance(handler, dict) or not _is_learning_hook_command(
+                handler.get("command"), "codex"
+            ):
+                continue
+            key = (
+                f"{config_path.resolve()}:"
+                f"{re.sub(r'(?<!^)(?=[A-Z])', '_', event_name).lower()}:"
+                f"{group_index}:{handler_index}"
+            )
+            state = states.get(key, {}) if isinstance(states, dict) else {}
+            current_hash = _codex_hook_hash(event_name, group, handler)
+            enabled = state.get("enabled") is not False
+            trusted = state.get("trusted_hash") == current_hash
+            candidates.append(
+                {
+                    "key": key,
+                    "enabled": enabled,
+                    "trusted": trusted,
+                    "current_hash": current_hash,
+                }
+            )
+    return {
+        "configured": bool(candidates),
+        "operational": any(item["enabled"] and item["trusted"] for item in candidates),
+        "candidates": candidates,
+    }
+
+
 def check_install(
     codex_config: Path,
     claude_settings: Path,
@@ -139,12 +202,12 @@ def check_install(
     claude_payload = json.loads(claude_path.read_text(encoding="utf-8"))
     openclaw_path = openclaw_runner.expanduser().resolve()
     openclaw_source = openclaw_path.read_text(encoding="utf-8")
-    codex_stop_live = _contains_command(codex_payload.get("hooks", {}).get("Stop", []), "codex")
+    codex_stop = _codex_hook_operational_status(codex_payload, codex_path, "Stop")
     claude_stop_live = _contains_command(
         claude_payload.get("hooks", {}).get("Stop", []), "claude-code"
     )
-    codex_prompt_live = _contains_command(
-        codex_payload.get("hooks", {}).get("UserPromptSubmit", []), "codex"
+    codex_prompt = _codex_hook_operational_status(
+        codex_payload, codex_path, "UserPromptSubmit"
     )
     claude_prompt_live = _contains_command(
         claude_payload.get("hooks", {}).get("UserPromptSubmit", []), "claude-code"
@@ -158,17 +221,21 @@ def check_install(
         )
     )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "live": (
-            codex_stop_live
+            codex_stop["operational"]
             and claude_stop_live
-            and codex_prompt_live
+            and codex_prompt["operational"]
             and claude_prompt_live
             and openclaw_live
         ),
-        "codex_stop_hook": codex_stop_live,
+        "codex_stop_hook": codex_stop["configured"],
+        "codex_stop_operational": codex_stop["operational"],
+        "codex_stop_candidates": codex_stop["candidates"],
         "claude_code_stop_hook": claude_stop_live,
-        "codex_prompt_hook": codex_prompt_live,
+        "codex_prompt_hook": codex_prompt["configured"],
+        "codex_prompt_operational": codex_prompt["operational"],
+        "codex_prompt_candidates": codex_prompt["candidates"],
         "claude_code_prompt_hook": claude_prompt_live,
         "openclaw_completion_gate": openclaw_live,
         "openclaw_runner": str(openclaw_path),
@@ -520,7 +587,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.openclaw_runner,
             )
         except (json.JSONDecodeError, OSError, tomllib.TOMLDecodeError, TypeError, ValueError) as exc:
-            print(json.dumps({"schema_version": 1, "live": False, "error": f"{type(exc).__name__}: {exc}"}))
+            print(json.dumps({"schema_version": 2, "live": False, "error": f"{type(exc).__name__}: {exc}"}))
             return 1
         print(json.dumps(result, sort_keys=True))
         return 0 if result["live"] else 1

@@ -1,12 +1,12 @@
 {
   "active_slice": {
     "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
-    "next_action": "Obtain fresh independent signoff on the v4 invalidation, cumulative manual-off decision, and execution circuit breaker.",
+    "next_action": "Freeze and evaluate a new unseen holdout only after the repaired structured route passed its contaminated development canary.",
     "requires_external_action": false,
     "requires_spend": false,
     "slice_id": "native-corpus-and-signoff",
     "status": "verifying",
-    "target_revision": "d7949af566021eca4f1dccf3dbf866a867f868f9"
+    "target_revision": "7487ee9918c4138b4663debb9a7ff0534a2b2dab"
   },
   "authority": {
     "external_action_authorized": false,
@@ -29,7 +29,7 @@
     "verifier_outcome": "fail"
   },
   "cursor_id": "plan-135-native-corpus-signoff-v3",
-  "cursor_revision": 5,
+  "cursor_revision": 6,
   "failure_state": {
     "boundary": "evaluation-runtime-integrity",
     "last_failure_ref": "prompts/correction_learning/native_result_v4.json@d7949af566021eca4f1dccf3dbf866a867f868f9",
@@ -78,6 +78,20 @@
       "evidence_ref": "scripts/correction_learning_audit.py@d7949af566021eca4f1dccf3dbf866a867f868f9",
       "kind": "supporting_work",
       "observation_id": "all-batch-failures-retained",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "decision-signoff",
+      "evidence_ref": "docs/evidence/plan135_native_v4_signoff.md@a82de7f6c576d4ab7c6d27252ffa859e19957903",
+      "kind": "verification_failure",
+      "observation_id": "premature-circuit-breaker-rejected",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "docs/evidence/plan135_native_v4_schema_canary.json@7487ee9918c4138b4663debb9a7ff0534a2b2dab",
+      "kind": "supporting_work",
+      "observation_id": "rationale-bound-repair-canary",
       "outcome": "pass"
     }
   ],

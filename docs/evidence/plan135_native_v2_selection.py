@@ -73,7 +73,12 @@ def _ranked(home: Path, agent: str, paths: list[Path]):
     return sorted(eligible)
 
 
-def _wave(home: Path, start_rank: int, end_rank: int) -> dict[str, object]:
+def _wave(
+    home: Path,
+    start_rank: int,
+    end_rank: int,
+    development_revision: str,
+) -> dict[str, object]:
     selected = []
     for agent, paths in _paths(home).items():
         for score, path, session_id, exchanges in _ranked(home, agent, paths)[
@@ -103,7 +108,7 @@ def _wave(home: Path, start_rank: int, end_rank: int) -> dict[str, object]:
     payload: dict[str, object] = {
         "schema_version": "candidate/1.0",
         "seed": SEED,
-        "development_revision": "f5680f700c4a",
+        "development_revision": development_revision,
         "population_start": START.isoformat().replace("+00:00", "Z"),
         "population_end": END.isoformat().replace("+00:00", "Z"),
         "sources": selected,
@@ -120,11 +125,29 @@ def _serialized(payload: dict[str, object]) -> bytes:
 def main() -> int:
     home = Path.home()
     checks = [
-        (0, 8, ROOT / "docs/evidence/plan135_native_v2_candidates.json"),
-        (8, 16, ROOT / "docs/evidence/plan135_native_v2_extension1_candidates.json"),
+        (
+            0,
+            8,
+            "f5680f700c4a",
+            ROOT / "docs/evidence/plan135_native_v2_candidates.json",
+        ),
+        (
+            8,
+            16,
+            "f5680f700c4a",
+            ROOT / "docs/evidence/plan135_native_v2_extension1_candidates.json",
+        ),
+        (
+            16,
+            32,
+            "29ab33b8bd31e86929518b35f8b98c8a2c51e5f7",
+            ROOT / "docs/evidence/plan135_native_v3_candidates.json",
+        ),
     ]
-    for start_rank, end_rank, expected in checks:
-        actual = _serialized(_wave(home, start_rank, end_rank))
+    for start_rank, end_rank, development_revision, expected in checks:
+        actual = _serialized(
+            _wave(home, start_rank, end_rank, development_revision)
+        )
         expected_bytes = expected.read_bytes()
         if actual != expected_bytes:
             raise SystemExit(f"selection mismatch: {expected.name}")

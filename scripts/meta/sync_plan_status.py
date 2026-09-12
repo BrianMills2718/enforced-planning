@@ -26,7 +26,6 @@ import re
 import sys
 from pathlib import Path
 
-
 PLANS_DIR = Path("docs/plans")
 INDEX_FILE = PLANS_DIR / "CLAUDE.md"
 
@@ -175,7 +174,7 @@ def parse_index_table(index_path: Path) -> dict[int, dict]:
         # Extract status emoji
         status_cell = cells[status_index]
         status_emoji = None
-        for emoji in STATUS_MAP.keys():
+        for emoji in STATUS_MAP:
             if emoji in status_cell:
                 status_emoji = emoji
                 break
@@ -200,6 +199,50 @@ def parse_index_table(index_path: Path) -> dict[int, dict]:
     return plans
 
 
+def collect_canonical_plan_statuses(
+    index_statuses: dict[int, dict],
+) -> tuple[dict[int, dict], list[dict]]:
+    """Select one canonical status source per plan number.
+
+    Number-prefixed supporting artifacts are allowed beside a plan. When more
+    than one file shares a number, the index's explicit filename reference
+    selects the canonical plan; an absent or ambiguous reference fails visibly
+    instead of letting lexicographic order overwrite a status.
+    """
+
+    candidates: dict[int, list[dict]] = {}
+    for plan_path in sorted(PLANS_DIR.glob("[0-9]*_*.md")):
+        status = parse_plan_status(plan_path)
+        if status:
+            candidates.setdefault(status["number"], []).append(status)
+
+    selected: dict[int, dict] = {}
+    issues: list[dict] = []
+    for plan_num, options in sorted(candidates.items()):
+        if len(options) == 1:
+            selected[plan_num] = options[0]
+            continue
+
+        title_cell = index_statuses.get(plan_num, {}).get("title_cell", "")
+        referenced = [option for option in options if option["file"] in title_cell]
+        if len(referenced) == 1:
+            selected[plan_num] = referenced[0]
+            continue
+
+        issues.append(
+            {
+                "plan": plan_num,
+                "issue": "ambiguous_plan_files",
+                "message": (
+                    f"Plan #{plan_num} has multiple numbered files and the index does not "
+                    "reference exactly one canonical file: "
+                    + ", ".join(option["file"] for option in options)
+                ),
+            }
+        )
+    return selected, issues
+
+
 def check_content_consistency() -> list[dict]:
     """Check that plan status matches content.
 
@@ -207,14 +250,10 @@ def check_content_consistency() -> list[dict]:
     - Status "❌ Needs Plan" + has ## Plan section = should be "📋 Planned"
     - Status "📋 Planned" + no ## Plan section = missing content
     """
-    issues = []
+    index_statuses = parse_index_table(INDEX_FILE)
+    plan_statuses, issues = collect_canonical_plan_statuses(index_statuses)
 
-    plan_files = sorted(PLANS_DIR.glob("[0-9]*_*.md"))
-
-    for pf in plan_files:
-        plan = parse_plan_status(pf)
-        if not plan:
-            continue
+    for plan in plan_statuses.values():
 
         status = plan["status_emoji"]
         has_plan = plan["has_plan_section"]
@@ -280,20 +319,8 @@ def fix_content_status() -> int:
 
 def check_consistency() -> list[dict]:
     """Check for inconsistencies between plan files and index."""
-    issues = []
-
-    # Get all plan files
-    plan_files = sorted(PLANS_DIR.glob("[0-9]*_*.md"))
-
-    # Parse each plan file
-    plan_statuses = {}
-    for pf in plan_files:
-        status = parse_plan_status(pf)
-        if status:
-            plan_statuses[status["number"]] = status
-
-    # Parse index
     index_statuses = parse_index_table(INDEX_FILE)
+    plan_statuses, issues = collect_canonical_plan_statuses(index_statuses)
 
     # Compare
     all_nums = set(plan_statuses.keys()) | set(index_statuses.keys())
@@ -311,15 +338,14 @@ def check_consistency() -> list[dict]:
         elif index and not plan:
             # This is OK - some plans may be superseded or have no file
             pass
-        elif plan and index:
-            if plan["status_emoji"] != index["status_emoji"]:
-                issues.append({
-                    "plan": num,
-                    "issue": "status_mismatch",
-                    "message": f"Plan #{num}: file has {plan['status_emoji']} but index has {index['status_emoji']}",
-                    "file_status": plan["status_raw"],
-                    "index_status": index["status_cell"],
-                })
+        elif plan and index and plan["status_emoji"] != index["status_emoji"]:
+            issues.append({
+                "plan": num,
+                "issue": "status_mismatch",
+                "message": f"Plan #{num}: file has {plan['status_emoji']} but index has {index['status_emoji']}",
+                "file_status": plan["status_raw"],
+                "index_status": index["status_cell"],
+            })
 
     return issues
 
@@ -332,13 +358,12 @@ def sync_index_to_plans() -> int:
 
     content = INDEX_FILE.read_text()
 
-    # Get plan file statuses
-    plan_files = sorted(PLANS_DIR.glob("[0-9]*_*.md"))
-    plan_statuses = {}
-    for pf in plan_files:
-        status = parse_plan_status(pf)
-        if status:
-            plan_statuses[status["number"]] = status
+    index_statuses = parse_index_table(INDEX_FILE)
+    plan_statuses, selection_issues = collect_canonical_plan_statuses(index_statuses)
+    if selection_issues:
+        for issue in selection_issues:
+            print(f"Error: {issue['message']}")
+        return 1
 
     # Find and update each row in the table
     def replace_status(match: re.Match) -> str:
@@ -355,12 +380,17 @@ def sync_index_to_plans() -> int:
 
         plan = plan_statuses[plan_num]
         new_status = plan["status_emoji"]
+        if new_status not in STATUS_MAP:
+            # A custom status outside this legacy emoji map is not authority to
+            # erase a richer index value. Preserve it until both surfaces have
+            # an explicitly supported mapping.
+            return line
 
         # Check if status already contains custom suffix (not standard status names)
         old_status = cells[3]
         custom_suffix = ""
         standard_names = {name.lower() for name in STATUS_MAP.values()}
-        for emoji in STATUS_MAP.keys():
+        for emoji in STATUS_MAP:
             if emoji in old_status:
                 # Extract any text after the emoji
                 parts = old_status.split(emoji, 1)
@@ -399,22 +429,22 @@ def sync_index_to_plans() -> int:
 
 def list_statuses() -> None:
     """List all plan statuses."""
-    plan_files = sorted(PLANS_DIR.glob("[0-9]*_*.md"))
+    index_statuses = parse_index_table(INDEX_FILE)
+    plan_statuses, selection_issues = collect_canonical_plan_statuses(index_statuses)
 
     print("Plan Statuses:")
     print("-" * 60)
 
-    for pf in plan_files:
-        status = parse_plan_status(pf)
-        if status:
-            emoji = status["status_emoji"]
-            num = status["number"]
-            title = status["title"][:40]
-            print(f"  {emoji} #{num:2} {title}")
+    for num, status in sorted(plan_statuses.items()):
+        emoji = status["status_emoji"]
+        title = status["title"][:40]
+        print(f"  {emoji} #{num:2} {title}")
+
+    for issue in selection_issues:
+        print(f"  ❓ #{issue['plan']:2} {issue['message']}")
 
     # Also show index-only entries
-    index_statuses = parse_index_table(INDEX_FILE)
-    plan_nums = {parse_plan_status(pf)["number"] for pf in plan_files if parse_plan_status(pf)}
+    plan_nums = set(plan_statuses)
 
     index_only = set(index_statuses.keys()) - plan_nums
     if index_only:

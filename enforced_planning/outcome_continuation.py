@@ -33,6 +33,8 @@ ProgressKind = Literal[
     "decision_changing_learning",
     "non_outcome",
 ]
+VerificationRole = Literal["producer", "independent"]
+ArtifactDisposition = Literal["evidenced", "rejected"]
 PortfolioClass = Literal["product", "maintenance", "external_obligation"]
 LeaseState = Literal["active", "recovery_required", "stalled", "complete", "parked"]
 OperationKind = Literal[
@@ -147,10 +149,22 @@ class CanonicalJourneyV1(StrictModel):
     failure_signal: str = Field(min_length=8)
 
 
+class OutcomeCriterionV1(StrictModel):
+    """One non-substitutable condition of the user-visible outcome."""
+
+    criterion_id: str
+    description: str = Field(min_length=12)
+
+    @model_validator(mode="after")
+    def _validate_criterion_id(self) -> OutcomeCriterionV1:
+        _portable_id(self.criterion_id, field_name="criterion_id")
+        return self
+
+
 class OutcomeContractV1(StrictModel):
     """Immutable identity, scope, and canonical journey for one outcome lineage."""
 
-    schema_version: Literal["1.0.0", "1.1.0"] = "1.0.0"
+    schema_version: Literal["1.0.0", "1.1.0", "1.2.0"] = "1.0.0"
     outcome_id: str
     owner_class: str
     project_id: str
@@ -166,6 +180,7 @@ class OutcomeContractV1(StrictModel):
     baseline_revision: str = Field(min_length=7)
     allowed_scope: list[str] = Field(min_length=1)
     progress_dimensions: list[str] = Field(min_length=1)
+    success_criteria: list[OutcomeCriterionV1] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_identity_and_scope(self) -> OutcomeContractV1:
@@ -173,6 +188,13 @@ class OutcomeContractV1(StrictModel):
             raise ValueError("schema 1.0.0 contracts cannot declare portfolio_class")
         if self.schema_version == "1.1.0" and self.portfolio_class is None:
             raise ValueError("schema 1.1.0 contracts require portfolio_class")
+        if self.schema_version == "1.2.0":
+            if self.portfolio_class is None:
+                raise ValueError("schema 1.2.0 contracts require portfolio_class")
+            if not self.success_criteria:
+                raise ValueError("schema 1.2.0 contracts require success_criteria")
+        elif self.success_criteria:
+            raise ValueError("success_criteria require schema 1.2.0")
         for field_name, value in (
             ("outcome_id", self.outcome_id),
             ("owner_class", self.owner_class),
@@ -194,6 +216,9 @@ class OutcomeContractV1(StrictModel):
             raise ValueError("progress_dimensions must contain non-empty values")
         if len(set(self.progress_dimensions)) != len(self.progress_dimensions):
             raise ValueError("progress_dimensions must be unique")
+        criterion_ids = [criterion.criterion_id for criterion in self.success_criteria]
+        if len(set(criterion_ids)) != len(criterion_ids):
+            raise ValueError("success_criteria criterion_id values must be unique")
         return self
 
 
@@ -235,6 +260,11 @@ class OutcomeProgressReceiptV1(StrictModel):
     exact_replay_result: str | None = None
     decision_delta: str | None = None
     discriminating_evidence: bool = False
+    artifact_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    artifact_disposition: ArtifactDisposition | None = None
+    criterion_ids: list[str] = Field(default_factory=list)
+    verifier_id: str | None = None
+    verification_role: VerificationRole | None = None
 
     @model_validator(mode="after")
     def _validate_progress_claim(self) -> OutcomeProgressReceiptV1:
@@ -253,6 +283,21 @@ class OutcomeProgressReceiptV1(StrictModel):
         ):
             if value is not None and len(value.strip()) < 8:
                 raise ValueError(f"{field_name} must be specific enough to audit")
+        artifact_fields = (self.artifact_sha256, self.artifact_disposition)
+        if any(value is None for value in artifact_fields) != all(value is None for value in artifact_fields):
+            raise ValueError("artifact_sha256 and artifact_disposition must be supplied together")
+        verification_fields = (self.verifier_id, self.verification_role)
+        if any(value is None for value in verification_fields) != all(value is None for value in verification_fields):
+            raise ValueError("verifier_id and verification_role must be supplied together")
+        for criterion_id in self.criterion_ids:
+            _portable_id(criterion_id, field_name="criterion_ids")
+        if len(set(self.criterion_ids)) != len(self.criterion_ids):
+            raise ValueError("criterion_ids must be unique")
+        if self.artifact_disposition == "rejected":
+            if self.progress_kind != "non_outcome":
+                raise ValueError("rejected artifacts must be recorded as non_outcome")
+            if self.criterion_ids or self.verification_role is not None:
+                raise ValueError("rejected artifacts cannot carry passing criterion evidence")
         return self
 
 
@@ -268,6 +313,9 @@ class OutcomeLeaseV1(StrictModel):
     consecutive_non_outcome_increments: int = Field(default=0, ge=0)
     current_failure_boundary: str | None = None
     same_boundary_failures: int = Field(default=0, ge=0)
+    current_artifact_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    passed_criterion_ids: list[str] = Field(default_factory=list)
+    rejected_artifact_sha256s: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_state_counters(self) -> OutcomeLeaseV1:
@@ -282,7 +330,25 @@ class OutcomeLeaseV1(StrictModel):
             raise ValueError("recovery_required lease needs two non-outcome increments")
         if self.state == "stalled" and self.same_boundary_failures < 3:
             raise ValueError("stalled lease needs three same-boundary failures")
+        if self.passed_criterion_ids and self.current_artifact_sha256 is None:
+            raise ValueError("passed criteria require a current artifact")
+        if len(set(self.passed_criterion_ids)) != len(self.passed_criterion_ids):
+            raise ValueError("passed_criterion_ids must be unique")
+        if len(set(self.rejected_artifact_sha256s)) != len(self.rejected_artifact_sha256s):
+            raise ValueError("rejected_artifact_sha256s must be unique")
+        if self.current_artifact_sha256 in self.rejected_artifact_sha256s:
+            raise ValueError("a rejected artifact cannot remain current")
         return self
+
+
+class ReviewReadinessDecisionV1(StrictModel):
+    """Deterministic review gate for one exact candidate artifact."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    review_ready: bool
+    reason_code: str = Field(min_length=3)
+    artifact_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    missing_criterion_ids: list[str] = Field(default_factory=list)
 
 
 class RecoveryLeaseV1(StrictModel):
@@ -492,6 +558,33 @@ def transition_lease(
             "receipt_dimension_mismatch",
             "receipt dimension is not declared by the outcome contract",
         )
+    if contract.schema_version == "1.2.0":
+        criterion_ids = {criterion.criterion_id for criterion in contract.success_criteria}
+        unknown_criteria = sorted(set(receipt.criterion_ids) - criterion_ids)
+        if unknown_criteria:
+            raise ContinuationError(
+                "receipt_criterion_mismatch",
+                "receipt names criteria absent from the outcome contract: " + ", ".join(unknown_criteria),
+            )
+        if receipt.progress_kind == "behavioral_advance":
+            if (
+                receipt.artifact_disposition != "evidenced"
+                or receipt.artifact_sha256 is None
+                or not receipt.criterion_ids
+                or receipt.verification_role != "independent"
+                or receipt.verifier_id is None
+                or not receipt.discriminating_evidence
+            ):
+                raise ContinuationError(
+                    "criterion_evidence_required",
+                    "schema 1.2.0 behavioral progress requires discriminating, "
+                    "independent criterion evidence bound to one artifact",
+                )
+            if receipt.artifact_sha256 in lease.rejected_artifact_sha256s:
+                raise ContinuationError(
+                    "rejected_artifact_ineligible",
+                    "a rejected artifact cannot receive new passing criterion evidence",
+                )
     receipt_sha256 = canonical_sha256(receipt)
     if receipt_sha256 == lease.last_receipt_sha256:
         return LeaseTransitionV1(
@@ -514,6 +607,22 @@ def transition_lease(
     update: dict[str, Any] = {
         "last_receipt_sha256": receipt_sha256,
     }
+    if receipt.artifact_disposition == "rejected" and receipt.artifact_sha256:
+        rejected = list(lease.rejected_artifact_sha256s)
+        if receipt.artifact_sha256 not in rejected:
+            rejected.append(receipt.artifact_sha256)
+        update["rejected_artifact_sha256s"] = rejected
+        if lease.current_artifact_sha256 == receipt.artifact_sha256:
+            update["current_artifact_sha256"] = None
+            update["passed_criterion_ids"] = []
+    elif receipt.artifact_disposition == "evidenced" and receipt.artifact_sha256:
+        same_artifact = lease.current_artifact_sha256 == receipt.artifact_sha256
+        passed = list(lease.passed_criterion_ids) if same_artifact else []
+        for criterion_id in receipt.criterion_ids:
+            if criterion_id not in passed:
+                passed.append(criterion_id)
+        update["current_artifact_sha256"] = receipt.artifact_sha256
+        update["passed_criterion_ids"] = passed
     if receipt.progress_kind in PROGRESS_KINDS:
         update.update(
             state="active",
@@ -544,14 +653,50 @@ def transition_lease(
             same_boundary_failures=same_boundary_failures,
         )
 
-    transitioned = OutcomeLeaseV1.model_validate(
-        {**lease.model_dump(mode="json"), **update}
-    )
+    transitioned = OutcomeLeaseV1.model_validate({**lease.model_dump(mode="json"), **update})
     return LeaseTransitionV1(
         receipt_sha256=receipt_sha256,
         applied=True,
         replayed=False,
         lease=transitioned,
+    )
+
+
+def evaluate_review_readiness(
+    contract: OutcomeContractV1,
+    lease: OutcomeLeaseV1,
+    *,
+    artifact_sha256: str,
+) -> ReviewReadinessDecisionV1:
+    """Refuse review until every frozen criterion passes on this exact artifact."""
+
+    _assert_contract_binding(contract, lease)
+    if contract.schema_version != "1.2.0":
+        return ReviewReadinessDecisionV1(
+            review_ready=False,
+            reason_code="criterion_contract_not_configured",
+            artifact_sha256=artifact_sha256,
+        )
+    if artifact_sha256 in lease.rejected_artifact_sha256s:
+        return ReviewReadinessDecisionV1(
+            review_ready=False,
+            reason_code="artifact_rejected",
+            artifact_sha256=artifact_sha256,
+        )
+    required = [criterion.criterion_id for criterion in contract.success_criteria]
+    passed = set(lease.passed_criterion_ids) if lease.current_artifact_sha256 == artifact_sha256 else set()
+    missing = [criterion_id for criterion_id in required if criterion_id not in passed]
+    if missing:
+        return ReviewReadinessDecisionV1(
+            review_ready=False,
+            reason_code="criterion_evidence_missing",
+            artifact_sha256=artifact_sha256,
+            missing_criterion_ids=missing,
+        )
+    return ReviewReadinessDecisionV1(
+        review_ready=True,
+        reason_code="all_criteria_evidenced",
+        artifact_sha256=artifact_sha256,
     )
 
 
@@ -684,11 +829,7 @@ def admit_operation(
         "complete": "outcome_complete",
         "parked": "outcome_parked",
     }
-    next_actions = (
-        RECOVERY_NEXT_ACTIONS
-        if lease.state in {"recovery_required", "stalled"}
-        else TERMINAL_NEXT_ACTIONS
-    )
+    next_actions = RECOVERY_NEXT_ACTIONS if lease.state in {"recovery_required", "stalled"} else TERMINAL_NEXT_ACTIONS
     return _decision(
         allowed=False,
         reason_code=reason_by_state[lease.state],
@@ -733,8 +874,6 @@ def load_scenario(path: str) -> OutcomeContinuationScenarioV1:
     """Load one strict scenario JSON file."""
 
     try:
-        return OutcomeContinuationScenarioV1.model_validate_json(
-            Path(path).read_text(encoding="utf-8")
-        )
+        return OutcomeContinuationScenarioV1.model_validate_json(Path(path).read_text(encoding="utf-8"))
     except OSError as exc:
         raise ContinuationError("scenario_read_failed", f"unable to read scenario: {exc}") from exc

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Privacy-reduce, adjudicate, assemble, and check native-v4 annotations."""
+"""Privacy-reduce, adjudicate, assemble, and check native annotations."""
 
 from __future__ import annotations
 
@@ -19,6 +19,12 @@ ADJUDICATION = EVIDENCE / "plan135_native_v4_adjudication.json"
 CORPUS = ROOT / "prompts/correction_learning/native_corpus_v4.json"
 SUMMARY = EVIDENCE / "plan135_native_v4_annotation_summary.json"
 ALLOWED = {"correction", "not_correction", "ambiguous"}
+CASE_PREFIX = "native-v4"
+CORPUS_ID = "correction-learning-native-v4"
+SCORED_POPULATION = (
+    "Deterministic 16-session-per-client sample from the unseen 2026-08-31 "
+    "through 2026-09-06 population."
+)
 
 
 def _read(path: Path) -> dict[str, object]:
@@ -85,7 +91,7 @@ def build(candidate_commit: str, labels_commit: str, adjudication_commit: str) -
     cases = [
         {
             "agent": row["agent"],
-            "case_id": f"native-v4-{index:03d}",
+            "case_id": f"{CASE_PREFIX}-{index:03d}",
             "event_hash": row["event_hash"],
             "event_id": row["event_id"],
             "expected": final[row["event_id"]],
@@ -102,7 +108,7 @@ def build(candidate_commit: str, labels_commit: str, adjudication_commit: str) -
     ]
     corpus = {
         "cases": cases,
-        "corpus_id": "correction-learning-native-v4",
+        "corpus_id": CORPUS_ID,
         "frozen_at": frozen_at,
         "pilot_cutoff": candidates["population_start"],
         "schema_version": "1.1",
@@ -110,7 +116,7 @@ def build(candidate_commit: str, labels_commit: str, adjudication_commit: str) -
             "label_basis": "Privacy-reduced A/B labels committed independently before blind adjudication; all disagreements resolved before corpus freeze and replay.",
             "native_format_controls": "Typed Codex content_item_kinds and Claude Code isMeta admission are deterministic tested controls upstream.",
             "privacy": "No conversation prose or annotation rationale retained; exact home-relative provenance permits local verification.",
-            "scored_population": "Deterministic 16-session-per-client sample from the unseen 2026-08-31 through 2026-09-06 population.",
+            "scored_population": SCORED_POPULATION,
             "scored_sources": sources,
         },
     }
@@ -131,7 +137,7 @@ def build(candidate_commit: str, labels_commit: str, adjudication_commit: str) -
             "candidate": candidate_commit,
             "labels": labels_commit,
         },
-        "corpus_id": "correction-learning-native-v4",
+        "corpus_id": CORPUS_ID,
         "frozen_at": frozen_at,
         "non_claims": [
             "Conversation prose and annotation rationales are not retained.",

@@ -13,7 +13,7 @@
       "objective": "Extend the existing criterion-bound outcome lineage with stable execution-item projection, typed native divergence, and one canonical goal-completion proposal without duplicating project, mailbox, or session authority.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "scope": {
         "included": [
           "Stable execution item and projection types",
@@ -72,10 +72,10 @@
       ],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "authorization_mode": "registry_claim",
-      "status": "ready",
+      "status": "accepted",
       "record_version": 1,
       "created_at": "2026-09-12T17:00:00Z",
-      "updated_at": "2026-09-12T17:00:00Z"
+      "updated_at": "2026-09-12T22:25:00Z"
     },
     {
       "schema_version": "1.0",
@@ -90,7 +90,7 @@
       "objective": "Extend the existing AES App Server adapter with an observe-only translation of neutral execution state and correlated pushed observations.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": ["AES App Server projection", "Pushed plan-event observation", "Capability diagnostics", "Isolated authentic Codex probe"],
         "excluded": ["New process supervisor", "TUI attachment", "Global hook activation", "Canonical state ownership"]
@@ -119,12 +119,12 @@
           "negative_control": "Missing, malformed, bypassed, or reordered native events remain unavailable or divergent rather than successful."
         }
       ],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependency xcet-01-neutral-contract is not accepted"]},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "authorization_mode": "registry_claim",
-      "status": "blocked",
+      "status": "ready",
       "record_version": 1,
       "created_at": "2026-09-12T17:00:00Z",
-      "updated_at": "2026-09-12T17:00:00Z"
+      "updated_at": "2026-09-12T22:25:00Z"
     },
     {
       "schema_version": "1.0",
@@ -139,7 +139,7 @@
       "objective": "Add an isolated observe-only Claude Task adapter that preserves stable neutral identity and typed tool or hook observations without changing host configuration.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "blocked_dependencies",
+      "claimability": "ready_for_execution",
       "scope": {
         "included": ["Claude Task projection", "Tool/hook observation translation", "Capability diagnostics", "Isolated authentic Claude probe"],
         "excluded": ["Global hook activation", "Always-on review", "Automatic continuation", "Canonical state ownership"]
@@ -171,12 +171,12 @@
           "negative_control": "Disabled tools, hook failure, interruption, or task completion remains explicit non-success for the canonical goal."
         }
       ],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependency xcet-01-neutral-contract is not accepted"]},
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "authorization_mode": "registry_claim",
-      "status": "blocked",
+      "status": "ready",
       "record_version": 1,
       "created_at": "2026-09-12T17:00:00Z",
-      "updated_at": "2026-09-12T17:00:00Z"
+      "updated_at": "2026-09-12T22:25:00Z"
     },
     {
       "schema_version": "1.0",

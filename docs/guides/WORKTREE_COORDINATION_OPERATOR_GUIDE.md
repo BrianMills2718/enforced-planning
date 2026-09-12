@@ -1043,6 +1043,9 @@ Liveness is heartbeat-backed:
   automatically stale
 - once a claim has a heartbeat, an overly old heartbeat becomes
   `stale_session_heartbeat`
+- a valid paired `expected_quiet_until` and `quiet_reason` defers that stale
+  classification only until the declared deadline, for bounded operations such
+  as native evaluations that legitimately outlast the heartbeat window
 
 `heartbeat_at` and `expires_at` are different clocks and both matter. The
 heartbeat says when the owner last checked in; the lease says when the claim
@@ -1146,6 +1149,12 @@ durable progress event:
 - `evidence_ref`: exact durable evidence for that advancement
 - `next_action`: the concrete next useful action
 - optional paired `expected_quiet_until` and `quiet_reason`
+
+The quiet pair covers both progress and heartbeat liveness during the declared
+window. Use it before a bounded tool or evaluation run expected to exceed the
+heartbeat freshness window. It is not an indefinite keepalive: malformed or
+unpaired values do not suppress staleness, and ordinary heartbeat expiry resumes
+at the exact deadline.
 
 Record advancement on one exact owned scope from the current native runtime:
 

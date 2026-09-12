@@ -840,6 +840,15 @@ outside the lane while it was open, and lists what landed if it did. Policy
 `shared-surface-state-claims` requires checking a surface other agents can write
 before describing its state; this is that check for the default branch.
 
+Before physical cleanup, the close wrapper fetches the advertised remote main
+branch into `origin/main`. This is not just a freshness optimization: in a
+partial clone, deleting the lane branch and worktree can leave the subsequent
+range walk trying to lazy-fetch the recorded start commit by raw object ID.
+GitHub does not advertise that deleted-lane object, so the scan can otherwise
+degrade to `NOT CHECKED -- upload-pack: not our ref` even when the start commit
+is an ancestor of current main. Fetch failure does not prevent safe closeout;
+the three-state report below still fails visibly if its local range is unreadable.
+
 It reports movement, not authorship. Two measurements on 2026-09-08 ruled both
 identity signals out: every agent session commits as the same operator (and a
 `gh` squash-merge rewrites the author to the GitHub noreply address regardless),

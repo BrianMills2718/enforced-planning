@@ -86,6 +86,11 @@ permits a different exact native runtime to terminally reconcile a preserved
 the existing merge or durable-recovery preflight. This does not weaken Plan
 132's ownership rules or transfer write custody; it removes already-finished
 ownerless residue that would otherwise prevent a new narrow goal-bound claim.
+Verified 2026-09-12: the wrapper also materializes the advertised remote-main
+history before terminal cleanup, while the exact claim still owns repository
+writes, so a partial clone does not lose the start-revision range when the lane
+ref is deleted. An unavailable refresh preserves the explicit `NOT CHECKED`
+closeout result.
 
 ---
 

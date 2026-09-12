@@ -204,6 +204,11 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
     )
     monkeypatch.setattr(
         module,
+        "_materialize_shared_ref_history",
+        lambda root: events.append("materialize") or None,
+    )
+    monkeypatch.setattr(
+        module,
         "_resolve_canonical_lock_module",
         lambda: events.append("resolve") or helper,
     )
@@ -237,4 +242,59 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
     monkeypatch.setattr(module, "_report_shared_ref_movement", report)
 
     assert module.main([]) == 0
-    assert events == ["durable-root", "resolve", "close", "reconcile", "report"]
+    assert events == [
+        "durable-root",
+        "materialize",
+        "resolve",
+        "close",
+        "reconcile",
+        "report",
+    ]
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_shared_ref_history_is_fetched_through_an_advertised_branch(
+    script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Do not lazy-fetch a deleted lane's start object by raw object id."""
+
+    module = _load(script, f"session_close_materialize_{script.parent.name}")
+    observed: list[list[str]] = []
+
+    def run(command, **_kwargs):
+        observed.append(command)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    assert module._materialize_shared_ref_history(tmp_path) is None
+    assert observed == [
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "origin",
+            "+refs/heads/main:refs/remotes/origin/main",
+        ]
+    ]
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_shared_ref_history_refresh_failure_preserves_closeout_fallback(
+    script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load(script, f"session_close_materialize_failure_{script.parent.name}")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=1, stdout="", stderr="network unavailable"
+        ),
+    )
+    assert module._materialize_shared_ref_history(tmp_path) == "network unavailable"

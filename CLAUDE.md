@@ -166,6 +166,11 @@ adoption.
    single-writer development task does not need a session/claim lifecycle.
 7. Use `session-close` or `make worktree-remove` for claimed lane cleanup; do
    not manually split claim release from worktree removal.
+   Before destructive cleanup, `session-close` refreshes the advertised
+   `origin/main` history while the lane still owns writes. This keeps the
+   start-revision range locally readable in partial clones after the lane ref
+   and worktree are removed; a failed refresh remains a visible `NOT CHECKED`
+   report rather than a false unchanged result.
    A legacy `session_ended` claim that recorded the canonical repository root
    is the one exception to physical cleanup: use `session-close
    --reconcile-canonical-root` with exact claim and tracker SHA-256 digests so

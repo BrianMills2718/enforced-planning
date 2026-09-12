@@ -3004,3 +3004,40 @@ def test_installed_coordination_runtime_exposes_session_continuity_cli(tmp_path:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "--send-resume-offer" in result.stdout
     assert "--resume-offer-message-id" in result.stdout
+
+
+def test_pr_auto_default_resolves_canonical_repo_from_linked_worktree(tmp_path: Path) -> None:
+    """A branch-folder name must not replace the Git repository identity."""
+
+    repo = tmp_path / "canonical-repository"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "README.md").write_text("fixture\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "fixture")
+
+    worktree = tmp_path / "feature-branch-folder"
+    _git(repo, "worktree", "add", "-b", "feature", str(worktree))
+    assignment = next(
+        line
+        for line in (PROJECT_META_ROOT / "templates/Makefile.meta").read_text().splitlines()
+        if line.startswith("PR_AUTO_EXPECTED_REPO ?=")
+    )
+    probe = worktree / "Probe.mk"
+    probe.write_text(
+        f"{assignment}\nprint-repo:\n\t@echo $(PR_AUTO_EXPECTED_REPO)\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["make", "-s", "-f", str(probe), "print-repo"],
+        cwd=worktree,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "canonical-repository"

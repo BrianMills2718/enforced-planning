@@ -638,3 +638,10 @@ Prompt 1.2, four-case batches, exact-ID and exception invalidation, the v3/v4
 quality thresholds, and fresh independent decision sign-off remain unchanged.
 Fewer than ten adjudicated corrections requires a precommitted extension. V5
 permits one held-out replay only and may not be retried or retuned.
+
+V5 annotation produced 117/128 independent agreement and 11 blindly
+adjudicated disagreements. Executable reconstruction yields 34 corrections,
+88 non-corrections, and six ambiguous boundaries. The exact-source loader
+resolved all 128 events across the 32 frozen sessions. Candidate selection,
+privacy-reduced A/B labels, privacy-reduced adjudication, and the final corpus
+were committed in the preregistered order before replay.

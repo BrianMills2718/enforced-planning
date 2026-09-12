@@ -38,6 +38,10 @@ ArtifactDisposition = Literal["evidenced", "rejected"]
 PortfolioClass = Literal["product", "maintenance", "external_obligation"]
 LeaseState = Literal["active", "recovery_required", "stalled", "complete", "parked"]
 ReviewStatus = Literal["working", "review_ready"]
+ExecutionItemStatus = Literal["pending", "in_progress", "blocked", "completed", "cancelled"]
+ExecutionOwnerRole = Literal["coordinator", "worker", "investigator", "reviewer", "verifier"]
+NativeClient = Literal["canonical", "codex", "claude"]
+NativeProjectionOutcome = Literal["matched", "divergent", "unavailable", "malformed"]
 OperationKind = Literal[
     "product_write",
     "claim_create",
@@ -178,6 +182,9 @@ def _canonical_compatibility_payload(value: Any) -> Any:
         "passed_criterion_ids": [],
         "rejected_artifact_sha256s": [],
         "review_status": "working",
+        "completion_proposal_id": None,
+        "completion_proposal_sha256": None,
+        "completion_evidence_revision": None,
     }
     if "lease_id" in payload and all(
         payload.get(key) == default for key, default in lease_defaults.items()
@@ -383,6 +390,9 @@ class OutcomeLeaseV1(StrictModel):
     passed_criterion_ids: list[str] = Field(default_factory=list)
     rejected_artifact_sha256s: list[str] = Field(default_factory=list)
     review_status: ReviewStatus = "working"
+    completion_proposal_id: str | None = None
+    completion_proposal_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    completion_evidence_revision: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
 
     @model_validator(mode="after")
     def _validate_state_counters(self) -> OutcomeLeaseV1:
@@ -407,6 +417,17 @@ class OutcomeLeaseV1(StrictModel):
             raise ValueError("a rejected artifact cannot remain current")
         if self.review_status == "review_ready" and self.current_artifact_sha256 is None:
             raise ValueError("review_ready requires a current artifact")
+        completion_fields = (
+            self.completion_proposal_id,
+            self.completion_proposal_sha256,
+            self.completion_evidence_revision,
+        )
+        if any(value is None for value in completion_fields) != all(
+            value is None for value in completion_fields
+        ):
+            raise ValueError("completion proposal identity, digest, and evidence revision must be supplied together")
+        if self.completion_proposal_id is not None:
+            _portable_id(self.completion_proposal_id, field_name="completion_proposal_id")
         return self
 
 
@@ -418,6 +439,238 @@ class ReviewReadinessDecisionV1(StrictModel):
     reason_code: str = Field(min_length=3)
     artifact_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
     missing_criterion_ids: list[str] = Field(default_factory=list)
+
+
+class ExecutionItemV1(StrictModel):
+    """One stable client-neutral execution item projected into native UIs."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    item_id: str
+    display_name: str = Field(min_length=3, max_length=200)
+    status: ExecutionItemStatus = "pending"
+    criterion_ids: list[str] = Field(min_length=1)
+    dependency_ids: list[str] = Field(default_factory=list)
+    owner_role: ExecutionOwnerRole
+    source_kind: str
+    source_ref: str = Field(min_length=3)
+    evidence_refs: list[str] = Field(default_factory=list)
+    verifier_refs: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_item_identity(self) -> ExecutionItemV1:
+        _portable_id(self.item_id, field_name="item_id")
+        _portable_id(self.source_kind, field_name="source_kind")
+        for field_name, values in (
+            ("criterion_ids", self.criterion_ids),
+            ("dependency_ids", self.dependency_ids),
+        ):
+            for value in values:
+                _portable_id(value, field_name=field_name)
+            if len(set(values)) != len(values):
+                raise ValueError(f"{field_name} must be unique")
+        if self.item_id in self.dependency_ids:
+            raise ValueError("an execution item cannot depend on itself")
+        for field_name, values in (
+            ("evidence_refs", self.evidence_refs),
+            ("verifier_refs", self.verifier_refs),
+        ):
+            if any(not value.strip() for value in values):
+                raise ValueError(f"{field_name} must contain non-empty values")
+            if len(set(values)) != len(values):
+                raise ValueError(f"{field_name} must be unique")
+        return self
+
+
+class AppliedExecutionTransitionV1(StrictModel):
+    """Retained idempotency identity for one accepted projection transition."""
+
+    transition_id: str
+    request_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+
+    @model_validator(mode="after")
+    def _validate_transition_id(self) -> AppliedExecutionTransitionV1:
+        _portable_id(self.transition_id, field_name="transition_id")
+        return self
+
+
+class ExecutionProjectionV1(StrictModel):
+    """Canonical execution state; native task lists are projections of this record."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    projection_id: str
+    outcome_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    projection_revision: int = Field(ge=1)
+    items: list[ExecutionItemV1] = Field(min_length=1)
+    applied_transitions: list[AppliedExecutionTransitionV1] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_projection_graph(self) -> ExecutionProjectionV1:
+        _portable_id(self.projection_id, field_name="projection_id")
+        item_ids = [item.item_id for item in self.items]
+        if len(set(item_ids)) != len(item_ids):
+            raise ValueError("execution item IDs must be unique")
+        known = set(item_ids)
+        for item in self.items:
+            missing = sorted(set(item.dependency_ids) - known)
+            if missing:
+                raise ValueError("execution item dependencies must name known items")
+
+        dependencies = {item.item_id: item.dependency_ids for item in self.items}
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(item_id: str) -> None:
+            if item_id in visiting:
+                raise ValueError("execution item dependencies must be acyclic")
+            if item_id in visited:
+                return
+            visiting.add(item_id)
+            for dependency_id in dependencies[item_id]:
+                visit(dependency_id)
+            visiting.remove(item_id)
+            visited.add(item_id)
+
+        for item_id in item_ids:
+            visit(item_id)
+        transition_ids = [transition.transition_id for transition in self.applied_transitions]
+        if len(set(transition_ids)) != len(transition_ids):
+            raise ValueError("applied transition IDs must be unique")
+        return self
+
+
+class ExecutionItemUpdateV1(StrictModel):
+    """A bounded native or canonical intent for one existing execution item."""
+
+    item_id: str
+    display_name: str | None = Field(default=None, min_length=3, max_length=200)
+    status: ExecutionItemStatus | None = None
+
+    @model_validator(mode="after")
+    def _validate_update(self) -> ExecutionItemUpdateV1:
+        _portable_id(self.item_id, field_name="item_id")
+        if self.display_name is None and self.status is None:
+            raise ValueError("an execution item update must change display_name or status")
+        return self
+
+
+class ExecutionProjectionTransitionV1(StrictModel):
+    """Revision-bound transition intent independent of any client tool schema."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    transition_id: str
+    expected_projection_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    actor_id: str
+    source_client: NativeClient
+    item_updates: list[ExecutionItemUpdateV1] = Field(min_length=1)
+    display_order: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_transition(self) -> ExecutionProjectionTransitionV1:
+        _portable_id(self.transition_id, field_name="transition_id")
+        _portable_id(self.actor_id, field_name="actor_id")
+        update_ids = [update.item_id for update in self.item_updates]
+        if len(set(update_ids)) != len(update_ids):
+            raise ValueError("item_updates must name each item at most once")
+        for item_id in self.display_order:
+            _portable_id(item_id, field_name="display_order")
+        if len(set(self.display_order)) != len(self.display_order):
+            raise ValueError("display_order must be unique")
+        return self
+
+
+class ExecutionProjectionTransitionResultV1(StrictModel):
+    """Accepted, replayed projection transition and its current canonical state."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    transition_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    applied: bool
+    replayed: bool
+    projection: ExecutionProjectionV1
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> ExecutionProjectionTransitionResultV1:
+        if self.applied == self.replayed:
+            raise ValueError("an execution transition result must be applied or replayed")
+        return self
+
+
+class NativeProjectionObservationV1(StrictModel):
+    """A typed native observation that never mutates canonical execution state."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    observation_id: str
+    source_client: Literal["codex", "claude"]
+    client_version: str = Field(min_length=1)
+    configuration_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    expected_projection_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    native_projection_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
+    native_event_id: str | None = Field(default=None, min_length=1)
+    outcome: NativeProjectionOutcome
+    reason_code: str = Field(min_length=3)
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_observation(self) -> NativeProjectionObservationV1:
+        _portable_id(self.observation_id, field_name="observation_id")
+        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
+            raise ValueError("observed_at must be timezone-aware")
+        if self.outcome == "matched" and (
+            self.native_projection_sha256 is None
+            or self.native_projection_sha256 != self.expected_projection_sha256
+        ):
+            raise ValueError("matched observation requires equal native and expected projection digests")
+        if self.outcome == "divergent" and (
+            self.native_projection_sha256 is None
+            or self.native_projection_sha256 == self.expected_projection_sha256
+        ):
+            raise ValueError("divergent observation requires a different native projection digest")
+        if self.outcome in {"unavailable", "malformed"} and self.native_projection_sha256 is not None:
+            raise ValueError(f"{self.outcome} observation cannot claim a native projection digest")
+        return self
+
+
+class GoalCompletionProposalV1(StrictModel):
+    """The only terminal success intent for a criterion-bound outcome."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    proposal_id: str
+    outcome_contract_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    expected_lease_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    execution_projection_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    artifact_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    evidence_revision: str = Field(pattern=HEX_SHA256_PATTERN)
+    proposed_by: str
+
+    @model_validator(mode="after")
+    def _validate_proposal_identity(self) -> GoalCompletionProposalV1:
+        _portable_id(self.proposal_id, field_name="proposal_id")
+        _portable_id(self.proposed_by, field_name="proposed_by")
+        return self
+
+
+class GoalCompletionDecisionV1(StrictModel):
+    """Deterministic completion decision and resulting canonical lease."""
+
+    schema_version: Literal["1.0.0"] = "1.0.0"
+    proposal_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
+    accepted: bool
+    applied: bool
+    replayed: bool
+    reason_code: str
+    missing_item_ids: list[str] = Field(default_factory=list)
+    missing_criterion_ids: list[str] = Field(default_factory=list)
+    unrepresented_criterion_ids: list[str] = Field(default_factory=list)
+    lease: OutcomeLeaseV1
+
+    @model_validator(mode="after")
+    def _validate_decision(self) -> GoalCompletionDecisionV1:
+        if self.applied and (not self.accepted or self.replayed):
+            raise ValueError("applied completion must be accepted and not replayed")
+        if self.replayed and (not self.accepted or self.applied):
+            raise ValueError("replayed completion must be accepted and not applied")
+        if self.accepted and self.lease.state != "complete":
+            raise ValueError("accepted completion must return a complete lease")
+        return self
 
 
 class RecoveryLeaseV1(StrictModel):
@@ -796,6 +1049,273 @@ def evaluate_review_readiness(
         review_ready=True,
         reason_code="all_criteria_evidenced",
         artifact_sha256=artifact_sha256,
+    )
+
+
+def apply_execution_projection_transition(
+    projection: ExecutionProjectionV1,
+    transition: ExecutionProjectionTransitionV1,
+) -> ExecutionProjectionTransitionResultV1:
+    """Apply one CAS-bound item update, retaining exact replay identity."""
+
+    transition_sha256 = canonical_sha256(transition)
+    existing = next(
+        (
+            record
+            for record in projection.applied_transitions
+            if record.transition_id == transition.transition_id
+        ),
+        None,
+    )
+    if existing is not None:
+        if existing.request_sha256 != transition_sha256:
+            raise ContinuationError(
+                "execution_transition_collision",
+                "execution transition idempotency collision",
+            )
+        return ExecutionProjectionTransitionResultV1(
+            transition_sha256=transition_sha256,
+            applied=False,
+            replayed=True,
+            projection=projection,
+        )
+
+    if transition.expected_projection_sha256 != canonical_sha256(projection):
+        raise ContinuationError(
+            "execution_projection_stale",
+            "transition expected projection digest does not match current canonical state",
+        )
+
+    current_by_id = {item.item_id: item for item in projection.items}
+    unknown_updates = sorted(
+        update.item_id for update in transition.item_updates if update.item_id not in current_by_id
+    )
+    if unknown_updates:
+        raise ContinuationError(
+            "execution_item_unknown",
+            "transition names unknown execution items: " + ", ".join(unknown_updates),
+        )
+    if transition.display_order and set(transition.display_order) != set(current_by_id):
+        raise ContinuationError(
+            "execution_display_order_mismatch",
+            "display_order must contain every current execution item exactly once",
+        )
+
+    legal_statuses: dict[ExecutionItemStatus, set[ExecutionItemStatus]] = {
+        "pending": {"pending", "in_progress", "blocked", "completed", "cancelled"},
+        "in_progress": {"in_progress", "blocked", "completed", "cancelled"},
+        "blocked": {"blocked", "in_progress", "cancelled"},
+        "completed": {"completed"},
+        "cancelled": {"cancelled"},
+    }
+    updated_by_id = dict(current_by_id)
+    for update in transition.item_updates:
+        current = current_by_id[update.item_id]
+        next_status = update.status or current.status
+        if next_status not in legal_statuses[current.status]:
+            raise ContinuationError(
+                "execution_status_transition_invalid",
+                f"execution item {current.item_id} cannot move from {current.status} to {next_status}",
+            )
+        updated_by_id[current.item_id] = current.model_copy(
+            update={
+                "display_name": update.display_name or current.display_name,
+                "status": next_status,
+            }
+        )
+
+    for item in updated_by_id.values():
+        if item.status in {"in_progress", "completed"}:
+            unresolved = [
+                dependency_id
+                for dependency_id in item.dependency_ids
+                if updated_by_id[dependency_id].status != "completed"
+            ]
+            if unresolved:
+                raise ContinuationError(
+                    "execution_dependencies_unresolved",
+                    f"execution item {item.item_id} has unresolved dependencies: "
+                    + ", ".join(unresolved),
+                )
+
+    order = transition.display_order or [item.item_id for item in projection.items]
+    transitioned = ExecutionProjectionV1(
+        projection_id=projection.projection_id,
+        outcome_contract_sha256=projection.outcome_contract_sha256,
+        projection_revision=projection.projection_revision + 1,
+        items=[updated_by_id[item_id] for item_id in order],
+        applied_transitions=[
+            *projection.applied_transitions,
+            AppliedExecutionTransitionV1(
+                transition_id=transition.transition_id,
+                request_sha256=transition_sha256,
+            ),
+        ],
+    )
+    return ExecutionProjectionTransitionResultV1(
+        transition_sha256=transition_sha256,
+        applied=True,
+        replayed=False,
+        projection=transitioned,
+    )
+
+
+def _completion_decision(
+    *,
+    proposal_sha256: str,
+    lease: OutcomeLeaseV1,
+    accepted: bool,
+    applied: bool = False,
+    replayed: bool = False,
+    reason_code: str,
+    missing_item_ids: list[str] | None = None,
+    missing_criterion_ids: list[str] | None = None,
+    unrepresented_criterion_ids: list[str] | None = None,
+) -> GoalCompletionDecisionV1:
+    return GoalCompletionDecisionV1(
+        proposal_sha256=proposal_sha256,
+        accepted=accepted,
+        applied=applied,
+        replayed=replayed,
+        reason_code=reason_code,
+        missing_item_ids=missing_item_ids or [],
+        missing_criterion_ids=missing_criterion_ids or [],
+        unrepresented_criterion_ids=unrepresented_criterion_ids or [],
+        lease=lease,
+    )
+
+
+def propose_goal_completion(
+    contract: OutcomeContractV1,
+    lease: OutcomeLeaseV1,
+    projection: ExecutionProjectionV1,
+    proposal: GoalCompletionProposalV1,
+) -> GoalCompletionDecisionV1:
+    """Close one outcome only from current criterion and execution evidence."""
+
+    contract_sha256 = _assert_contract_binding(contract, lease)
+    proposal_sha256 = canonical_sha256(proposal)
+    if lease.state == "complete":
+        if lease.completion_proposal_sha256 == proposal_sha256:
+            return _completion_decision(
+                proposal_sha256=proposal_sha256,
+                lease=lease,
+                accepted=True,
+                replayed=True,
+                reason_code="completion_replayed",
+            )
+        if lease.completion_proposal_id == proposal.proposal_id:
+            return _completion_decision(
+                proposal_sha256=proposal_sha256,
+                lease=lease,
+                accepted=False,
+                reason_code="completion_proposal_collision",
+            )
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="outcome_already_complete",
+        )
+    if proposal.outcome_contract_sha256 != contract_sha256:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="completion_contract_mismatch",
+        )
+    if projection.outcome_contract_sha256 != contract_sha256:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="execution_projection_contract_mismatch",
+        )
+    if proposal.expected_lease_sha256 != canonical_sha256(lease):
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="completion_lease_stale",
+        )
+    if proposal.execution_projection_sha256 != canonical_sha256(projection):
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="completion_projection_stale",
+        )
+    if proposal.evidence_revision != lease.last_receipt_sha256:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="completion_evidence_stale",
+        )
+
+    required_criteria = [criterion.criterion_id for criterion in contract.success_criteria]
+    represented_criteria = {
+        criterion_id for item in projection.items for criterion_id in item.criterion_ids
+    }
+    unknown_criteria = sorted(represented_criteria - set(required_criteria))
+    if unknown_criteria:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="execution_criterion_unknown",
+            unrepresented_criterion_ids=unknown_criteria,
+        )
+    unrepresented = [
+        criterion_id for criterion_id in required_criteria if criterion_id not in represented_criteria
+    ]
+    if unrepresented:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="criterion_not_represented",
+            unrepresented_criterion_ids=unrepresented,
+        )
+
+    incomplete_items = [item.item_id for item in projection.items if item.status != "completed"]
+    if incomplete_items:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code="execution_items_incomplete",
+            missing_item_ids=incomplete_items,
+        )
+
+    review = evaluate_review_readiness(
+        contract,
+        lease,
+        artifact_sha256=proposal.artifact_sha256,
+    )
+    if not review.review_ready:
+        return _completion_decision(
+            proposal_sha256=proposal_sha256,
+            lease=lease,
+            accepted=False,
+            reason_code=review.reason_code,
+            missing_criterion_ids=review.missing_criterion_ids,
+        )
+
+    completed = lease.model_copy(
+        update={
+            "state": "complete",
+            "completion_proposal_id": proposal.proposal_id,
+            "completion_proposal_sha256": proposal_sha256,
+            "completion_evidence_revision": proposal.evidence_revision,
+        }
+    )
+    return _completion_decision(
+        proposal_sha256=proposal_sha256,
+        lease=completed,
+        accepted=True,
+        applied=True,
+        reason_code="goal_completion_accepted",
     )
 
 

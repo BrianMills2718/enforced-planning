@@ -1,5 +1,5 @@
 name: correction_learning_classification
-version: "1.0"
+version: "1.1"
 description: Distinguish user corrections of agent mistakes from ordinary steering.
 messages:
   - role: system
@@ -17,6 +17,14 @@ messages:
 
       ambiguous: the text could be dissatisfaction or correction but the adjacent
       exchange is insufficient to tell. Ambiguous is never enforcement-positive.
+
+      Judge what the user message itself says about the immediately preceding
+      assistant message. An assistant admitting or correcting an earlier mistake
+      does not turn the user's next approval, command, or audit request into a
+      correction. Questions about pace, process, architecture, or alternatives
+      are not corrections unless the user clearly disputes the preceding
+      assistant claim or handling; use ambiguous when that implication is not
+      clear from the adjacent pair.
 
       For each correction, set matching_learning_id only when one supplied learning
       directly captures the corrected mistake. A merely later or generally useful

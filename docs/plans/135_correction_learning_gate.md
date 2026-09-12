@@ -406,3 +406,19 @@ generalization. `docs/evidence/plan135_native_corpus_signoff.md` records the
 rejected sign-off. The classifier remains manual/off as the safety default, not
 as an eval-validated decision; this holdout may now inform diagnosis but cannot
 be reused as fresh promotion evidence.
+
+**Root-cause repair after invalidation:** Transcript extraction now uses native
+message metadata rather than prose heuristics: Codex user records with explicit
+content kinds are eligible only when they include `user.text`, and Claude Code
+`isMeta` user records are excluded. Native corpus schema 1.1 adds explicit
+scored source declarations and rejects any scored population that is incomplete
+or overinclusive between the pilot cutoff and freeze time. Prompt version 1.1
+also makes the adjacent-turn boundary explicit: an assistant's own admission
+does not make the next user command a correction, and process questions without
+a clear dispute are ambiguous rather than enforcement-positive. A diagnostic
+three-case development probe classified the known correction as correction, the
+contested process challenge as ambiguous, and the subsequent `$audit` command
+as not-correction under trace
+`correction-learning/dev-v2/adjacent-and-process/batch-1` (29.656 seconds, no
+retry or error, recorded marginal cost `$0.00`). This is development evidence,
+not a fresh holdout or promotion result.

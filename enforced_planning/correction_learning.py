@@ -114,6 +114,21 @@ class LearningCandidate(StrictModel):
     learning: str = Field(min_length=1)
 
 
+class NativeCorpusSourceV1(StrictModel):
+    """One transcript whose complete bounded population must be represented."""
+
+    agent: Literal["codex", "claude-code"]
+    session_id: str = Field(min_length=1)
+    source_path: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def portable_source(self) -> NativeCorpusSourceV1:
+        source = Path(self.source_path)
+        if source.is_absolute() or ".." in source.parts:
+            raise ValueError("native corpus source_path must be home-relative and cannot escape")
+        return self
+
+
 class NativeCorpusSelectionV1(StrictModel):
     """Human-readable sampling and privacy contract fixed before replay."""
 
@@ -121,6 +136,7 @@ class NativeCorpusSelectionV1(StrictModel):
     native_format_controls: str = Field(min_length=1)
     label_basis: str = Field(min_length=1)
     privacy: str = Field(min_length=1)
+    scored_sources: list[NativeCorpusSourceV1] = Field(default_factory=list)
 
 
 class NativeCorpusCaseV1(StrictModel):
@@ -147,7 +163,7 @@ class NativeCorpusCaseV1(StrictModel):
 class NativeCorrectionCorpusV1(StrictModel):
     """Frozen native cases selected and labeled before classifier replay."""
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.0"
     corpus_id: str = Field(min_length=1)
     frozen_at: AwareDatetime
     pilot_cutoff: AwareDatetime
@@ -168,6 +184,8 @@ class NativeCorrectionCorpusV1(StrictModel):
             raise ValueError("native corpus must cover Codex and Claude Code")
         if len({(case.agent, case.session_id) for case in self.cases}) < 5:
             raise ValueError("native corpus must cover at least five native sessions")
+        if self.schema_version == "1.1" and not self.selection.scored_sources:
+            raise ValueError("native corpus v1.1 requires explicit scored_sources")
         return self
 
 
@@ -198,6 +216,34 @@ def load_native_corpus_exchanges(
         if exchange.event_hash != case.event_hash or exchange.occurred_at != case.occurred_at:
             raise ValueError(f"native corpus event provenance changed: {case.case_id}")
         exchanges.append(exchange)
+    if corpus.schema_version == "1.1":
+        expected_population: set[tuple[str, str, str]] = set()
+        declared_sources: set[tuple[str, str]] = set()
+        for selected in corpus.selection.scored_sources:
+            source_key = (selected.agent, selected.source_path)
+            declared_sources.add(source_key)
+            source = (resolved_home / selected.source_path).resolve()
+            if not source.is_relative_to(resolved_home):
+                raise ValueError("native corpus source escapes the configured home")
+            for exchange in extract_transcript_exchanges(source, agent=selected.agent):
+                if corpus.pilot_cutoff <= exchange.occurred_at <= corpus.frozen_at:
+                    expected_population.add(
+                        (selected.agent, selected.session_id, exchange.event_id)
+                    )
+        actual_population = {
+            (case.agent, case.session_id, case.event_id)
+            for case in corpus.cases
+            if case.role == "scored"
+        }
+        undeclared = {
+            (case.agent, case.source_path)
+            for case in corpus.cases
+            if case.role == "scored"
+        } - declared_sources
+        if undeclared:
+            raise ValueError("native corpus scored case uses an undeclared source")
+        if actual_population != expected_population:
+            raise ValueError("native corpus scored population is incomplete or overinclusive")
     return corpus, exchanges
 
 
@@ -229,6 +275,11 @@ def _transcript_message(payload: dict[str, object], *, agent: str) -> tuple[str,
         if item.get("type") != "message" or item.get("role") not in {"user", "assistant"}:
             return None
         role = str(item["role"])
+        metadata = item.get("internal_chat_message_metadata_passthrough")
+        if role == "user" and isinstance(metadata, dict):
+            kinds = metadata.get("content_item_kinds")
+            if isinstance(kinds, list) and "user.text" not in kinds:
+                return None
         accepted = {"input_text"} if role == "user" else {"output_text"}
         text = _message_text(item.get("content"), accepted_types=accepted)
     elif agent == "claude-code":
@@ -238,6 +289,8 @@ def _transcript_message(payload: dict[str, object], *, agent: str) -> tuple[str,
         if message.get("role") not in {"user", "assistant"}:
             return None
         role = str(message["role"])
+        if role == "user" and payload.get("isMeta") is True:
+            return None
         text = _message_text(message.get("content"), accepted_types={"text"})
     else:
         raise ValueError(f"unsupported transcript agent: {agent}")

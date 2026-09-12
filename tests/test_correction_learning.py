@@ -226,12 +226,29 @@ def test_current_codex_and_claude_transcript_shapes_extract_adjacent_exchanges(
                 ),
                 json.dumps(
                     {
+                        "timestamp": "2026-09-11T18:00:30Z",
+                        "type": "response_item",
+                        "payload": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": "Injected authority"}],
+                            "internal_chat_message_metadata_passthrough": {
+                                "content_item_kinds": ["agents_md.instructions"]
+                            },
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
                         "timestamp": "2026-09-11T18:01:00Z",
                         "type": "response_item",
                         "payload": {
                             "type": "message",
                             "role": "user",
                             "content": [{"type": "input_text", "text": "Correction"}],
+                            "internal_chat_message_metadata_passthrough": {
+                                "content_item_kinds": ["user.text"]
+                            },
                         },
                     }
                 ),
@@ -255,6 +272,17 @@ def test_current_codex_and_claude_transcript_shapes_extract_adjacent_exchanges(
                 ),
                 json.dumps(
                     {
+                        "timestamp": "2026-09-11T18:00:30Z",
+                        "type": "user",
+                        "isMeta": True,
+                        "message": {
+                            "role": "user",
+                            "content": "[structured-output-enforce] Tool protocol",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
                         "timestamp": "2026-09-11T18:01:00Z",
                         "type": "user",
                         "message": {"role": "user", "content": "Correction"},
@@ -265,8 +293,11 @@ def test_current_codex_and_claude_transcript_shapes_extract_adjacent_exchanges(
         encoding="utf-8",
     )
 
-    assert len(extract_transcript_exchanges(codex, agent="codex")) == 1
-    assert len(extract_transcript_exchanges(claude, agent="claude-code")) == 1
+    codex_exchanges = extract_transcript_exchanges(codex, agent="codex")
+    claude_exchanges = extract_transcript_exchanges(claude, agent="claude-code")
+    assert len(codex_exchanges) == len(claude_exchanges) == 1
+    assert codex_exchanges[0].user_text == "Correction"
+    assert claude_exchanges[0].user_text == "Correction"
 
 
 def test_audit_cli_loads_the_claimed_worktree_package() -> None:
@@ -393,7 +424,7 @@ def test_native_corpus_replay_requires_exact_event_provenance(tmp_path: Path) ->
             }
         )
     payload = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "corpus_id": "test-native-corpus",
         "frozen_at": "2026-09-12T03:00:00Z",
         "pilot_cutoff": "2026-09-12T01:00:00Z",
@@ -402,6 +433,15 @@ def test_native_corpus_replay_requires_exact_event_provenance(tmp_path: Path) ->
             "native_format_controls": "One Claude transcript-shape control.",
             "label_basis": "Fixed test labels.",
             "privacy": "No source prose in the manifest.",
+            "scored_sources": [
+                {
+                    "agent": case["agent"],
+                    "session_id": case["session_id"],
+                    "source_path": case["source_path"],
+                }
+                for case in cases
+                if case["role"] == "scored"
+            ],
         },
         "cases": cases,
     }
@@ -411,9 +451,41 @@ def test_native_corpus_replay_requires_exact_event_provenance(tmp_path: Path) ->
     corpus, exchanges = load_native_corpus_exchanges(corpus_path, home=tmp_path)
     assert len(corpus.cases) == len(exchanges) == 5
 
+    original_hash = payload["cases"][0]["event_hash"]
     payload["cases"][0]["event_hash"] = "corr_" + "0" * 32
     corpus_path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="event provenance changed"):
+        load_native_corpus_exchanges(corpus_path, home=tmp_path)
+
+    payload["cases"][0]["event_hash"] = original_hash
+    first_source = tmp_path / payload["cases"][0]["source_path"]
+    existing = first_source.read_text(encoding="utf-8")
+    extra = [
+        {
+            "timestamp": "2026-09-12T02:30:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "Another claim"}],
+            },
+        },
+        {
+            "timestamp": "2026-09-12T02:31:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Another question"}],
+            },
+        },
+    ]
+    first_source.write_text(
+        existing + "\n" + "\n".join(json.dumps(row) for row in extra),
+        encoding="utf-8",
+    )
+    corpus_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="scored population is incomplete"):
         load_native_corpus_exchanges(corpus_path, home=tmp_path)
 
 

@@ -1,8 +1,8 @@
 # Plan #135: Correction-Aware Learning Gate
 
-**Status:** In Progress — typed audit and deterministic Stop verifier
-implemented; native classifier remains manual/off pending representative native
-evidence
+**Status:** In Progress — Prompt 1.2/Sonnet promotion route rejected by signed
+native evidence; classifier remains manual/off pending a materially different
+detection design
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -10,7 +10,8 @@ evidence
 **adrs_referenced:** []
 **research_citations:** []
 **Landscape disposition:** inline
-**Blocked By:** None
+**Blocked By:** A materially different correction-detection design with new
+evidence; further retuning or holdouts on the rejected route are not ready work
 **Blocks:** None
 
 `trace_evaluable: true`
@@ -203,6 +204,9 @@ transcript boundary is separately demonstrated.
 
 ## Files Affected
 
+- `.gitignore` (allow the execution-loop cursor to remain durable)
+- `docs/evidence/plan135_native_corpus_outcome.json`
+- `docs/evidence/plan135_native_corpus_allocation.json`
 - `docs/plans/135_correction_learning_gate.md`
 - `docs/plans/135_correction_learning_gate_work_graph.json`
 - `enforced_planning/correction_learning.py` (create)
@@ -295,10 +299,11 @@ works would only multiply an unproven control.
   hook entry? — **Status: OPEN**; prefer extension, prove process lifetime with
   a native canary.
 - [ ] Does the first sanctioned light-model route meet the threshold? —
-  **Status: PARTIAL, NOT PROMOTABLE**; subscription-backed Haiku was unreliable
-  and slow. A stripped Sonnet route passed the frozen synthetic threshold, but
-  independent sign-off rejected promotion because no representative native
-  held-out corpus established generalization. The route remains manual/off.
+  **Status: UNKNOWN ON REPRESENTATIVE NATIVE CORRECTIONS**;
+  subscription-backed Haiku was unreliable and slow. A stripped Sonnet route
+  passed the synthetic threshold, but the first native corpus was invalidated
+  by population and label defects. The route remains manual/off; any revised
+  mechanism needs a correctly frozen fresh holdout and independent sign-off.
 
 ## Notes
 
@@ -375,3 +380,298 @@ representativeness or generalization. Therefore the classifier remains
 manual/off; native launching, Stop blocking, and host wiring are not authorized
 by this pilot. The next valid evidence is a frozen authentically sampled native
 corpus with replayable per-case verdicts and another independent sign-off.
+
+### Native corpus pre-registration
+
+The labels in `prompts/correction_learning/native_corpus_v1.json` were frozen at
+commit `2434017` before any classifier replay. The scored population is every
+post-pilot exchange from three already-active substantive Codex sessions: nine
+cases across three sessions, with two corrections, six non-corrections, and one
+ambiguous boundary. Five additional post-pilot one-exchange Claude Code sessions
+are native-format negative controls only; they exercise current extraction but
+are not represented as human-conversation evidence. The manifest retains home-
+relative source locators, timestamps, event IDs, and content-derived hashes, but
+no assistant or user prose. Replay must resolve the exact local event hashes and
+emit only classifications plus rationale hashes. A passing run advances only to
+fresh independent sign-off; it cannot authorize block mode by itself.
+
+**Native result: INVALID FOR DECISION.** The single pre-registered replay at
+source revision `ce5dfff` resolved all 14/14 frozen events across eight sessions
+and the three calls completed without retry or schema error. However, fresh
+sign-off found that the manifest omitted an in-scope event and that its only
+claimed post-pilot correction (`cx-brain-01`) actually scored the subsequent
+`$audit` command after the assistant had acknowledged an earlier correction.
+The `cx-aes-03` negative label is also materially contestable. Consequently the
+reported 1/2 recall and false-positive counts cannot diagnose classifier
+generalization. `docs/evidence/plan135_native_corpus_signoff.md` records the
+rejected sign-off. The classifier remains manual/off as the safety default, not
+as an eval-validated decision; this holdout may now inform diagnosis but cannot
+be reused as fresh promotion evidence.
+
+**Root-cause repair after invalidation:** Transcript extraction now uses native
+message metadata rather than prose heuristics: Codex user records with explicit
+content kinds are eligible only when they include `user.text`, and Claude Code
+`isMeta` user records are excluded. Native corpus schema 1.1 adds explicit
+scored source declarations and rejects any scored population that is incomplete
+or overinclusive between the pilot cutoff and freeze time. Prompt version 1.1
+also makes the adjacent-turn boundary explicit: an assistant's own admission
+does not make the next user command a correction, and process questions without
+a clear dispute are ambiguous rather than enforcement-positive. A diagnostic
+three-case development probe classified the known correction as correction, the
+contested process challenge as ambiguous, and the subsequent `$audit` command
+as not-correction under trace
+`correction-learning/dev-v2/adjacent-and-process/batch-1` (29.656 seconds, no
+retry or error, recorded marginal cost `$0.00`). This is development evidence,
+not a fresh holdout or promotion result.
+
+### Native corpus v2 pre-registration
+
+This is a single-system product evidence gate, not a comparative benchmark.
+The falsifiable claim is that prompt 1.1 plus typed native-message admission can
+identify Brian's corrections in previously unseen authentic adjacent exchanges
+with at least 90% recall and no enforcement-positive false positives. Passing
+may authorize a reversible native observe-only launch; it cannot authorize Stop
+blocking. Failure or invalid evidence retains manual/off and triggers a new
+mechanism revision on development data only.
+
+The source sample was frozen in
+`docs/evidence/plan135_native_v2_candidates.json` before annotation or replay.
+It excludes every v1/development session and covers eight Codex plus eight
+Claude Code sessions. Eligible transcript windows run from 2026-09-07 through
+the prompt-1.1 commit time. Within each client, transcript paths with at least
+four eligible user-authored adjacent exchanges are ordered by SHA-256 of the
+fixed seed, client, and home-relative path; the lowest eight are selected, and
+a hash-derived contiguous four-exchange window is retained. This yields 64
+cases without inspecting their prose during selection.
+
+Two blind annotators independently label every exact adjacent pair using only
+information available to the classifier. A third blind adjudicator resolves
+disagreements. Agreement and disagreements are reported; model rationales and
+conversation prose are not retained in the corpus. If fewer than ten adjudicated
+corrections exist, classifier replay is forbidden: selection must be extended
+using the next paths in the same deterministic order and all added labels frozen
+before replay. Otherwise the one permitted held-out run uses the committed
+prompt, typed schema, stripped Sonnet route, six cases per batch, no tools or
+setting sources, and a `$0.05` maximum marginal budget.
+
+The initial blind annotations contained only five unanimously labeled
+corrections (six from one annotator before adjudication), below the frozen
+ten-positive floor. Before any classifier replay, the next eight paths per
+client in the same hash order and their hash-derived four-exchange windows were
+therefore frozen as
+`docs/evidence/plan135_native_v2_extension1_candidates.json`. The original 64
+cases remain in the combined population; none were removed or relabeled to meet
+the floor.
+
+Blind annotation completed with agreement on 120/128 cases (93.75%); a third
+blind annotator adjudicated all eight disagreements. The frozen combined corpus
+contains 14 corrections, 113 non-corrections, and one ambiguous boundary across
+32 native session windows. `prompts/correction_learning/native_corpus_v2.json`
+contains only exact source/event provenance and final labels;
+`docs/evidence/plan135_native_v2_annotation_summary.json` retains selection and
+annotation hashes. Local provenance replay resolved the exact complete 128/128
+population. The corpus and labels are now frozen; no prompt or admission change
+is allowed before the single held-out replay.
+
+**Native v2 result: VALID FAIL.** The one frozen replay resolved 128/128 exact
+events and completed 22 subscription-backed Sonnet calls with no route/schema
+error or retry. It detected 10/14 corrections (71.4% recall), produced one
+enforcement-positive false positive across 113 non-corrections, and produced no
+enforcement-positive verdict for the one ambiguous boundary. Claude Code recall
+was 4/5; Codex recall was 6/9 and contained the false positive. Calls totaled
+691.101 seconds of model latency (9.542–80.942 seconds) at recorded marginal
+cost `$0.00`. The frozen privacy-reduced result is
+`prompts/correction_learning/native_result_v2.json`; traces are under the
+legacy-named but unique prefix `correction-learning/native-v1/65f20a8e2c23/`.
+
+The class-level diagnosis separates semantic errors from extraction, which had
+already passed exact typed admission and population checks. Misses cluster in
+imperative continuation/resumption messages that also correct the prior status
+or impose required repairs: the model overweights their task-directive form and
+underweights the disputed earlier handling. A shorter factual/name correction
+paired with a recurrence-prevention request was also missed. Conversely, terse
+clarification or critical questions remain a boundary class: the sole false
+positive inferred a correction from a question whose adjudicated label did not
+assert prior error, while three other non-corrections became ambiguous. No
+prompt, label, threshold, or admission change was made after this result. The
+classifier remains manual/off pending fresh adversarial sign-off on that
+decision; any future semantic repair must treat v2 as development data and use
+a new unseen holdout.
+
+**Native v2 sign-off: REJECTED.** Round one rejected manually expanded,
+nonexistent Git revisions and missing annotation/selection reconstruction.
+Evidence-only repair made revision, selection, final-label, trace, and diagnosis
+checks executable. Round two accepted all of those except historical blind-label
+provenance: the privacy-reduced A/B rows were committed after the result, while
+the original pre-result files contain rationales the privacy contract forbids
+retaining. `docs/evidence/plan135_native_v2_signoff_r1.md` and
+`plan135_native_v2_signoff_r2.md` preserve both reviews. Rather than weaken
+privacy to rescue the run, v2 is development evidence only. A v3 holdout must
+commit privacy-reduced independent labels and adjudications before replay.
+
+### Native corpus v3 pre-registration
+
+Prompt 1.2 and the revision-validating replay harness were frozen at
+`29ab33b8bd31e86929518b35f8b98c8a2c51e5f7` before v3 source selection. V3 uses
+the next unseen rank window (`16:32`) from the unchanged deterministic v2
+source-ranking rule. The eligible universe contained 16 further Codex and nine
+further Claude Code session windows, yielding 100 exact cases across 25 native
+sessions in `docs/evidence/plan135_native_v3_candidates.json`. No source prose
+was inspected during selection and no v1/v2/development session is eligible.
+
+The v2 claim, thresholds, invalid-run rules, six-case batches, model, tools,
+budget, and sign-off requirement remain unchanged. Two blind annotators and a
+third disagreement adjudicator must emit privacy-reduced event-ID/label records
+that are committed before the final corpus and before replay. If fewer than ten
+adjudicated corrections are present, the next available Codex ranks must be
+frozen and annotated before replay; cases may not be removed after annotation.
+
+V3 annotation produced 91/100 independent agreement and nine blindly
+adjudicated disagreements, yielding 17 corrections and 83 non-corrections. The
+candidate, both privacy-reduced label sets, and privacy-reduced adjudication were
+committed in that order before `native_corpus_v3.json` was assembled. Run
+`docs/evidence/plan135_native_v3_annotation_check.py` to recompute the final
+labels, and `plan135_native_v2_selection.py` to reproduce the rank-16:32 source
+sample. The corpus is frozen; the next permitted action is its one held-out
+replay from the exact Git revision containing these bytes.
+
+The primary gates are at least 90% correction recall, zero correction verdicts
+among adjudicated non-corrections, and zero correction verdicts among ambiguous
+boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source
+windows, admission of typed meta/protocol records, route/schema errors, label
+leakage, or annotation below the ten-positive floor invalidates the run. Exact
+coverage, agreement, subgroup results by client, call latency/cost, prompt and
+corpus hashes, and trace IDs are secondary readouts. Any consequential decision
+requires fresh adversarial `eval-decision-signoff`.
+
+**Native v3 result: INVALID.** The single replay dispatched 17
+subscription-backed Sonnet calls with no route/schema error or retry, but batch
+four returned only five verdicts for its six frozen event IDs. The missing ID
+was `c76f54d31b2d26e76e9d8753`; no unexpected ID was returned. Because the
+pre-run contract makes any missing verdict invalidating, no accuracy metric or
+promotion claim is valid. The privacy-reduced invalid-run record reconstructed
+from the durable traces is
+`prompts/correction_learning/native_result_v3.json`; traces are under
+`correction-learning/correction-learning-native-v3/14d8820e9e4f/`.
+
+The harness defect was that it checked the combined ID set only after every
+batch, then raised before writing any result. It now validates each batch's
+exact event-ID set immediately and atomically preserves a privacy-reduced
+invalid result before returning failure. V3 remains development evidence and
+must not be retried or scored. A consequential decision still requires a fresh,
+precommitted holdout run followed by independent adversarial sign-off.
+
+### Native corpus v4 pre-registration
+
+V4 draws an unseen sample from the disjoint interval 2026-08-31 through
+2026-09-06. `plan135_native_v4_selection.py` deterministically ranks eligible
+sessions with seed `plan135-native-v4`, selects 16 sessions per client, and
+selects one four-exchange window per session without inspecting prose. The
+selection implementation and this contract must be committed before the
+candidate manifest is generated. The candidate manifest, two independent
+privacy-reduced label sets, adjudication of every disagreement, and the final
+corpus must then be committed in that order before replay.
+
+Prompt 1.2, the v3 decision thresholds and invalidation rules, exact-source
+replay, and independent adversarial sign-off remain unchanged. V4 uses
+four-case batches with the per-batch exact-ID guard. The smaller batch bounds
+wasted calls after a malformed response; it does not relax any quality gate.
+If adjudication yields fewer than ten corrections, an extension selected by a
+precommitted deterministic rule is required before replay. V4 permits one
+held-out replay only and may not be retried or retuned.
+
+V4 annotation produced 123/128 independent agreement and five blindly
+adjudicated disagreements, yielding 29 corrections, 97 non-corrections, and two
+ambiguous boundaries. The exact-source loader resolved all 128 frozen events from
+32 sessions. Candidate selection, privacy-reduced A/B labels, privacy-reduced
+adjudication, and the corpus were committed in the preregistered order before
+replay.
+
+**Native v4 result: INVALID.** The one replay completed eight four-case batches,
+then the ninth call failed after both permitted `StructuredOutput` attempts
+returned a rationale longer than the model-facing schema's 240-character
+maximum. The trace contains eight completed calls and one failed call, with no
+retry and `$0.00` recorded marginal cost. Completed-call model latency totaled
+176.677 seconds (13.580–38.632 seconds). Because route failure is explicitly
+invalidating, no accuracy score or promotion claim is valid and v4 may not be
+retried. The privacy-reduced reconstructed result is
+`prompts/correction_learning/native_result_v4.json`; traces are under
+`correction-learning/correction-learning-native-v4/0445e448dc70/`.
+
+The second harness defect was that only verdict-ID mismatches were converted to
+durable invalid results; provider, route, and schema exceptions escaped before
+artifact creation. Batch execution now wraps every evaluation exception with
+its batch index and privacy-safe exception type, then uses the same atomic
+invalid-result path. This fixes evidence retention but does not make v4 valid.
+
+Independent sign-off accepted v4's invalidation, sample reconstruction,
+privacy-reduced commit ordering, and the manual/off decision. It rejected the
+proposal to declare the execution cursor circuit-broken: the cursor records two
+failures at the same runtime-integrity boundary against a cap of three. It also
+required a mechanism change before any further fresh holdout. The exact v4
+trace shows the same unsupported rationale length constraint failed twice; the
+turn limit was the terminal symptom, not the root cause. The classifier schema
+now keeps rationale non-empty but unbounded because rationale prose is transient
+and only its hash crosses the privacy boundary. An authentic development canary
+on the contaminated failing batch must pass before another unseen holdout is
+selected.
+
+The post-repair development canary replayed only the contaminated four-event v4
+batch nine from the exact repair revision. It returned all four required IDs in
+one 29.767-second call with no error or retry and `$0.00` recorded marginal
+cost. `plan135_native_v4_schema_canary.json` retains only IDs and classifications.
+This passes the mechanism-repair boundary but does not score v4 or establish
+full-run reliability. A new unseen holdout is now the next permitted evaluation
+action.
+
+### Native corpus v5 pre-registration
+
+V5 is the first holdout after the structured-schema repair. It samples the
+disjoint, previously uninspected interval 2026-08-24 through 2026-08-30.
+`plan135_native_v5_selection.py` deterministically ranks eligible sessions with
+seed `plan135-native-v5`, selects 16 sessions per client, and selects one
+four-exchange window per session without inspecting prose. This selector and
+contract must be committed before candidate generation. Candidate, independent
+A/B labels, blind disagreement adjudication, and final corpus must be committed
+in that order before replay.
+
+Prompt 1.2, four-case batches, exact-ID and exception invalidation, the v3/v4
+quality thresholds, and fresh independent decision sign-off remain unchanged.
+Fewer than ten adjudicated corrections requires a precommitted extension. V5
+permits one held-out replay only and may not be retried or retuned.
+
+V5 annotation produced 117/128 independent agreement and 11 blindly
+adjudicated disagreements. Executable reconstruction yields 34 corrections,
+88 non-corrections, and six ambiguous boundaries. The exact-source loader
+resolved all 128 events across the 32 frozen sessions. Candidate selection,
+privacy-reduced A/B labels, privacy-reduced adjudication, and the final corpus
+were committed in the preregistered order before replay.
+
+**Native v5 result: VALID FAIL.** The one frozen replay returned exact verdict
+coverage for all 128 events without an invalidating route or schema error. It
+detected 24/34 corrections (70.6% recall), produced three enforcement-positive
+false positives across 88 adjudicated non-corrections, and produced no
+enforcement-positive verdict across six ambiguous boundaries. Codex recall was
+12/18 with all three false positives; Claude Code recall was 12/16 with zero
+false positives. The result fails both the 90% recall gate and the zero-false-
+positive gate, so the classifier remains manual/off. No prompt, labels,
+threshold, or admission rule changed after the run. The frozen privacy-reduced
+result is `prompts/correction_learning/native_result_v5.json`; a fresh
+independent verifier must sign off before any final decision or integration.
+
+Post-result harness review found that successful-run status still required
+every prediction to be acceptable even though the preregistered correction
+recall threshold is 90%. It also retained a Claude-specific native-format
+metric name after controls became client-neutral. Neither defect changes v5's
+failure. Future result schema 1.1 now computes the declared 90%-recall,
+zero-false-positive, zero-ambiguous-positive, and zero-control-positive gate
+directly and uses `native_format_control_false_positives`.
+
+**Native v5 sign-off: ACCEPTED.** Independent verification reproduced source
+selection, exact event loading, annotation reconstruction, Git ordering,
+privacy boundaries, all 128 predictions, and 32 successful trace calls. The
+signed decision rejects the unchanged Prompt 1.2/Sonnet route for promotion,
+retains correction learning as manual/off, and stops further holdout spend or
+retuning on this route. This is a negative promotion decision, not activation or
+proof that the broader correction-learning objective is complete. The signed
+artifact is `docs/evidence/plan135_native_v5_signoff.md`.

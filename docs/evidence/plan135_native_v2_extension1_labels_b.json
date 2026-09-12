@@ -1,0 +1,267 @@
+{
+  "annotator": "B",
+  "labels": [
+    {
+      "event_id": "67dedf3690f78b0c75224e86",
+      "label": "correction"
+    },
+    {
+      "event_id": "f5e963f63b08effde23f7dfc",
+      "label": "correction"
+    },
+    {
+      "event_id": "9540218d5a29a00819bcaf3d",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8fe8c86a56277b049ac53189",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "743862aafc29fbd94d8210d4",
+      "label": "correction"
+    },
+    {
+      "event_id": "ac56b730d469df608346cf79",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "02ca766d15208b58f702f850",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "2ecd88b6829e10eeef57bcc1",
+      "label": "correction"
+    },
+    {
+      "event_id": "afc9bf0a7e78c5fc6c88ece4",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "10a17ec5eda257e11249cc6d",
+      "label": "correction"
+    },
+    {
+      "event_id": "b9d2242e4f8c9f3609f8ff44",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "1ccaad41ea6028469820e260",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8bb163d0b7b2b76bfa0ac8dd",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f5d8f0be45ec788345572800",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7d5f81a0385b5724c73f3783",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "0d5ff12e2c4592232014367c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "1bd8746cc572de9dcc77897f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "dc0d7e251ebda7e73b7a392a",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "1d76f7f2cbff56b5e2f147e2",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "4b9153df81f1dbc55cf3c7fd",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "370ddcae363679589d17fe57",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "011f22dedde1ca92bebe7ee2",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "ee23602fee9bf17c6bd97c1e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "9a11774eca89737d8c4eadb5",
+      "label": "correction"
+    },
+    {
+      "event_id": "ec3d834a95db2eed5fa78b7f",
+      "label": "correction"
+    },
+    {
+      "event_id": "faf045bcb5bbd8938f7f701c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "ccf321170517fd2cb9e4662b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "de73d5b31ee58ba7dfcc069c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "1045b299a3f306a89a4e8301",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "d1034a17da84e6cb0bc4ed92",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "eef8767a01b8505212f7b20e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e5b274025e73e379f613f33b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "cd87d0f3b646934329d7fb0f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "acfd560e08339ff1817b2392",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e3f71ed07cf4b1c2252d1479",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "981d98b3c094eb745e3b95d3",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "9c4ae5322e111b0b3a0e067a",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8c72cdc74aa61a1ff328fe08",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "075dc29bbab08d3cba7ac2cd",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "4e4c42a8bb01c6b91e32ed78",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "47d83b32f57e3b8b1316155a",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "127e220a6d967978cc5afbd8",
+      "label": "correction"
+    },
+    {
+      "event_id": "df58f352774e2d9dd62279d6",
+      "label": "correction"
+    },
+    {
+      "event_id": "5af7c9dc4983720bcb83dcd1",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e67ca8aab151c6d60c238d39",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8de357a823c5edbd23bca50d",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "48211e1456c58b17790731c0",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "182014d38937166811a13b7f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7d06302250255936cccc707e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "18adf342b90f2627967aa3df",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "88f1600d785bddbb3a8eee4f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "a3ba92871e0442eb655d4cb2",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "cbe6c28f3e38f6df15a47d47",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "728e17f1adafa45e65c51fe3",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "cea735e05b8e01e0d47a250e",
+      "label": "ambiguous"
+    },
+    {
+      "event_id": "394753896b8a3b94a0bb77da",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "b8d929925d2fa8024c3a39bd",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "c6090edb31bea895f3f299a7",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e91b06938349e25ab78cf2f5",
+      "label": "correction"
+    },
+    {
+      "event_id": "4781c8ca502270f92be708cd",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7c952b7c21c402bf51643ac9",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "eca00209b2b7d80db92ca254",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f6cfe2d58aa29bad31f57678",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8b8235ebf2e56278528afb6b",
+      "label": "not_correction"
+    }
+  ],
+  "non_claims": [
+    "Annotation rationales and conversation prose are intentionally omitted."
+  ],
+  "original_sha256": "909c6bdbcfdd87eabb79d92ba036fdcc9cbc8f1c5061cfb8faf7adf2662b00a5",
+  "record_type": "privacy_reduced_native_annotation",
+  "schema_version": "1.0"
+}

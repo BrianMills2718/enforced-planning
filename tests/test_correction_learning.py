@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -11,9 +12,11 @@ import pytest
 from enforced_planning.correction_learning import (
     CorrectionClassification,
     CorrectionVerdict,
+    NativeCorrectionCorpusV1,
     TranscriptExchange,
     audit_exchanges,
     extract_transcript_exchanges,
+    load_native_corpus_exchanges,
 )
 from scripts import correction_learning_audit
 
@@ -224,12 +227,29 @@ def test_current_codex_and_claude_transcript_shapes_extract_adjacent_exchanges(
                 ),
                 json.dumps(
                     {
+                        "timestamp": "2026-09-11T18:00:30Z",
+                        "type": "response_item",
+                        "payload": {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": "Injected authority"}],
+                            "internal_chat_message_metadata_passthrough": {
+                                "content_item_kinds": ["agents_md.instructions"]
+                            },
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
                         "timestamp": "2026-09-11T18:01:00Z",
                         "type": "response_item",
                         "payload": {
                             "type": "message",
                             "role": "user",
                             "content": [{"type": "input_text", "text": "Correction"}],
+                            "internal_chat_message_metadata_passthrough": {
+                                "content_item_kinds": ["user.text"]
+                            },
                         },
                     }
                 ),
@@ -253,6 +273,17 @@ def test_current_codex_and_claude_transcript_shapes_extract_adjacent_exchanges(
                 ),
                 json.dumps(
                     {
+                        "timestamp": "2026-09-11T18:00:30Z",
+                        "type": "user",
+                        "isMeta": True,
+                        "message": {
+                            "role": "user",
+                            "content": "[structured-output-enforce] Tool protocol",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
                         "timestamp": "2026-09-11T18:01:00Z",
                         "type": "user",
                         "message": {"role": "user", "content": "Correction"},
@@ -263,8 +294,11 @@ def test_current_codex_and_claude_transcript_shapes_extract_adjacent_exchanges(
         encoding="utf-8",
     )
 
-    assert len(extract_transcript_exchanges(codex, agent="codex")) == 1
-    assert len(extract_transcript_exchanges(claude, agent="claude-code")) == 1
+    codex_exchanges = extract_transcript_exchanges(codex, agent="codex")
+    claude_exchanges = extract_transcript_exchanges(claude, agent="claude-code")
+    assert len(codex_exchanges) == len(claude_exchanges) == 1
+    assert codex_exchanges[0].user_text == "Correction"
+    assert claude_exchanges[0].user_text == "Correction"
 
 
 def test_audit_cli_loads_the_claimed_worktree_package() -> None:
@@ -312,6 +346,143 @@ def test_classifier_route_disables_agent_context_and_ordinary_tools(monkeypatch)
     assert captured["cwd"] == str(correction_learning_audit.ROOT)
 
 
+def test_verdict_accepts_long_transient_rationale() -> None:
+    verdict = CorrectionVerdict(
+        event_id="turn-1",
+        classification="not_correction",
+        rationale="r" * 500,
+    )
+
+    assert len(verdict.rationale) == 500
+
+
+def test_classifier_rejects_a_missing_event_within_its_batch(monkeypatch) -> None:
+    exchanges = [_exchange("turn-1"), _exchange("turn-2")]
+
+    def incomplete(*_args, **_kwargs):
+        return CorrectionClassification(
+            verdicts=[
+                CorrectionVerdict(
+                    event_id="turn-1",
+                    classification="not_correction",
+                    rationale="Only one verdict returned.",
+                )
+            ]
+        )
+
+    monkeypatch.setattr(correction_learning_audit, "classify_with_model", incomplete)
+    with pytest.raises(correction_learning_audit.BatchVerdictMismatch) as caught:
+        correction_learning_audit.classify_in_batches(
+            exchanges,
+            [],
+            model="claude-code/sonnet",
+            trace_id="test/batch-id-mismatch",
+            batch_size=6,
+        )
+    assert caught.value.batch_index == 1
+    assert caught.value.missing_event_ids == ["turn-2"]
+
+
+def test_classifier_preserves_batch_index_for_route_failure(monkeypatch) -> None:
+    def failed(*_args, **_kwargs):
+        raise RuntimeError("provider details must not enter the result artifact")
+
+    monkeypatch.setattr(correction_learning_audit, "classify_with_model", failed)
+    with pytest.raises(correction_learning_audit.BatchEvaluationFailure) as caught:
+        correction_learning_audit.classify_in_batches(
+            [_exchange("turn-1")],
+            [],
+            model="claude-code/sonnet",
+            trace_id="test/batch-route-failure",
+            batch_size=4,
+        )
+    assert caught.value.batch_index == 1
+    assert caught.value.error_type == "RuntimeError"
+    assert "provider details" not in str(caught.value)
+
+
+def test_native_replay_writes_privacy_reduced_invalid_result(
+    monkeypatch, tmp_path: Path
+) -> None:
+    corpus_path = tmp_path / "corpus.json"
+    result_path = tmp_path / "result.json"
+    corpus_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        correction_learning_audit,
+        "verified_frozen_revision",
+        lambda *_args: "a" * 40,
+    )
+    corpus = type("Corpus", (), {"corpus_id": "test-invalid-run"})()
+    monkeypatch.setattr(
+        correction_learning_audit,
+        "load_native_corpus_exchanges",
+        lambda _path: (corpus, [_exchange("turn-1")]),
+    )
+    monkeypatch.setattr(
+        correction_learning_audit,
+        "classify_in_batches",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            correction_learning_audit.BatchEvaluationFailure(1, "ResultError")
+        ),
+    )
+    args = argparse.Namespace(
+        source_revision="a" * 40,
+        corpus=corpus_path,
+        result=result_path,
+        model="claude-code/sonnet",
+        batch_size=4,
+    )
+
+    assert correction_learning_audit.evaluate_native_corpus(args) == 2
+    payload = json.loads(result_path.read_text(encoding="utf-8"))
+    assert payload["run_status"] == "invalid"
+    assert payload["decision_status"] == "retain_manual_off"
+    assert payload["failure"] == {
+        "batch_index": 1,
+        "code": "batch_evaluation_error",
+        "error_type": "ResultError",
+    }
+    assert "provider details" not in result_path.read_text(encoding="utf-8")
+
+
+def test_native_promotion_gate_uses_preregistered_thresholds() -> None:
+    corrections = [
+        {
+            "role": "scored",
+            "expected": "correction",
+            "actual": "correction" if index < 9 else "not_correction",
+        }
+        for index in range(10)
+    ]
+    negatives = [
+        {"role": "scored", "expected": "not_correction", "actual": "not_correction"}
+    ]
+    ambiguous = [
+        {"role": "scored", "expected": "ambiguous", "actual": "ambiguous"}
+    ]
+
+    assert correction_learning_audit.native_promotion_gate_passes(
+        corrections + negatives + ambiguous
+    )
+    corrections[8]["actual"] = "not_correction"
+    assert not correction_learning_audit.native_promotion_gate_passes(
+        corrections + negatives + ambiguous
+    )
+    corrections[8]["actual"] = "correction"
+    negatives[0]["actual"] = "correction"
+    assert not correction_learning_audit.native_promotion_gate_passes(
+        corrections + negatives + ambiguous
+    )
+
+
+def test_native_replay_rejects_nonexistent_source_revision() -> None:
+    with pytest.raises(ValueError, match="resolvable Git commit"):
+        correction_learning_audit.verified_frozen_revision(
+            "65f20a8e2c2314cbb691aa7c25da1a67a85c8374",
+            Path("prompts/correction_learning/native_corpus_v2.json"),
+        )
+
+
 def test_pilot_case_set_has_preregistered_held_out_counts() -> None:
     path = Path("prompts/correction_learning/pilot_cases_v1.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -320,6 +491,142 @@ def test_pilot_case_set_has_preregistered_held_out_counts() -> None:
     assert len({case["case_id"] for case in payload["cases"]}) == len(payload["cases"])
     assert sum(case["expected"] == "correction" for case in held_out) == 10
     assert sum(case["expected"] == "not_correction" for case in held_out) == 20
+
+
+def test_native_corpus_is_post_pilot_privacy_reduced_and_multiclient() -> None:
+    path = Path("prompts/correction_learning/native_corpus_v1.json")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    corpus = NativeCorrectionCorpusV1.model_validate(raw)
+
+    assert len(corpus.cases) == 14
+    assert len({(case.agent, case.session_id) for case in corpus.cases}) == 8
+    assert sum(case.role == "scored" for case in corpus.cases) == 9
+    assert sum(case.expected == "correction" for case in corpus.cases) == 2
+    assert all("assistant" not in case and "user" not in case for case in raw["cases"])
+
+
+def test_native_corpus_replay_requires_exact_event_provenance(tmp_path: Path) -> None:
+    cases = []
+    for index, agent in enumerate(["codex", "codex", "codex", "codex", "claude-code"]):
+        source = Path(f"native/session-{index}.jsonl")
+        target = tmp_path / source
+        target.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = f"2026-09-12T02:00:0{index}Z"
+        if agent == "codex":
+            rows = [
+                {
+                    "timestamp": timestamp,
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": "Claim"}],
+                    },
+                },
+                {
+                    "timestamp": timestamp,
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "Question"}],
+                    },
+                },
+            ]
+        else:
+            rows = [
+                {
+                    "timestamp": timestamp,
+                    "type": "assistant",
+                    "message": {"role": "assistant", "content": "Claim"},
+                },
+                {
+                    "timestamp": timestamp,
+                    "type": "user",
+                    "message": {"role": "user", "content": "Question"},
+                },
+            ]
+        target.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+        exchange = extract_transcript_exchanges(target, agent=agent)[0]
+        cases.append(
+            {
+                "case_id": f"case-{index}",
+                "role": "scored" if agent == "codex" else "native_format_control",
+                "agent": agent,
+                "session_id": f"session-{index}",
+                "source_path": str(source),
+                "event_id": exchange.event_id,
+                "event_hash": exchange.event_hash,
+                "occurred_at": exchange.occurred_at.isoformat(),
+                "expected": "not_correction",
+            }
+        )
+    payload = {
+        "schema_version": "1.1",
+        "corpus_id": "test-native-corpus",
+        "frozen_at": "2026-09-12T03:00:00Z",
+        "pilot_cutoff": "2026-09-12T01:00:00Z",
+        "selection": {
+            "scored_population": "Synthetic loader test cases.",
+            "native_format_controls": "One Claude transcript-shape control.",
+            "label_basis": "Fixed test labels.",
+            "privacy": "No source prose in the manifest.",
+            "scored_sources": [
+                {
+                    "agent": case["agent"],
+                    "session_id": case["session_id"],
+                    "source_path": case["source_path"],
+                    "window_start": case["occurred_at"],
+                    "window_end": "2026-09-12T02:59:59Z",
+                }
+                for case in cases
+                if case["role"] == "scored"
+            ],
+        },
+        "cases": cases,
+    }
+    corpus_path = tmp_path / "corpus.json"
+    corpus_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    corpus, exchanges = load_native_corpus_exchanges(corpus_path, home=tmp_path)
+    assert len(corpus.cases) == len(exchanges) == 5
+
+    original_hash = payload["cases"][0]["event_hash"]
+    payload["cases"][0]["event_hash"] = "corr_" + "0" * 32
+    corpus_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="event provenance changed"):
+        load_native_corpus_exchanges(corpus_path, home=tmp_path)
+
+    payload["cases"][0]["event_hash"] = original_hash
+    first_source = tmp_path / payload["cases"][0]["source_path"]
+    existing = first_source.read_text(encoding="utf-8")
+    extra = [
+        {
+            "timestamp": "2026-09-12T02:30:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "Another claim"}],
+            },
+        },
+        {
+            "timestamp": "2026-09-12T02:31:00Z",
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Another question"}],
+            },
+        },
+    ]
+    first_source.write_text(
+        existing + "\n" + "\n".join(json.dumps(row) for row in extra),
+        encoding="utf-8",
+    )
+    corpus_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="scored population is incomplete"):
+        load_native_corpus_exchanges(corpus_path, home=tmp_path)
 
 
 @pytest.mark.skipif(

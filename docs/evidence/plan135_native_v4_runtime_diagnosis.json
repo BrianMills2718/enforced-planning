@@ -1,0 +1,25 @@
+{
+  "batch_index": 9,
+  "diagnosis": "Both allowed StructuredOutput attempts failed because verdicts[3].rationale exceeded the 240-character schema maximum; maximum-turn exhaustion was the terminal symptom.",
+  "evidence": {
+    "attempt_1": {
+      "error": "Output does not match required schema: /verdicts/3/rationale: must NOT have more than 240 characters",
+      "tool_result_line": 13,
+      "tool_use_line": 12
+    },
+    "attempt_2": {
+      "error": "Output does not match required schema: /verdicts/3/rationale: must NOT have more than 240 characters",
+      "tool_result_line": 20,
+      "tool_use_line": 19
+    }
+  },
+  "non_claims": [
+    "This diagnosis does not make native v4 valid or scoreable.",
+    "No conversation prose, model verdict, or model rationale is retained in this artifact."
+  ],
+  "record_type": "native_replay_runtime_diagnosis",
+  "schema_version": "1.0",
+  "source_sha256": "344f1c75a9ce07cc522a0a6ce005c41ef877b4d90d69ac63269a6bcef29ded72",
+  "source_transcript": ".claude/projects/-home-brian-code-enforced-planning-worktrees-plan-135-native-corpus-signoff-v3/62e17c6c-cc69-4464-aa9d-0dfd3d472908.jsonl",
+  "trace_id": "correction-learning/correction-learning-native-v4/0445e448dc70/batch-9"
+}

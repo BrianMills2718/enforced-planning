@@ -1,0 +1,32 @@
+{
+  "artifact_sha256": {
+    "plan135_native_v5_adjudication.json": "e56044cb93c138ea715b3940424c06afa8d4645244c707ff43b869e5d7717b3d",
+    "plan135_native_v5_candidates.json": "3c4e74281d0961653639825e8dbae511374d1e6a31e528b138a56396865d3eef",
+    "plan135_native_v5_labels_a.json": "b070b337915077406e5704d55cc77d723af63d2633024eef838467cea08a4506",
+    "plan135_native_v5_labels_b.json": "5ad28957c23701803985d044b12d70c89f8c1f74b45abebfe96b324f8359020e"
+  },
+  "combined": {
+    "adjudicated": 11,
+    "agreements": 117,
+    "cases": 128,
+    "disagreements": 11,
+    "labels": {
+      "ambiguous": 6,
+      "correction": 34,
+      "not_correction": 88
+    }
+  },
+  "commit_chain": {
+    "adjudication": "49c30a26a080169fbb57b83af93fd6589ecd895f",
+    "candidate": "d187bfcb5691ca6f0afb4ad7b949b2f6f8b8c6aa",
+    "labels": "e991f6cfed9579e56616e70c0b61b1c3c09b9845"
+  },
+  "corpus_id": "correction-learning-native-v5",
+  "frozen_at": "2026-09-12T03:52:28.874385Z",
+  "non_claims": [
+    "Conversation prose and annotation rationales are not retained.",
+    "Annotation agreement does not establish classifier accuracy."
+  ],
+  "record_type": "native_corpus_annotation_summary",
+  "schema_version": "1.0"
+}

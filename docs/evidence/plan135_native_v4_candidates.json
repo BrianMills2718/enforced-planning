@@ -1,0 +1,937 @@
+{
+  "development_revision": "a0b7296680a42fcdd2e899f2657c6176364d5206",
+  "population_end": "2026-09-07T00:00:00Z",
+  "population_start": "2026-08-31T00:00:00Z",
+  "schema_version": "candidate/1.0",
+  "seed": "plan135-native-v4",
+  "sources": [
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_9852bba91f5fef9966bc16f8b0ff6a41",
+          "event_id": "229504e217382b88a56b5b82",
+          "occurred_at": "2026-09-01T03:16:35.725000Z"
+        },
+        {
+          "event_hash": "corr_791501411f4ab33c95608dcdcfb41fb2",
+          "event_id": "b8e8f9e4c38396e5b7bd5092",
+          "occurred_at": "2026-09-01T03:16:35.725000Z"
+        },
+        {
+          "event_hash": "corr_668bc4ca1a98c10380bb72a250d0d50a",
+          "event_id": "e00e4a23eb2581ff46be2c59",
+          "occurred_at": "2026-09-01T03:16:35.726000Z"
+        },
+        {
+          "event_hash": "corr_dd89020ba6611b0650c47715c8bcef0e",
+          "event_id": "9e9afb87d7274d45aedc007b",
+          "occurred_at": "2026-09-01T03:16:35.727000Z"
+        }
+      ],
+      "session_id": "01a05af7-f903-7510-8732-698d8694e699",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-16-35-01a05af7-f903-7510-8732-698d8694e699.jsonl",
+      "window_end": "2026-09-01T03:16:35.727000Z",
+      "window_start": "2026-09-01T03:16:35.725000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_4eccce5a53c0a9d4ad9ff545ebbadad9",
+          "event_id": "88e607bdd56ac0fece581662",
+          "occurred_at": "2026-09-01T04:51:24.664000Z"
+        },
+        {
+          "event_hash": "corr_180ec6a9abc4b78ea690ea432230b79e",
+          "event_id": "68d468f0a3bda9c888779023",
+          "occurred_at": "2026-09-01T04:51:24.664000Z"
+        },
+        {
+          "event_hash": "corr_cf181f6c852b6103cd3ab74f5dcedfb4",
+          "event_id": "57061e0cadd39d404352d27a",
+          "occurred_at": "2026-09-01T04:51:24.665000Z"
+        },
+        {
+          "event_hash": "corr_4449e7fce2997550800da30c3d6e8011",
+          "event_id": "e6eeb4a3479e3e31983b74e2",
+          "occurred_at": "2026-09-01T04:51:24.666000Z"
+        }
+      ],
+      "session_id": "01a05b4e-c765-74d3-a579-71e9e0de76a6",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T21-51-24-01a05b4e-c765-74d3-a579-71e9e0de76a6.jsonl",
+      "window_end": "2026-09-01T04:51:24.666000Z",
+      "window_start": "2026-09-01T04:51:24.664000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_bafd397c84b3c1418edd360b8b2ba171",
+          "event_id": "7cd589dddaba91df8536e5a1",
+          "occurred_at": "2026-09-01T03:21:16.003000Z"
+        },
+        {
+          "event_hash": "corr_533fec87e2e90150efaf793cf045932a",
+          "event_id": "f22db800a008ea835e8bbe2d",
+          "occurred_at": "2026-09-01T03:21:16.004000Z"
+        },
+        {
+          "event_hash": "corr_d3b277e611b5ebb457c9a379bc2db75a",
+          "event_id": "819935b0a6aca46d907a732b",
+          "occurred_at": "2026-09-01T03:21:16.004000Z"
+        },
+        {
+          "event_hash": "corr_01e54af43ab3a4f1182a6877f4f40fe9",
+          "event_id": "1fb05282f930cec4cbc896c3",
+          "occurred_at": "2026-09-01T03:21:16.005000Z"
+        }
+      ],
+      "session_id": "01a05afc-3fdb-7b53-94f4-4e0a7eb5ff69",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-21-15-01a05afc-3fdb-7b53-94f4-4e0a7eb5ff69.jsonl",
+      "window_end": "2026-09-01T03:21:16.005000Z",
+      "window_start": "2026-09-01T03:21:16.003000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_92f6c47c2d5abee55638b17062aaf8d6",
+          "event_id": "2c51d80b4cef8fc416b2940c",
+          "occurred_at": "2026-09-01T03:58:47.913000Z"
+        },
+        {
+          "event_hash": "corr_fd52434e1dcc78ad72796773d852c75b",
+          "event_id": "029970e4f3a6ccec07e9c358",
+          "occurred_at": "2026-09-01T03:58:47.916000Z"
+        },
+        {
+          "event_hash": "corr_bc124c43000adfc42c7d5cf87f345063",
+          "event_id": "460b5de9fe92694475ccaaba",
+          "occurred_at": "2026-09-01T03:58:47.916000Z"
+        },
+        {
+          "event_hash": "corr_ad78ae9eeba3e441899053b8b250cdae",
+          "event_id": "7b6eaf67d75a23c95daa3296",
+          "occurred_at": "2026-09-01T03:58:47.917000Z"
+        }
+      ],
+      "session_id": "01a05b1e-9c60-72a2-96ac-1b40d406ac37",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-58-47-01a05b1e-9c60-72a2-96ac-1b40d406ac37.jsonl",
+      "window_end": "2026-09-01T03:58:47.917000Z",
+      "window_start": "2026-09-01T03:58:47.913000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_c03667a62e05bbe88175022d046b599c",
+          "event_id": "368a68da530df3627d524da6",
+          "occurred_at": "2026-09-01T03:58:35.733000Z"
+        },
+        {
+          "event_hash": "corr_e88db8c23200d806f38817d5804ffa60",
+          "event_id": "9980c07db13b2488a32e7f80",
+          "occurred_at": "2026-09-01T03:58:35.733000Z"
+        },
+        {
+          "event_hash": "corr_35de897f8c814cbe396945570d7db398",
+          "event_id": "26039c0392ac1318fce60322",
+          "occurred_at": "2026-09-01T03:58:35.735000Z"
+        },
+        {
+          "event_hash": "corr_00d273dabea549d46f27bde6e4af7b6d",
+          "event_id": "899f6f073579203fde82c37c",
+          "occurred_at": "2026-09-01T03:58:35.737000Z"
+        }
+      ],
+      "session_id": "01a05b1e-6cc9-7652-9daa-4e47c9081489",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-58-35-01a05b1e-6cc9-7652-9daa-4e47c9081489.jsonl",
+      "window_end": "2026-09-01T03:58:35.737000Z",
+      "window_start": "2026-09-01T03:58:35.733000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_c47895554416373611b762a358122517",
+          "event_id": "0b04849204301c0456524506",
+          "occurred_at": "2026-09-01T05:09:03.872000Z"
+        },
+        {
+          "event_hash": "corr_1630d12dddaccd745697c13534df6155",
+          "event_id": "cb0ab2852b6bda6c4a075c3f",
+          "occurred_at": "2026-09-01T05:23:33.374000Z"
+        },
+        {
+          "event_hash": "corr_a87416b4169616747fd59caf7c76bd0e",
+          "event_id": "132cfb3294f7051e61f86fa8",
+          "occurred_at": "2026-09-01T15:04:27.252000Z"
+        },
+        {
+          "event_hash": "corr_6d689376b56941dee41567fda60794d4",
+          "event_id": "f7d24e2aebd3d4bbecc8e9bd",
+          "occurred_at": "2026-09-01T15:09:54.630000Z"
+        }
+      ],
+      "session_id": "01a05b30-4bdb-7051-86d0-f20575c46fdf",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T21-18-06-01a05b30-4bdb-7051-86d0-f20575c46fdf.jsonl",
+      "window_end": "2026-09-01T15:09:54.630000Z",
+      "window_start": "2026-09-01T05:09:03.872000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_b60a8d2bd98c716d1b9c214d72007aa7",
+          "event_id": "75479ba07ef5c408a012ef73",
+          "occurred_at": "2026-09-01T05:00:19.640000Z"
+        },
+        {
+          "event_hash": "corr_8833bbd97656067948cae7fe136cc8fb",
+          "event_id": "e9842aabade1b6124c4ad17f",
+          "occurred_at": "2026-09-01T05:00:19.641000Z"
+        },
+        {
+          "event_hash": "corr_4776f79f646ea492e42e6f54131a851d",
+          "event_id": "df28726817a4c75b30497f0d",
+          "occurred_at": "2026-09-01T05:00:19.643000Z"
+        },
+        {
+          "event_hash": "corr_6e05b2d76047ba0b34f5451b134b5190",
+          "event_id": "86fdf5b0fd8b91996ed47e09",
+          "occurred_at": "2026-09-01T05:00:19.644000Z"
+        }
+      ],
+      "session_id": "01a05b56-f0fc-7560-892d-d8d3237dd55a",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T22-00-19-01a05b56-f0fc-7560-892d-d8d3237dd55a.jsonl",
+      "window_end": "2026-09-01T05:00:19.644000Z",
+      "window_start": "2026-09-01T05:00:19.640000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_31eb6c12b353d3890c0c5c0ccaac748a",
+          "event_id": "5f2521b7e194dcf49ba2c822",
+          "occurred_at": "2026-09-02T04:42:13.038000Z"
+        },
+        {
+          "event_hash": "corr_26d209475c659c532806d261a02c00d9",
+          "event_id": "c155451f8f44b496e8275dbd",
+          "occurred_at": "2026-09-02T04:43:43.626000Z"
+        },
+        {
+          "event_hash": "corr_261b3bc41eccb113cdb77397139d7701",
+          "event_id": "3e21376a883321d6b396178e",
+          "occurred_at": "2026-09-02T04:47:12.828000Z"
+        },
+        {
+          "event_hash": "corr_d7e72c460b4115654b82ceb303b4e8dd",
+          "event_id": "1f6dd34f63ae5b8d52968d5d",
+          "occurred_at": "2026-09-02T04:54:28.764000Z"
+        }
+      ],
+      "session_id": "01a05b24-a6f6-7781-b812-558dd75ee0d7",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T21-05-23-01a05b24-a6f6-7781-b812-558dd75ee0d7.jsonl",
+      "window_end": "2026-09-02T04:54:28.764000Z",
+      "window_start": "2026-09-02T04:42:13.038000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_199b12bb63787f68a93c27e623160002",
+          "event_id": "8a5c5d232a61772cf9d21b3d",
+          "occurred_at": "2026-08-31T16:00:08.435000Z"
+        },
+        {
+          "event_hash": "corr_a2d3e3e810ca4937ba203b1e40c381dc",
+          "event_id": "be4974b36d36539f7bcc81f5",
+          "occurred_at": "2026-08-31T16:00:08.436000Z"
+        },
+        {
+          "event_hash": "corr_0d49e26bee6859ac26a2b450e305f7fd",
+          "event_id": "a8d0967d184520fe6a8ebff5",
+          "occurred_at": "2026-08-31T16:00:08.436000Z"
+        },
+        {
+          "event_hash": "corr_217d31d48531e2fff56902694d5b01c6",
+          "event_id": "29215a63d1172ed4b03e66d5",
+          "occurred_at": "2026-08-31T16:00:08.436000Z"
+        }
+      ],
+      "session_id": "01a0588c-a8f0-7461-abf6-30ec3b939be4",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T09-00-08-01a0588c-a8f0-7461-abf6-30ec3b939be4.jsonl",
+      "window_end": "2026-08-31T16:00:08.436000Z",
+      "window_start": "2026-08-31T16:00:08.435000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_4782db7ac12815755e76ee45984b254a",
+          "event_id": "850ee5e49f139e3a1f5a3773",
+          "occurred_at": "2026-09-01T03:44:47.414000Z"
+        },
+        {
+          "event_hash": "corr_9ee550cdbdfebf3747954def2b3b8d01",
+          "event_id": "36dc8535d52198765c3be74e",
+          "occurred_at": "2026-09-01T03:44:47.414000Z"
+        },
+        {
+          "event_hash": "corr_f91840a12f9413f7a31a7657045e5e78",
+          "event_id": "b7c212737d1b9a0786a76a00",
+          "occurred_at": "2026-09-01T03:44:47.415000Z"
+        },
+        {
+          "event_hash": "corr_b55ea9e98db3e52eccdcb1d4bf2236cf",
+          "event_id": "4a2e0c19d28cabbc1613667e",
+          "occurred_at": "2026-09-01T03:44:47.415000Z"
+        }
+      ],
+      "session_id": "01a05b11-c932-7c91-bb20-90b373451ce4",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-44-47-01a05b11-c932-7c91-bb20-90b373451ce4.jsonl",
+      "window_end": "2026-09-01T03:44:47.415000Z",
+      "window_start": "2026-09-01T03:44:47.414000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_a0e36952cf8809a12c38017982605cd3",
+          "event_id": "8a2907b7dda6dae67a21c5ce",
+          "occurred_at": "2026-09-01T07:11:09.478000Z"
+        },
+        {
+          "event_hash": "corr_231d776ae0b2d7941789067fb37a3fec",
+          "event_id": "70e760a0a73aa6a7d51abb08",
+          "occurred_at": "2026-09-01T07:16:03.158000Z"
+        },
+        {
+          "event_hash": "corr_a14a844774c0838870b5c56d8952c80d",
+          "event_id": "fc0b43e4717176125ff67a6b",
+          "occurred_at": "2026-09-01T07:23:13.952000Z"
+        },
+        {
+          "event_hash": "corr_c93cf89fbc19c84917e072ceb952fccb",
+          "event_id": "2d4a36506357b5c041696252",
+          "occurred_at": "2026-09-01T07:49:34.230000Z"
+        }
+      ],
+      "session_id": "01a05b94-d5d8-7d82-8a9a-6c64c6979e96",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T23-07-55-01a05b94-d5d8-7d82-8a9a-6c64c6979e96.jsonl",
+      "window_end": "2026-09-01T07:49:34.230000Z",
+      "window_start": "2026-09-01T07:11:09.478000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_4b6caed8f7e2c9660198e1e52e36a998",
+          "event_id": "02b196ef7aa0ae95ccac08cc",
+          "occurred_at": "2026-09-01T02:16:53.454000Z"
+        },
+        {
+          "event_hash": "corr_a77eeca39ef4b2323a3248a7832f3d0c",
+          "event_id": "25bbfdb6d174f4b72f76105b",
+          "occurred_at": "2026-09-01T02:19:06.561000Z"
+        },
+        {
+          "event_hash": "corr_ecae43784ce19486a1c1a5d2762b1fe0",
+          "event_id": "9727fb1fa0539291f6a30552",
+          "occurred_at": "2026-09-01T03:05:39.740000Z"
+        },
+        {
+          "event_hash": "corr_7460fd737ad45c4c4915e1976d2dd436",
+          "event_id": "83fd88b0bb11e41dde41c332",
+          "occurred_at": "2026-09-01T03:09:03.574000Z"
+        }
+      ],
+      "session_id": "01a05ab7-2b77-7ef0-b10f-266999d8c956",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T19-05-48-01a05ab7-2b77-7ef0-b10f-266999d8c956.jsonl",
+      "window_end": "2026-09-01T03:09:03.574000Z",
+      "window_start": "2026-09-01T02:16:53.454000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_6b63ad7b833c9511830aba69408a7a06",
+          "event_id": "d14c1f4339d4ad3b7546582f",
+          "occurred_at": "2026-09-02T05:53:08.439000Z"
+        },
+        {
+          "event_hash": "corr_0f9149d89ee7b0fc3aee4c924b90a360",
+          "event_id": "f585e60180440d8da061257c",
+          "occurred_at": "2026-09-02T08:01:13.017000Z"
+        },
+        {
+          "event_hash": "corr_c895132599d75183c949633f19db0cb4",
+          "event_id": "75496eb1b6a7788a37a3d0c9",
+          "occurred_at": "2026-09-02T08:37:13.922000Z"
+        },
+        {
+          "event_hash": "corr_40a74238cebd2a081eebeeacea55c57d",
+          "event_id": "f63db34501a2c7802891774b",
+          "occurred_at": "2026-09-02T09:06:05.975000Z"
+        }
+      ],
+      "session_id": "01a05b16-b282-7861-b868-5bf405555690",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-50-09-01a05b16-b282-7861-b868-5bf405555690.jsonl",
+      "window_end": "2026-09-02T09:06:05.975000Z",
+      "window_start": "2026-09-02T05:53:08.439000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_6bdf183a7d27d6ae20409c6cbc0fdeea",
+          "event_id": "e266255844432d8d0031332e",
+          "occurred_at": "2026-09-01T03:26:26.478000Z"
+        },
+        {
+          "event_hash": "corr_8277e14d123663da7b21db2c6b55ba0c",
+          "event_id": "8152b30ab83f8397e9cb21d3",
+          "occurred_at": "2026-09-01T03:26:26.480000Z"
+        },
+        {
+          "event_hash": "corr_e949ae44f7f1a036df1eee7d655e3ef4",
+          "event_id": "6e6815609332cf8d4c0da356",
+          "occurred_at": "2026-09-01T03:26:26.482000Z"
+        },
+        {
+          "event_hash": "corr_22d8fec10f86aa68732e7ce3efb08d70",
+          "event_id": "02d5e5bd108146e2eedcf941",
+          "occurred_at": "2026-09-01T03:26:26.486000Z"
+        }
+      ],
+      "session_id": "01a05b00-fc65-7a62-bf66-e389a26131ae",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T20-26-26-01a05b00-fc65-7a62-bf66-e389a26131ae.jsonl",
+      "window_end": "2026-09-01T03:26:26.486000Z",
+      "window_start": "2026-09-01T03:26:26.478000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_425a73586000583e9afa44c01985221f",
+          "event_id": "955000d89d8940a8e687b98f",
+          "occurred_at": "2026-08-31T15:42:10.909000Z"
+        },
+        {
+          "event_hash": "corr_033dd6ae27f622fe3c9c73c0b28c79cb",
+          "event_id": "c4787ee05880f6db52e2f2e5",
+          "occurred_at": "2026-08-31T15:51:40.899000Z"
+        },
+        {
+          "event_hash": "corr_f062592b2903a56ff9b931df2514d559",
+          "event_id": "94488c016e3af37b7c7485a2",
+          "occurred_at": "2026-08-31T15:54:08.019000Z"
+        },
+        {
+          "event_hash": "corr_8dd0f068f97c9b1a1f9cb8ab1c925dbf",
+          "event_id": "6e0eb44993f722a9d7859a65",
+          "occurred_at": "2026-08-31T15:54:55.416000Z"
+        }
+      ],
+      "session_id": "01a0585e-3b6a-7cd3-822f-758c1cd6bd12",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T08-09-25-01a0585e-3b6a-7cd3-822f-758c1cd6bd12.jsonl",
+      "window_end": "2026-08-31T15:54:55.416000Z",
+      "window_start": "2026-08-31T15:42:10.909000Z"
+    },
+    {
+      "agent": "codex",
+      "events": [
+        {
+          "event_hash": "corr_965e462fc5cc3d778ac8535eab2645c9",
+          "event_id": "eb90aa4853a4d6e2c130371f",
+          "occurred_at": "2026-09-01T05:55:12.194000Z"
+        },
+        {
+          "event_hash": "corr_8ba174b2f214282229e925830d844940",
+          "event_id": "b1e2483b7c8f565fb90b3c2c",
+          "occurred_at": "2026-09-01T05:58:10.184000Z"
+        },
+        {
+          "event_hash": "corr_766aab09ae245c623dc8defa91e3f377",
+          "event_id": "b8105e69e7ddaec750fcd262",
+          "occurred_at": "2026-09-01T07:28:20.490000Z"
+        },
+        {
+          "event_hash": "corr_894485ac9e5a327bce42193cdd45d54f",
+          "event_id": "000e00ddeb5c0f3ae37d4d10",
+          "occurred_at": "2026-09-01T07:29:18.845000Z"
+        }
+      ],
+      "session_id": "01a05b6b-fda8-7192-8ec0-f9a23e1c21c1",
+      "source_path": ".codex/sessions/2026/08/31/rollout-2026-08-31T22-23-19-01a05b6b-fda8-7192-8ec0-f9a23e1c21c1.jsonl",
+      "window_end": "2026-09-01T07:29:18.845000Z",
+      "window_start": "2026-09-01T05:55:12.194000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_bdbf930e57b780c2ca2a72db8f1fda2f",
+          "event_id": "e1f9ea548b08d96500614f43",
+          "occurred_at": "2026-09-04T21:34:58.355000Z"
+        },
+        {
+          "event_hash": "corr_7e65fbad53dddf00475574c6219fce44",
+          "event_id": "87ffee603c28d8b6ed026506",
+          "occurred_at": "2026-09-04T21:44:35.269000Z"
+        },
+        {
+          "event_hash": "corr_62384ce72fc5e3f8b9f4e752f8bcabcf",
+          "event_id": "f964391faa46dbc35c0893e8",
+          "occurred_at": "2026-09-04T21:51:55.361000Z"
+        },
+        {
+          "event_hash": "corr_22bc3f0bfeae3599012dd2b64f508636",
+          "event_id": "76b36c22a46e800f115685ea",
+          "occurred_at": "2026-09-04T21:59:33.431000Z"
+        }
+      ],
+      "session_id": "58c36de1-c474-4b92-913f-1b6cf11314f1",
+      "source_path": ".claude/projects/-home-brian-code/58c36de1-c474-4b92-913f-1b6cf11314f1.jsonl",
+      "window_end": "2026-09-04T21:59:33.431000Z",
+      "window_start": "2026-09-04T21:34:58.355000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_a88f0a5f3b221cf98c1f7dda1a4d4bc8",
+          "event_id": "29836c8583e8f12ea148c304",
+          "occurred_at": "2026-09-02T16:46:51.776000Z"
+        },
+        {
+          "event_hash": "corr_b3da28cbe536ee403edaae55ad644be8",
+          "event_id": "1a019bbf7c1cc1da797a9dea",
+          "occurred_at": "2026-09-02T16:51:41.542000Z"
+        },
+        {
+          "event_hash": "corr_2183a0e52d1d3abd536e745dc339df60",
+          "event_id": "295ef5b9ac6b4991cbfbe56b",
+          "occurred_at": "2026-09-02T16:56:48.347000Z"
+        },
+        {
+          "event_hash": "corr_8a80fdb5cfe8ed1b12ba6c3f1a7e2365",
+          "event_id": "cf7362ef3945f3efff2a972e",
+          "occurred_at": "2026-09-02T17:02:55.755000Z"
+        }
+      ],
+      "session_id": "58a54b6c-683c-454c-a1b2-430cf78fc48a",
+      "source_path": ".claude/projects/-home-brian-code/58a54b6c-683c-454c-a1b2-430cf78fc48a.jsonl",
+      "window_end": "2026-09-02T17:02:55.755000Z",
+      "window_start": "2026-09-02T16:46:51.776000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_b0be87e531b443d689f89bfaea4d32ae",
+          "event_id": "ce1d0a9f666182dc244e8372",
+          "occurred_at": "2026-09-01T19:11:17.133000Z"
+        },
+        {
+          "event_hash": "corr_c3739bb4ea58d45162d63f7ba9024035",
+          "event_id": "3b45f69a74ac98fe3be3b0c0",
+          "occurred_at": "2026-09-01T19:25:17.460000Z"
+        },
+        {
+          "event_hash": "corr_90c8812b6fce22779880a31ab162fdbd",
+          "event_id": "59a1ca54b8dc46e880586728",
+          "occurred_at": "2026-09-01T19:26:48.035000Z"
+        },
+        {
+          "event_hash": "corr_49df56a6e02dddf7f26c0aa438e34134",
+          "event_id": "34288b9f44b8f56482d924fc",
+          "occurred_at": "2026-09-01T19:30:13.687000Z"
+        }
+      ],
+      "session_id": "f2ba79cf-248c-4da0-94c7-c5b6dbc2bbf0",
+      "source_path": ".claude/projects/-home-brian-code/f2ba79cf-248c-4da0-94c7-c5b6dbc2bbf0.jsonl",
+      "window_end": "2026-09-01T19:30:13.687000Z",
+      "window_start": "2026-09-01T19:11:17.133000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_8ffb557bd289d3a2891798819a2deff2",
+          "event_id": "74ea8b35ea4a663e278efcd1",
+          "occurred_at": "2026-09-03T19:25:37.610000Z"
+        },
+        {
+          "event_hash": "corr_ede3f05d489d2f0ab1115fc2b1e1070d",
+          "event_id": "153c9ff43a2d980ca2fec025",
+          "occurred_at": "2026-09-03T19:27:27.027000Z"
+        },
+        {
+          "event_hash": "corr_88705e44c1ceb09f8204b1dd7b150693",
+          "event_id": "0d0f54e21fc01bb0c74b00a0",
+          "occurred_at": "2026-09-03T19:44:38.660000Z"
+        },
+        {
+          "event_hash": "corr_3fd699a16f97cff811d88306816cb4fb",
+          "event_id": "bfee9f41253e2de2b32daf1d",
+          "occurred_at": "2026-09-03T19:59:09.990000Z"
+        }
+      ],
+      "session_id": "a8c14bc5-527e-4381-a7b2-1a10cee06f9a",
+      "source_path": ".claude/projects/-home-brian-code/a8c14bc5-527e-4381-a7b2-1a10cee06f9a.jsonl",
+      "window_end": "2026-09-03T19:59:09.990000Z",
+      "window_start": "2026-09-03T19:25:37.610000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_ca8e9ce2489a24277332949da0d33c29",
+          "event_id": "3ac90e36e80f6b324d336ae5",
+          "occurred_at": "2026-09-05T20:04:09.491000Z"
+        },
+        {
+          "event_hash": "corr_3037882dd2592733c4493da86e0a6496",
+          "event_id": "1a55b58115b6695c7a2de821",
+          "occurred_at": "2026-09-05T20:12:14.442000Z"
+        },
+        {
+          "event_hash": "corr_f72e5f4aae240561bb380efc6c015678",
+          "event_id": "4d894222268de67a4159b42c",
+          "occurred_at": "2026-09-05T20:23:04.771000Z"
+        },
+        {
+          "event_hash": "corr_9329a3549c68f39f367c6e1bbe430446",
+          "event_id": "53336bb7a03a8997518e658c",
+          "occurred_at": "2026-09-05T20:24:47.837000Z"
+        }
+      ],
+      "session_id": "a1b2a1b8-5e63-4f43-8fb4-6b2aff137f5a",
+      "source_path": ".claude/projects/-home-brian-code-agentic-engineering-system/a1b2a1b8-5e63-4f43-8fb4-6b2aff137f5a.jsonl",
+      "window_end": "2026-09-05T20:24:47.837000Z",
+      "window_start": "2026-09-05T20:04:09.491000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_802eaba754bf2aae57f576ff00954cda",
+          "event_id": "764d193002f07b51857a297a",
+          "occurred_at": "2026-09-03T23:24:32.293000Z"
+        },
+        {
+          "event_hash": "corr_7cb2b0187812b379fdceedfb5c06cb4c",
+          "event_id": "4ab51a2efe4780eb0b1ab631",
+          "occurred_at": "2026-09-04T02:26:22.963000Z"
+        },
+        {
+          "event_hash": "corr_c595cd5d02f307d091e21f7473440f57",
+          "event_id": "96957cb82fe92c13b6d19cd9",
+          "occurred_at": "2026-09-04T05:07:09.597000Z"
+        },
+        {
+          "event_hash": "corr_914ee44bad0b863ee44ec898b7515f02",
+          "event_id": "3b46b95527739ad4d3ca5e33",
+          "occurred_at": "2026-09-04T05:16:28.461000Z"
+        }
+      ],
+      "session_id": "586c9a0c-c99e-47d7-b46b-b4877e5d30c4",
+      "source_path": ".claude/projects/-home-brian-code/586c9a0c-c99e-47d7-b46b-b4877e5d30c4.jsonl",
+      "window_end": "2026-09-04T05:16:28.461000Z",
+      "window_start": "2026-09-03T23:24:32.293000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_2b11d05eb9f9a8fefccb0a573ca953a2",
+          "event_id": "6cf96742d170b901daac54cb",
+          "occurred_at": "2026-09-04T15:39:44.552000Z"
+        },
+        {
+          "event_hash": "corr_9e4db7498238db4859b2dcdc03bae611",
+          "event_id": "48309da822eff3a39a29e000",
+          "occurred_at": "2026-09-04T15:43:06.514000Z"
+        },
+        {
+          "event_hash": "corr_43ee95eb383ae5917c55ca2fca118bc5",
+          "event_id": "42db69161bb667282a4e7761",
+          "occurred_at": "2026-09-04T15:45:38.561000Z"
+        },
+        {
+          "event_hash": "corr_76067736fed67ee56f8d63efe3adfe57",
+          "event_id": "3e803031a59b5d22f79ef812",
+          "occurred_at": "2026-09-04T15:53:41.442000Z"
+        }
+      ],
+      "session_id": "3329817f-5f8c-4a7e-aedf-198ee5d42fbd",
+      "source_path": ".claude/projects/-home-brian-code/3329817f-5f8c-4a7e-aedf-198ee5d42fbd.jsonl",
+      "window_end": "2026-09-04T15:53:41.442000Z",
+      "window_start": "2026-09-04T15:39:44.552000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_1e0e4fa914501f7cf88092ae04619aa6",
+          "event_id": "5be82fb400a7b7fd928233e5",
+          "occurred_at": "2026-09-03T23:03:09.798000Z"
+        },
+        {
+          "event_hash": "corr_32d048bca05d3c59fbb9d978a47f9f00",
+          "event_id": "d0076eb0ec7fae1e233604f3",
+          "occurred_at": "2026-09-03T23:06:39.357000Z"
+        },
+        {
+          "event_hash": "corr_cae23e2efb64c8adcfa922576fbad576",
+          "event_id": "1b6325ee7bd254ee8a139a71",
+          "occurred_at": "2026-09-03T23:14:26.314000Z"
+        },
+        {
+          "event_hash": "corr_1f11c3a8a4405a2de94fd878d5d27c8a",
+          "event_id": "728afe5d916d0f81201c4317",
+          "occurred_at": "2026-09-03T23:17:36.296000Z"
+        }
+      ],
+      "session_id": "d7e59070-7cc7-42c4-bc5a-104785986b03",
+      "source_path": ".claude/projects/-home-brian-code/d7e59070-7cc7-42c4-bc5a-104785986b03.jsonl",
+      "window_end": "2026-09-03T23:17:36.296000Z",
+      "window_start": "2026-09-03T23:03:09.798000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_5ebea0bbf876a92cd981a63d1c9e8e48",
+          "event_id": "bada2d87f5eb2258e636af5c",
+          "occurred_at": "2026-09-02T20:23:18.857000Z"
+        },
+        {
+          "event_hash": "corr_50918bbb7eb7c7f50a0fee50592f812b",
+          "event_id": "1cb1f4d8c296ef8ab00fb4e0",
+          "occurred_at": "2026-09-02T20:30:38.300000Z"
+        },
+        {
+          "event_hash": "corr_761b0365dab111dd775510640da0a7f3",
+          "event_id": "ad7f1ceca60a41df80062287",
+          "occurred_at": "2026-09-02T21:05:15.411000Z"
+        },
+        {
+          "event_hash": "corr_863f007435f066234ea7d0402f8f4e9c",
+          "event_id": "c7a413dfb32034481a60d6b0",
+          "occurred_at": "2026-09-02T21:25:05.844000Z"
+        }
+      ],
+      "session_id": "1aeee58c-176e-4449-b2d0-d19b97ffa6a4",
+      "source_path": ".claude/projects/-home-brian-code/1aeee58c-176e-4449-b2d0-d19b97ffa6a4.jsonl",
+      "window_end": "2026-09-02T21:25:05.844000Z",
+      "window_start": "2026-09-02T20:23:18.857000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_9ec19bf8345bcac0c42610403c1e1703",
+          "event_id": "16dd75fc399a022e214ebfbf",
+          "occurred_at": "2026-09-04T15:15:29.435000Z"
+        },
+        {
+          "event_hash": "corr_47f7fe0e2db2c1265f6222c743f47578",
+          "event_id": "6072c6bedaa29ec32dce5df0",
+          "occurred_at": "2026-09-04T15:18:39.649000Z"
+        },
+        {
+          "event_hash": "corr_bb38e0db8fb2a1024b1c9bb500b006f9",
+          "event_id": "17b4ad13c826b422c41e39f3",
+          "occurred_at": "2026-09-04T15:26:02.383000Z"
+        },
+        {
+          "event_hash": "corr_ae55116af98e694b7b1bef7dfd19af48",
+          "event_id": "d984b1b088a1a86f9c020e15",
+          "occurred_at": "2026-09-04T15:33:15.264000Z"
+        }
+      ],
+      "session_id": "2bfd5513-c24e-414d-94af-c69bde8d0b6c",
+      "source_path": ".claude/projects/-home-brian-code/2bfd5513-c24e-414d-94af-c69bde8d0b6c.jsonl",
+      "window_end": "2026-09-04T15:33:15.264000Z",
+      "window_start": "2026-09-04T15:15:29.435000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_e05f4bb6e0fc4c769fb0653ec7a77f59",
+          "event_id": "0fd7931493ea9be76bbb1295",
+          "occurred_at": "2026-09-06T18:52:17.166000Z"
+        },
+        {
+          "event_hash": "corr_d149fdd775a4b2ba2445864f13b23abc",
+          "event_id": "f2e38cd85d27eff544998573",
+          "occurred_at": "2026-09-06T19:55:26.258000Z"
+        },
+        {
+          "event_hash": "corr_7eb8a6b4a5885db136bfb31b20148d5d",
+          "event_id": "d3c97b8704d48f36d9c4c146",
+          "occurred_at": "2026-09-06T20:08:13.767000Z"
+        },
+        {
+          "event_hash": "corr_641f852bedcd20f1eee2836e204f14b2",
+          "event_id": "b2658907af038f0b8c0bd1f8",
+          "occurred_at": "2026-09-06T20:48:48.922000Z"
+        }
+      ],
+      "session_id": "a7397d25-f9c6-426f-870a-2bc18f002720",
+      "source_path": ".claude/projects/-home-brian-code/a7397d25-f9c6-426f-870a-2bc18f002720.jsonl",
+      "window_end": "2026-09-06T20:48:48.922000Z",
+      "window_start": "2026-09-06T18:52:17.166000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_6d14c4729ca56b8fe52c1eea0edcb36b",
+          "event_id": "a8d73761a46818f9e688ebd6",
+          "occurred_at": "2026-09-04T18:09:56.982000Z"
+        },
+        {
+          "event_hash": "corr_2f2ea8ce557f62f3213f4520a2778bd4",
+          "event_id": "c2717be8fb70eda2912101b6",
+          "occurred_at": "2026-09-04T18:18:30.667000Z"
+        },
+        {
+          "event_hash": "corr_847aec72d46653fd169b19696fffc4a0",
+          "event_id": "40e68071cb2947aba505107f",
+          "occurred_at": "2026-09-04T18:19:47.966000Z"
+        },
+        {
+          "event_hash": "corr_24c8e075ee04cfc0811cad90793d4b8f",
+          "event_id": "7a61f352e50fb603c1b823ad",
+          "occurred_at": "2026-09-04T18:20:40.789000Z"
+        }
+      ],
+      "session_id": "ba0fa378-4381-4fb0-9d1a-2c09db6779cf",
+      "source_path": ".claude/projects/-home-brian-code/ba0fa378-4381-4fb0-9d1a-2c09db6779cf.jsonl",
+      "window_end": "2026-09-04T18:20:40.789000Z",
+      "window_start": "2026-09-04T18:09:56.982000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_7d3083c5fb93ccdf79376ab5d2b255e9",
+          "event_id": "505e494f0685989bddc01f42",
+          "occurred_at": "2026-09-04T17:27:50.140000Z"
+        },
+        {
+          "event_hash": "corr_1936841cce4652ff1f89b9f757861c48",
+          "event_id": "94cd0a00bbd5c368e51e1898",
+          "occurred_at": "2026-09-04T17:30:21.721000Z"
+        },
+        {
+          "event_hash": "corr_d27ffd72511ab1bff76da305c0299eb0",
+          "event_id": "f1bc50528901c91157726753",
+          "occurred_at": "2026-09-04T17:34:22.916000Z"
+        },
+        {
+          "event_hash": "corr_aec714c195d1ccba062d98cc8d49425e",
+          "event_id": "fa5e89c01628ed025fb8715c",
+          "occurred_at": "2026-09-04T17:46:59.060000Z"
+        }
+      ],
+      "session_id": "314a2bab-f38f-4961-8a18-f2f131ebfa13",
+      "source_path": ".claude/projects/-home-brian-code/314a2bab-f38f-4961-8a18-f2f131ebfa13.jsonl",
+      "window_end": "2026-09-04T17:46:59.060000Z",
+      "window_start": "2026-09-04T17:27:50.140000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_38d00154a11bf26c0bbe87653b00e7d0",
+          "event_id": "8b4e33fc3df8a1041df46530",
+          "occurred_at": "2026-09-04T17:50:36.273000Z"
+        },
+        {
+          "event_hash": "corr_2cb8bf19efb32ff29da1dbd951a325cf",
+          "event_id": "d7bd691c11d6f263dd97a6a9",
+          "occurred_at": "2026-09-04T17:53:11.480000Z"
+        },
+        {
+          "event_hash": "corr_26bdef9109159659b6cbc53af2bd6294",
+          "event_id": "324b0f9f9153425c56239fbc",
+          "occurred_at": "2026-09-04T17:54:18.465000Z"
+        },
+        {
+          "event_hash": "corr_6bf5ad13bbeac2993cdcee3365f2d2be",
+          "event_id": "8766d35403c6134c483ad49f",
+          "occurred_at": "2026-09-04T17:59:55.798000Z"
+        }
+      ],
+      "session_id": "4d8d6ac0-5f6f-42e9-b58a-1552de3ab5ac",
+      "source_path": ".claude/projects/-home-brian-code/4d8d6ac0-5f6f-42e9-b58a-1552de3ab5ac.jsonl",
+      "window_end": "2026-09-04T17:59:55.798000Z",
+      "window_start": "2026-09-04T17:50:36.273000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_40e24fadb49d62a3faa3b9d23e31aed3",
+          "event_id": "6092f7b935d23ccd98bf4f4e",
+          "occurred_at": "2026-09-02T15:45:42.041000Z"
+        },
+        {
+          "event_hash": "corr_c8d97ebf7dda9a27309fc98b53f5ab6f",
+          "event_id": "c31187e771dc9d0f6198c1ef",
+          "occurred_at": "2026-09-02T16:13:18.465000Z"
+        },
+        {
+          "event_hash": "corr_51f56a42316421ff1f034cf14d6eeab8",
+          "event_id": "f1d7c388295a95c8e1bbc5a7",
+          "occurred_at": "2026-09-02T16:20:40.837000Z"
+        },
+        {
+          "event_hash": "corr_394d475b868de06f2a41e1c5bffb8002",
+          "event_id": "5a44db1caddaef0814a21215",
+          "occurred_at": "2026-09-02T16:44:02.828000Z"
+        }
+      ],
+      "session_id": "acb7c5ce-8e29-4e05-b886-1eae10d07d89",
+      "source_path": ".claude/projects/-home-brian-code/acb7c5ce-8e29-4e05-b886-1eae10d07d89.jsonl",
+      "window_end": "2026-09-02T16:44:02.828000Z",
+      "window_start": "2026-09-02T15:45:42.041000Z"
+    },
+    {
+      "agent": "claude-code",
+      "events": [
+        {
+          "event_hash": "corr_3a61f0982c07d2dd882b459ae0614c54",
+          "event_id": "8a09fe8d5c54fbc7869cdceb",
+          "occurred_at": "2026-09-05T17:11:54.122000Z"
+        },
+        {
+          "event_hash": "corr_cb88a35398c2ccf609494bc8ef4cec36",
+          "event_id": "a0b29fa811d64fc4027a376b",
+          "occurred_at": "2026-09-05T17:25:28.889000Z"
+        },
+        {
+          "event_hash": "corr_3070cd76d344be4cac9d485ea3ce4341",
+          "event_id": "99a9c28a7f57f7a1982171d9",
+          "occurred_at": "2026-09-05T17:31:14.992000Z"
+        },
+        {
+          "event_hash": "corr_9ce5ff6e31050d05f5c50905cab908c0",
+          "event_id": "37b0edc586dcfbf9b682be79",
+          "occurred_at": "2026-09-05T17:35:43.555000Z"
+        }
+      ],
+      "session_id": "1fb86626-19fd-468c-ace6-29ca1ee23d81",
+      "source_path": ".claude/projects/-home-brian-code/1fb86626-19fd-468c-ace6-29ca1ee23d81.jsonl",
+      "window_end": "2026-09-05T17:35:43.555000Z",
+      "window_start": "2026-09-05T17:11:54.122000Z"
+    }
+  ]
+}

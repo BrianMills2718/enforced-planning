@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-135-native-corpus-product-allocation",
+  "requested_at": "2026-09-12T01:06:30Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-135-native-corpus-signoff",
+  "outcome_contract_sha256": "d4e1808cecdc26ad1cd7a8ae7d43e11e8de152d727869b59baeb76f35ba7b9fc",
+  "outcome_id": "correction-aware-agent-learning",
+  "outcome_lineage_id": "plan-135-correction-learning-gate",
+  "portfolio_class": "product",
+  "decision_ref": "enforced-planning#135@01c5a6cc61f853b8440b6792945badd64929ce6d",
+  "purpose": "Produce representative native evidence and independent signoff for the correction-learning gate before observe-mode adoption.",
+  "stopping_condition": "Complete or park the allocation after the native corpus decision and independent signoff are durably retained."
+}

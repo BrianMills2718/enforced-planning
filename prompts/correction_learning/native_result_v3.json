@@ -1,0 +1,38 @@
+{
+  "batch_size": 6,
+  "corpus": "prompts/correction_learning/native_corpus_v3.json",
+  "corpus_id": "correction-learning-native-v3",
+  "corpus_sha256": "fc544467ea2d28fa7ee928452a52e58238bef480070cfadff56e0b039f19ce1b",
+  "decision_status": "retain_manual_off",
+  "evaluated_at": "2026-09-12T02:58:07.489663Z",
+  "failure": {
+    "batch_index": 4,
+    "code": "batch_verdict_id_mismatch",
+    "missing_event_ids": [
+      "c76f54d31b2d26e76e9d8753"
+    ],
+    "unexpected_event_ids": []
+  },
+  "model": "claude-code/sonnet",
+  "non_claims": [
+    "No classifier accuracy metric is valid for this partial run.",
+    "This privacy-reduced invalid-run record was reconstructed from the durable model traces after the pre-fix harness failed before atomic result creation.",
+    "No assistant text, user text, or model rationale is retained."
+  ],
+  "observability": {
+    "call_count": 17,
+    "error_count": 0,
+    "latency_seconds_max": 61.575,
+    "latency_seconds_min": 17.314,
+    "latency_seconds_total": 533.615,
+    "marginal_cost_usd": 0.0,
+    "retry_count": 0
+  },
+  "prompt": "prompts/correction_learning/classify.yaml",
+  "prompt_sha256": "43bb06482bf5b7cf16ea42add795f4c33a4aa8000c2ac932e72f83074ea3cf98",
+  "record_type": "correction_native_corpus_result",
+  "run_status": "invalid",
+  "schema_version": "1.1",
+  "source_revision": "14d8820e9e4f6ab929cede843052625b2998d7da",
+  "trace_prefix": "correction-learning/correction-learning-native-v3/14d8820e9e4f"
+}

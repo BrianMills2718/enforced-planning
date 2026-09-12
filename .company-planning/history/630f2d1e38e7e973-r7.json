@@ -1,0 +1,128 @@
+{
+  "active_slice": {
+    "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
+    "next_action": "Re-plan correction detection around explicit capture or a materially different classifier route; do not retune the rejected route.",
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "native-corpus-and-signoff",
+    "status": "blocked",
+    "target_revision": "dfa47d56372e90331f67d3733494797c755ff537"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0.05,
+    "spend_used_usd": 0.0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": "dfa47d56372e90331f67d3733494797c755ff537",
+    "receipt_ref": "docs/evidence/plan135_native_v5_signoff.md@dfa47d56372e90331f67d3733494797c755ff537",
+    "remaining_ready_work": 0,
+    "requested": false,
+    "verifier_outcome": "pass"
+  },
+  "cursor_id": "plan-135-native-corpus-signoff-v3",
+  "cursor_revision": 7,
+  "failure_state": {
+    "boundary": "native-classifier-generalization",
+    "last_failure_ref": "prompts/correction_learning/native_result_v5.json@4864d15be6e44e557925d6271a05e8cccccb1cbc",
+    "same_boundary_failures": 2
+  },
+  "goal_ref": "correction-aware-agent-learning",
+  "lifecycle_state": "circuit_broken",
+  "observations": [
+    {
+      "boundary": "promotion-evidence",
+      "evidence_ref": "prompts/correction_learning/native_result_v2.json@7f35f22",
+      "kind": "verification_failure",
+      "observation_id": "native-v2-valid-fail",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "native-corpus-integrity",
+      "evidence_ref": "docs/evidence/plan135_native_v2_signoff_r2.md@29ab33b",
+      "kind": "verification_failure",
+      "observation_id": "native-v2-signoff-rejected",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "prompts/correction_learning/native_result_v3.json@84b8d2d",
+      "kind": "verification_failure",
+      "observation_id": "native-v3-missing-verdict-invalid",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "scripts/correction_learning_audit.py@84b8d2d",
+      "kind": "supporting_work",
+      "observation_id": "per-batch-id-guard",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "prompts/correction_learning/native_result_v4.json@d7949af566021eca4f1dccf3dbf866a867f868f9",
+      "kind": "verification_failure",
+      "observation_id": "native-v4-route-failure-invalid",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "scripts/correction_learning_audit.py@d7949af566021eca4f1dccf3dbf866a867f868f9",
+      "kind": "supporting_work",
+      "observation_id": "all-batch-failures-retained",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "decision-signoff",
+      "evidence_ref": "docs/evidence/plan135_native_v4_signoff.md@a82de7f6c576d4ab7c6d27252ffa859e19957903",
+      "kind": "verification_failure",
+      "observation_id": "premature-circuit-breaker-rejected",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "docs/evidence/plan135_native_v4_schema_canary.json@7487ee9918c4138b4663debb9a7ff0534a2b2dab",
+      "kind": "supporting_work",
+      "observation_id": "rationale-bound-repair-canary",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "native-classifier-generalization",
+      "evidence_ref": "prompts/correction_learning/native_result_v5.json@4864d15be6e44e557925d6271a05e8cccccb1cbc",
+      "kind": "verification_failure",
+      "observation_id": "native-v5-valid-fail",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "decision-signoff",
+      "evidence_ref": "docs/evidence/plan135_native_v5_signoff.md@dfa47d56372e90331f67d3733494797c755ff537",
+      "kind": "supporting_work",
+      "observation_id": "native-v5-route-rejection-signed-off",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "result-contract-integrity",
+      "evidence_ref": "scripts/correction_learning_audit.py@3bfe1c1",
+      "kind": "supporting_work",
+      "observation_id": "promotion-threshold-contract-aligned",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "01c5a6cc61f853b8440b6792945badd64929ce6d",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan-135-native-corpus-signoff-v3",
+    "repository": "enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/plan-135-native-corpus-signoff-v3"
+  }
+}

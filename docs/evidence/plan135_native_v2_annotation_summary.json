@@ -1,0 +1,51 @@
+{
+  "candidate_and_annotation_sha256": {
+    "plan135_native_v2_adjudication.json": "4cf2e9f687afc0dee002c37aa1214e104825cb4e0c23e58ffe3f9124170b669c",
+    "plan135_native_v2_candidates.json": "8f588eb03e1fba2924d682c87b5e920bb38eb78ced5f492680737084c90ac30d",
+    "plan135_native_v2_extension1_adjudication.json": "1ca288da3fc87dbd87e7666a0de3f7d6188b81965a140303f064f2426471023e",
+    "plan135_native_v2_extension1_candidates.json": "8ab49c7bddc901f822091e69f2c2ba50a8e7cdf99488a6615fa8d78790d248d7",
+    "plan135_native_v2_extension1_labels_a.json": "2b40968df2a44dfb1a3ea2fd6bee95dc97315d80f1bc95f3f61144dff35b8916",
+    "plan135_native_v2_extension1_labels_b.json": "909c6bdbcfdd87eabb79d92ba036fdcc9cbc8f1c5061cfb8faf7adf2662b00a5",
+    "plan135_native_v2_labels_a.json": "d2f5b3b098c85bc8f0e7124550876b22d9e5ebdb14acc60d7ac6c3eb731da150",
+    "plan135_native_v2_labels_b.json": "4afac5c9d53b69e76846d3a5f087cb150d4d6b234a0e9fac490e04e554b56591"
+  },
+  "combined": {
+    "adjudicated": 8,
+    "agreements": 120,
+    "cases": 128,
+    "disagreements": 8,
+    "labels": {
+      "ambiguous": 1,
+      "correction": 14,
+      "not_correction": 113
+    }
+  },
+  "corpus_id": "correction-learning-native-v2",
+  "frozen_at": "2026-09-12T01:59:14.321286Z",
+  "non_claims": [
+    "Rationales and conversation prose are not retained in this artifact.",
+    "Annotation agreement does not establish classifier accuracy."
+  ],
+  "record_type": "native_corpus_annotation_summary",
+  "schema_version": "1.0",
+  "selection_commits": [
+    "232d134",
+    "1ab8498"
+  ],
+  "waves": [
+    {
+      "adjudicated": 3,
+      "agreements": 61,
+      "candidate_file": "plan135_native_v2_candidates.json",
+      "cases": 64,
+      "disagreements": 3
+    },
+    {
+      "adjudicated": 5,
+      "agreements": 59,
+      "candidate_file": "plan135_native_v2_extension1_candidates.json",
+      "cases": 64,
+      "disagreements": 5
+    }
+  ]
+}

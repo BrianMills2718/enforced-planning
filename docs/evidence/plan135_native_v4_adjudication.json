@@ -1,0 +1,25 @@
+{
+  "annotator": "adjudicator",
+  "labels": [
+    {
+      "event_id": "25bbfdb6d174f4b72f76105b",
+      "label": "correction"
+    },
+    {
+      "event_id": "b8105e69e7ddaec750fcd262",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "34288b9f44b8f56482d924fc",
+      "label": "correction"
+    },
+    {
+      "event_id": "505e494f0685989bddc01f42",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8766d35403c6134c483ad49f",
+      "label": "not_correction"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "archived_cursor_path": ".company-planning/history/630f2d1e38e7e973-r7.json",
+  "archived_cursor_sha256": "b7ecca529519384a0095e1d605457179a40c6c283c6cf7d8d433f902d1531799",
+  "cursor_id": "plan-135-native-corpus-signoff-v3",
+  "cursor_revision": 7,
+  "cursor_sha256": "b7ecca529519384a0095e1d605457179a40c6c283c6cf7d8d433f902d1531799",
+  "disposition": "retired",
+  "management_worktree": "/home/brian/code/enforced-planning/worktrees/plan-135-native-corpus-signoff-v3",
+  "operation": "retire",
+  "operator_session_id": "codex:01a09111-50bc-7b21-944b-1e597e6247ce",
+  "reason": "The unchanged Prompt 1.2/Sonnet promotion slice failed representative native v5 and independent signoff accepted manual/off with no ready alternative.",
+  "record_type": "plan_execution_disposition_receipt",
+  "schema_version": "1.0",
+  "successor_ref": null
+}

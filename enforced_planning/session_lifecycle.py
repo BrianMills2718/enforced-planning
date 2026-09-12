@@ -2648,6 +2648,20 @@ def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
         text=True,
         check=False,
     )
+    if result.returncode != 0 and "working trees containing submodules" in (
+        result.stderr or result.stdout
+    ):
+        # Git requires --force even for a clean linked worktree merely because
+        # it has initialized submodules. Closeout has already proved the tree
+        # clean, the branch integrated (or durably disposed), and filesystem
+        # access safe, so this retry does not weaken the data-loss boundary.
+        result = subprocess.run(
+            ["git", "worktree", "remove", "--force", str(worktree_path)],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip())
     return "removed"

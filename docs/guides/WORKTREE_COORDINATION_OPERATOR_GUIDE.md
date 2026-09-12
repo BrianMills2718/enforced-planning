@@ -2221,6 +2221,14 @@ work rather than the lifetime number of finished lanes.
 The sanctioned closeout flow is idempotent for already-missing worktree or
 branch state so partial cleanup can be rerun safely.
 
+Git refuses an ordinary `git worktree remove` when a clean linked worktree has
+initialized submodules and asks for `--force` solely because those submodule
+administrative directories exist. The sanctioned closeout retries with
+`--force` only for that exact Git diagnostic, after its existing preflight has
+proved the worktree clean and the branch integrated or durably dispositioned.
+Other removal failures still stop closeout. Operators should not bypass that
+preflight by issuing a manual forced removal.
+
 Native lifecycle wiring also protects unclaimed and cross-repository work. At
 `SessionStart` (or the first mutation boundary), the coordination hook records
 status fingerprints for the Git repositories under the session's starting

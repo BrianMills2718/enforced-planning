@@ -327,6 +327,56 @@ def test_remove_worktree_reanchors_process_cwd_before_removal(
     assert not worktree.exists()
 
 
+def test_remove_clean_worktree_with_initialized_submodule(tmp_path: Path) -> None:
+    """Git's submodule-only force requirement must not strand a closed lane."""
+    child = tmp_path / "child"
+    parent = tmp_path / "parent"
+    for repo in (child, parent):
+        repo.mkdir()
+        _git(repo, "init", "-b", "main")
+        _git(repo, "config", "user.email", "test@example.com")
+        _git(repo, "config", "user.name", "Test User")
+        (repo / "README.md").write_text("seed\n", encoding="utf-8")
+        _git(repo, "add", "README.md")
+        _git(repo, "commit", "-m", "seed")
+
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            str(child),
+            "vendor/child",
+        ],
+        cwd=parent,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    _git(parent, "commit", "-am", "add child")
+    worktree = tmp_path / "lane-with-child"
+    _git(parent, "worktree", "add", "-b", "lane-with-child", str(worktree))
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "update",
+            "--init",
+        ],
+        cwd=worktree,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert session_lifecycle._remove_worktree_path(parent, worktree) == "removed"
+    assert not worktree.exists()
+
+
 def test_bootstrap_closeout_resolves_real_target_instead_of_authority_sentinel(
     tmp_path: Path,
 ) -> None:

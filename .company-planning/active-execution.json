@@ -1,12 +1,12 @@
 {
   "active_slice": {
     "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
-    "next_action": "Run the one preregistered native corpus replay, inspect its traces, and retain the privacy-reduced result.",
+    "next_action": "Obtain a fresh adversarial signoff on the valid-fail replay and the retain-manual-off decision.",
     "requires_external_action": false,
-    "requires_spend": true,
+    "requires_spend": false,
     "slice_id": "native-corpus-and-signoff",
     "status": "verifying",
-    "target_revision": "ce5dfff"
+    "target_revision": "85095b1"
   },
   "authority": {
     "external_action_authorized": false,
@@ -29,11 +29,11 @@
     "verifier_outcome": null
   },
   "cursor_id": "plan-135-native-corpus-signoff-v3",
-  "cursor_revision": 2,
+  "cursor_revision": 3,
   "failure_state": {
-    "boundary": null,
-    "last_failure_ref": null,
-    "same_boundary_failures": 0
+    "boundary": "native-classifier-generalization",
+    "last_failure_ref": "prompts/correction_learning/native_result_v1.json@85095b1",
+    "same_boundary_failures": 1
   },
   "goal_ref": "correction-aware-agent-learning",
   "lifecycle_state": "active",
@@ -51,6 +51,13 @@
       "kind": "supporting_work",
       "observation_id": "native-corpus-frozen",
       "outcome": "pass"
+    },
+    {
+      "boundary": "native-classifier-generalization",
+      "evidence_ref": "prompts/correction_learning/native_result_v1.json@85095b1",
+      "kind": "verification_failure",
+      "observation_id": "native-corpus-classifier-failed",
+      "outcome": "fail"
     }
   ],
   "plan_revision": "01c5a6cc61f853b8440b6792945badd64929ce6d",

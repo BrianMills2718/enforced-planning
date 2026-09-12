@@ -184,6 +184,46 @@ def _resolve_durable_repo_root(repo_root: Path = REPO_ROOT) -> Path:
     return Path(common_dir.stdout.strip()).resolve().parent
 
 
+def _materialize_shared_ref_history(
+    repo_root: Path,
+    *,
+    remote: str = "origin",
+    branch: str = "main",
+) -> str | None:
+    """Refresh the durable shared-ref graph while the lane still owns writes.
+
+    A partial clone can retain a remote-tracking ref without retaining every
+    ancestor object. If the linked worktree and task branch are removed first,
+    a later range walk may ask the promisor remote for the now-unadvertised
+    start object and fail with ``upload-pack: not our ref``. Fetch the named
+    branch through an advertised ref before destructive cleanup so both the
+    tracking ref and its reachable history are locally usable by the report.
+
+    A disconnected repository is still closeable: the existing report keeps
+    its explicit ``NOT CHECKED`` state if the local graph remains unreadable.
+    """
+
+    destination = f"refs/remotes/{remote}/{branch}"
+    completed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            remote,
+            f"+refs/heads/{branch}:{destination}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return None
+    return completed.stderr.strip() or "shared-ref history refresh failed"
+
+
 def _resolve_canonical_lock_module(
     *,
     repo_root: Path = REPO_ROOT,
@@ -307,8 +347,9 @@ def _report_shared_ref_movement(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    since_revision, range_basis = _lane_range_basis(args.project, args.scope, args.branch)
     durable_repo_root = _resolve_durable_repo_root()
+    _materialize_shared_ref_history(durable_repo_root)
+    since_revision, range_basis = _lane_range_basis(args.project, args.scope, args.branch)
     # Resolve this while the lane still exists. close_session() can remove the
     # worktree containing this script, so a relative lookup after closeout can
     # no longer find the reconciliation helper.

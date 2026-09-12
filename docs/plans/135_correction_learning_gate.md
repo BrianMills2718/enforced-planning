@@ -578,3 +578,26 @@ wasted calls after a malformed response; it does not relax any quality gate.
 If adjudication yields fewer than ten corrections, an extension selected by a
 precommitted deterministic rule is required before replay. V4 permits one
 held-out replay only and may not be retried or retuned.
+
+V4 annotation produced 123/128 independent agreement and five blindly
+adjudicated disagreements, yielding 29 corrections, 97 non-corrections, and two
+ambiguous boundaries. The exact-source loader resolved all 128 frozen events from
+32 sessions. Candidate selection, privacy-reduced A/B labels, privacy-reduced
+adjudication, and the corpus were committed in the preregistered order before
+replay.
+
+**Native v4 result: INVALID.** The one replay completed eight four-case batches,
+then the ninth call failed when Claude Code reached the configured two-turn
+maximum. The trace contains eight completed calls and one failed call, with no
+retry and `$0.00` recorded marginal cost. Completed-call model latency totaled
+176.677 seconds (13.580–38.632 seconds). Because route failure is explicitly
+invalidating, no accuracy score or promotion claim is valid and v4 may not be
+retried. The privacy-reduced reconstructed result is
+`prompts/correction_learning/native_result_v4.json`; traces are under
+`correction-learning/correction-learning-native-v4/0445e448dc70/`.
+
+The second harness defect was that only verdict-ID mismatches were converted to
+durable invalid results; provider, route, and schema exceptions escaped before
+artifact creation. Batch execution now wraps every evaluation exception with
+its batch index and privacy-safe exception type, then uses the same atomic
+invalid-result path. This fixes evidence retention but does not make v4 valid.

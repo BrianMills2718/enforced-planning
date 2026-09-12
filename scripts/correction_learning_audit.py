@@ -41,6 +41,15 @@ class BatchVerdictMismatch(ValueError):
         self.unexpected_event_ids = sorted(actual - expected)
 
 
+class BatchEvaluationFailure(RuntimeError):
+    """A frozen batch failed before a structurally valid verdict set existed."""
+
+    def __init__(self, batch_index: int, error_type: str) -> None:
+        super().__init__(f"native classifier batch {batch_index} failed: {error_type}")
+        self.batch_index = batch_index
+        self.error_type = error_type
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agent", choices=("codex", "claude-code"))
@@ -138,12 +147,15 @@ def classify_in_batches(
     for index in range(0, len(exchanges), batch_size):
         batch = exchanges[index : index + batch_size]
         batch_index = index // batch_size + 1
-        classified = classify_with_model(
-            batch,
-            learning_candidates,
-            model=model,
-            trace_id=f"{trace_id}/batch-{batch_index}",
-        )
+        try:
+            classified = classify_with_model(
+                batch,
+                learning_candidates,
+                model=model,
+                trace_id=f"{trace_id}/batch-{batch_index}",
+            )
+        except Exception as exc:
+            raise BatchEvaluationFailure(batch_index, type(exc).__name__) from exc
         expected_ids = {exchange.event_id for exchange in batch}
         actual_ids = {verdict.event_id for verdict in classified.verdicts}
         if actual_ids != expected_ids:
@@ -209,7 +221,20 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
             trace_id=trace_id,
             batch_size=args.batch_size,
         )
-    except BatchVerdictMismatch as exc:
+    except (BatchVerdictMismatch, BatchEvaluationFailure) as exc:
+        if isinstance(exc, BatchVerdictMismatch):
+            failure = {
+                "code": "batch_verdict_id_mismatch",
+                "batch_index": exc.batch_index,
+                "missing_event_ids": exc.missing_event_ids,
+                "unexpected_event_ids": exc.unexpected_event_ids,
+            }
+        else:
+            failure = {
+                "code": "batch_evaluation_error",
+                "batch_index": exc.batch_index,
+                "error_type": exc.error_type,
+            }
         payload = {
             "schema_version": "1.1",
             "record_type": "correction_native_corpus_result",
@@ -225,12 +250,7 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
             "trace_prefix": trace_id,
             "run_status": "invalid",
             "decision_status": "retain_manual_off",
-            "failure": {
-                "code": "batch_verdict_id_mismatch",
-                "batch_index": exc.batch_index,
-                "missing_event_ids": exc.missing_event_ids,
-                "unexpected_event_ids": exc.unexpected_event_ids,
-            },
+            "failure": failure,
             "non_claims": [
                 "No classifier accuracy metric is valid for this partial run.",
                 "No assistant text, user text, or model rationale is retained.",

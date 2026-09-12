@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -370,6 +371,68 @@ def test_classifier_rejects_a_missing_event_within_its_batch(monkeypatch) -> Non
         )
     assert caught.value.batch_index == 1
     assert caught.value.missing_event_ids == ["turn-2"]
+
+
+def test_classifier_preserves_batch_index_for_route_failure(monkeypatch) -> None:
+    def failed(*_args, **_kwargs):
+        raise RuntimeError("provider details must not enter the result artifact")
+
+    monkeypatch.setattr(correction_learning_audit, "classify_with_model", failed)
+    with pytest.raises(correction_learning_audit.BatchEvaluationFailure) as caught:
+        correction_learning_audit.classify_in_batches(
+            [_exchange("turn-1")],
+            [],
+            model="claude-code/sonnet",
+            trace_id="test/batch-route-failure",
+            batch_size=4,
+        )
+    assert caught.value.batch_index == 1
+    assert caught.value.error_type == "RuntimeError"
+    assert "provider details" not in str(caught.value)
+
+
+def test_native_replay_writes_privacy_reduced_invalid_result(
+    monkeypatch, tmp_path: Path
+) -> None:
+    corpus_path = tmp_path / "corpus.json"
+    result_path = tmp_path / "result.json"
+    corpus_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        correction_learning_audit,
+        "verified_frozen_revision",
+        lambda *_args: "a" * 40,
+    )
+    corpus = type("Corpus", (), {"corpus_id": "test-invalid-run"})()
+    monkeypatch.setattr(
+        correction_learning_audit,
+        "load_native_corpus_exchanges",
+        lambda _path: (corpus, [_exchange("turn-1")]),
+    )
+    monkeypatch.setattr(
+        correction_learning_audit,
+        "classify_in_batches",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            correction_learning_audit.BatchEvaluationFailure(1, "ResultError")
+        ),
+    )
+    args = argparse.Namespace(
+        source_revision="a" * 40,
+        corpus=corpus_path,
+        result=result_path,
+        model="claude-code/sonnet",
+        batch_size=4,
+    )
+
+    assert correction_learning_audit.evaluate_native_corpus(args) == 2
+    payload = json.loads(result_path.read_text(encoding="utf-8"))
+    assert payload["run_status"] == "invalid"
+    assert payload["decision_status"] == "retain_manual_off"
+    assert payload["failure"] == {
+        "batch_index": 1,
+        "code": "batch_evaluation_error",
+        "error_type": "ResultError",
+    }
+    assert "provider details" not in result_path.read_text(encoding="utf-8")
 
 
 def test_native_replay_rejects_nonexistent_source_revision() -> None:

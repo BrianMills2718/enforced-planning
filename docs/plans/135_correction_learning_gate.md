@@ -462,6 +462,16 @@ therefore frozen as
 cases remain in the combined population; none were removed or relabeled to meet
 the floor.
 
+Blind annotation completed with agreement on 120/128 cases (93.75%); a third
+blind annotator adjudicated all eight disagreements. The frozen combined corpus
+contains 14 corrections, 113 non-corrections, and one ambiguous boundary across
+32 native session windows. `prompts/correction_learning/native_corpus_v2.json`
+contains only exact source/event provenance and final labels;
+`docs/evidence/plan135_native_v2_annotation_summary.json` retains selection and
+annotation hashes. Local provenance replay resolved the exact complete 128/128
+population. The corpus and labels are now frozen; no prompt or admission change
+is allowed before the single held-out replay.
+
 The primary gates are at least 90% correction recall, zero correction verdicts
 among adjudicated non-corrections, and zero correction verdicts among ambiguous
 boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source

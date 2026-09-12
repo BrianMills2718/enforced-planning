@@ -98,6 +98,14 @@ or semantic classifier. The incumbent contract is documented in
 52 dashboard browser journey. Source-only tests establish the contract substrate
 but not adoption.
 
+## Capabilities
+
+| Capability | Change | Owner | Consumer and proof |
+|---|---|---|---|
+| Criterion-bound outcome lifecycle | Extend `OutcomeContractV1`, progress receipts, and leases with exact criterion and artifact identity | Enforced Planning | The Plan 52 dashboard session consumes a selected contract and receives a deterministic denied/ready decision |
+| Independent artifact verification | Reuse the existing verifier role; do not make the producer authoritative | AES Supervisor or another distinct verifier identity | A receipt names the verifier and the exact browser artifact digest |
+| Company-work dashboard | Consume the gate without owning or reinterpreting it | Initiative Roadmap Dashboard | The known rejected artifact fails and a corrected browser rendering passes every frozen criterion |
+
 ## Contract
 
 - A `1.2.0` outcome contract must contain unique, frozen success criteria.

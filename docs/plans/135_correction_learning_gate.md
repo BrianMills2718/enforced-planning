@@ -472,6 +472,31 @@ annotation hashes. Local provenance replay resolved the exact complete 128/128
 population. The corpus and labels are now frozen; no prompt or admission change
 is allowed before the single held-out replay.
 
+**Native v2 result: VALID FAIL.** The one frozen replay resolved 128/128 exact
+events and completed 22 subscription-backed Sonnet calls with no route/schema
+error or retry. It detected 10/14 corrections (71.4% recall), produced one
+enforcement-positive false positive across 113 non-corrections, and produced no
+enforcement-positive verdict for the one ambiguous boundary. Claude Code recall
+was 4/5; Codex recall was 6/9 and contained the false positive. Calls totaled
+691.101 seconds of model latency (9.542–80.942 seconds) at recorded marginal
+cost `$0.00`. The frozen privacy-reduced result is
+`prompts/correction_learning/native_result_v2.json`; traces are under the
+legacy-named but unique prefix `correction-learning/native-v1/65f20a8e2c23/`.
+
+The class-level diagnosis separates semantic errors from extraction, which had
+already passed exact typed admission and population checks. Misses cluster in
+imperative continuation/resumption messages that also correct the prior status
+or impose required repairs: the model overweights their task-directive form and
+underweights the disputed earlier handling. A shorter factual/name correction
+paired with a recurrence-prevention request was also missed. Conversely, terse
+clarification or critical questions remain a boundary class: the sole false
+positive inferred a correction from a question whose adjudicated label did not
+assert prior error, while three other non-corrections became ambiguous. No
+prompt, label, threshold, or admission change was made after this result. The
+classifier remains manual/off pending fresh adversarial sign-off on that
+decision; any future semantic repair must treat v2 as development data and use
+a new unseen holdout.
+
 The primary gates are at least 90% correction recall, zero correction verdicts
 among adjudicated non-corrections, and zero correction verdicts among ambiguous
 boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source

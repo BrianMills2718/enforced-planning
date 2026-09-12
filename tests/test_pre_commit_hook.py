@@ -11,6 +11,13 @@ PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 HOOK_SCRIPT = PROJECT_META_ROOT / "hooks" / "git" / "pre-commit"
 
 
+def test_source_repo_ignores_ephemeral_doc_coupling_ack_file() -> None:
+    """The source repository must not make its one-commit scratch file trackable by default."""
+
+    ignore_entries = (PROJECT_META_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".doc-coupling-acks" in ignore_entries
+
+
 def _hook_repo(tmp_path: Path) -> tuple[Path, Path]:
     """Create the minimum repository needed to execute the tracked hook."""
     repo_root = tmp_path / "repo"
@@ -99,6 +106,33 @@ def test_pre_commit_hook_passes_ephemeral_doc_coupling_ack_file(tmp_path: Path) 
 
     assert result.returncode == 0
     assert marker.read_text(encoding="utf-8") == f"--staged --strict --ack-file {ack_file}"
+
+
+def test_pre_commit_hook_rejects_tracked_doc_coupling_ack_file(tmp_path: Path) -> None:
+    """A consumed acknowledgement must not become part of the commit tree."""
+
+    repo_root, hook_copy = _hook_repo(tmp_path)
+    ack_file = repo_root / ".doc-coupling-acks"
+    ack_file.write_text("- path: README.md\n  reason: Unchanged public contract.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", ".doc-coupling-acks"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = subprocess.run(
+        ["bash", str(hook_copy)],
+        cwd=repo_root,
+        env=_hook_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert ".doc-coupling-acks is ephemeral but is tracked" in result.stdout
 
 
 def test_post_commit_hook_removes_ephemeral_doc_coupling_ack_file(tmp_path: Path) -> None:

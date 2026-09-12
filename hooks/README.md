@@ -66,9 +66,9 @@ The source repo includes these git hook templates:
 
 | Hook | Purpose |
 |---|---|
-| `pre-commit` | Run staged validation checks before commit |
+| `pre-commit` | Run staged validation checks and refuse tracked one-commit acknowledgement state |
 | `commit-msg` | Enforce commit prefix conventions |
-| `post-commit` | Remove one-commit coupling acknowledgements and advise about unpushed commits |
+| `post-commit` | Remove untracked one-commit coupling acknowledgements and advise about unpushed commits |
 | `pre-push` | Fail-closed canonical claim/session validation for branch pushes |
 
 These remain reference/legacy rollout assets until the broader hook-distribution

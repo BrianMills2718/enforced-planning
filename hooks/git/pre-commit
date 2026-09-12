@@ -354,6 +354,20 @@ if [[ -n "$DOC_COUPLING" ]]; then
     fi
 fi
 
+# Coupling acknowledgements are one-commit scratch state. The hook may read the
+# file above, but it must never become part of the candidate tree: a squash
+# merge can otherwise resurrect the file even though post-commit removed the
+# local working copy. A staged deletion is allowed because git ls-files reads
+# the candidate index, where the path is already absent.
+if git ls-files --error-unmatch -- .doc-coupling-acks >/dev/null 2>&1; then
+    echo ""
+    echo ".doc-coupling-acks is ephemeral but is tracked in the candidate commit."
+    echo "Keep the working copy, remove it from the index, and ignore it:"
+    echo "  git rm --cached -- .doc-coupling-acks"
+    echo "  add .doc-coupling-acks to .gitignore"
+    exit 1
+fi
+
 # 4. Module-reachability ratchet (if script exists). REACHABILITY_RATCHET=off
 # is a named, logged bypass for the first tuning pass on a repo -- see
 # ACCRETION_DETECTOR_ROLLOUT_BRIEF.md section 10a.

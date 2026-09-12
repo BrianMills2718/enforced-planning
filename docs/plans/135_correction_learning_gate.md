@@ -559,3 +559,22 @@ exact event-ID set immediately and atomically preserves a privacy-reduced
 invalid result before returning failure. V3 remains development evidence and
 must not be retried or scored. A consequential decision still requires a fresh,
 precommitted holdout run followed by independent adversarial sign-off.
+
+### Native corpus v4 pre-registration
+
+V4 draws an unseen sample from the disjoint interval 2026-08-31 through
+2026-09-06. `plan135_native_v4_selection.py` deterministically ranks eligible
+sessions with seed `plan135-native-v4`, selects 16 sessions per client, and
+selects one four-exchange window per session without inspecting prose. The
+selection implementation and this contract must be committed before the
+candidate manifest is generated. The candidate manifest, two independent
+privacy-reduced label sets, adjudication of every disagreement, and the final
+corpus must then be committed in that order before replay.
+
+Prompt 1.2, the v3 decision thresholds and invalidation rules, exact-source
+replay, and independent adversarial sign-off remain unchanged. V4 uses
+four-case batches with the per-batch exact-ID guard. The smaller batch bounds
+wasted calls after a malformed response; it does not relax any quality gate.
+If adjudication yields fewer than ten corrections, an extension selected by a
+precommitted deterministic rule is required before replay. V4 permits one
+held-out replay only and may not be retried or retuned.

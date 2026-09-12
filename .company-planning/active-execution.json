@@ -1,12 +1,12 @@
 {
   "active_slice": {
     "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
-    "next_action": "Freeze and evaluate a new unseen holdout only after the repaired structured route passed its contaminated development canary.",
+    "next_action": "Re-plan correction detection around explicit capture or a materially different classifier route; do not retune the rejected route.",
     "requires_external_action": false,
     "requires_spend": false,
     "slice_id": "native-corpus-and-signoff",
-    "status": "verifying",
-    "target_revision": "7487ee9918c4138b4663debb9a7ff0534a2b2dab"
+    "status": "blocked",
+    "target_revision": "dfa47d56372e90331f67d3733494797c755ff537"
   },
   "authority": {
     "external_action_authorized": false,
@@ -22,21 +22,21 @@
     "runtime_integrity_valid": true
   },
   "completion": {
-    "evidence_revision": null,
-    "receipt_ref": null,
-    "remaining_ready_work": 1,
+    "evidence_revision": "dfa47d56372e90331f67d3733494797c755ff537",
+    "receipt_ref": "docs/evidence/plan135_native_v5_signoff.md@dfa47d56372e90331f67d3733494797c755ff537",
+    "remaining_ready_work": 0,
     "requested": false,
-    "verifier_outcome": "fail"
+    "verifier_outcome": "pass"
   },
   "cursor_id": "plan-135-native-corpus-signoff-v3",
-  "cursor_revision": 6,
+  "cursor_revision": 7,
   "failure_state": {
-    "boundary": "evaluation-runtime-integrity",
-    "last_failure_ref": "prompts/correction_learning/native_result_v4.json@d7949af566021eca4f1dccf3dbf866a867f868f9",
+    "boundary": "native-classifier-generalization",
+    "last_failure_ref": "prompts/correction_learning/native_result_v5.json@4864d15be6e44e557925d6271a05e8cccccb1cbc",
     "same_boundary_failures": 2
   },
   "goal_ref": "correction-aware-agent-learning",
-  "lifecycle_state": "active",
+  "lifecycle_state": "circuit_broken",
   "observations": [
     {
       "boundary": "promotion-evidence",
@@ -92,6 +92,27 @@
       "evidence_ref": "docs/evidence/plan135_native_v4_schema_canary.json@7487ee9918c4138b4663debb9a7ff0534a2b2dab",
       "kind": "supporting_work",
       "observation_id": "rationale-bound-repair-canary",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "native-classifier-generalization",
+      "evidence_ref": "prompts/correction_learning/native_result_v5.json@4864d15be6e44e557925d6271a05e8cccccb1cbc",
+      "kind": "verification_failure",
+      "observation_id": "native-v5-valid-fail",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "decision-signoff",
+      "evidence_ref": "docs/evidence/plan135_native_v5_signoff.md@dfa47d56372e90331f67d3733494797c755ff537",
+      "kind": "supporting_work",
+      "observation_id": "native-v5-route-rejection-signed-off",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "result-contract-integrity",
+      "evidence_ref": "scripts/correction_learning_audit.py@3bfe1c1",
+      "kind": "supporting_work",
+      "observation_id": "promotion-threshold-contract-aligned",
       "outcome": "pass"
     }
   ],

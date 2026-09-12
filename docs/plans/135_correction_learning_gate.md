@@ -497,6 +497,17 @@ classifier remains manual/off pending fresh adversarial sign-off on that
 decision; any future semantic repair must treat v2 as development data and use
 a new unseen holdout.
 
+**Native v2 sign-off: REJECTED.** Round one rejected manually expanded,
+nonexistent Git revisions and missing annotation/selection reconstruction.
+Evidence-only repair made revision, selection, final-label, trace, and diagnosis
+checks executable. Round two accepted all of those except historical blind-label
+provenance: the privacy-reduced A/B rows were committed after the result, while
+the original pre-result files contain rationales the privacy contract forbids
+retaining. `docs/evidence/plan135_native_v2_signoff_r1.md` and
+`plan135_native_v2_signoff_r2.md` preserve both reviews. Rather than weaken
+privacy to rescue the run, v2 is development evidence only. A v3 holdout must
+commit privacy-reduced independent labels and adjudications before replay.
+
 The primary gates are at least 90% correction recall, zero correction verdicts
 among adjudicated non-corrections, and zero correction verdicts among ambiguous
 boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source

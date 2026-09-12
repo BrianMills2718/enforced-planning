@@ -345,6 +345,14 @@ def test_classifier_route_disables_agent_context_and_ordinary_tools(monkeypatch)
     assert captured["cwd"] == str(correction_learning_audit.ROOT)
 
 
+def test_native_replay_rejects_nonexistent_source_revision() -> None:
+    with pytest.raises(ValueError, match="resolvable Git commit"):
+        correction_learning_audit.verified_frozen_revision(
+            "65f20a8e2c2314cbb691aa7c25da1a67a85c8374",
+            Path("prompts/correction_learning/native_corpus_v2.json"),
+        )
+
+
 def test_pilot_case_set_has_preregistered_held_out_counts() -> None:
     path = Path("prompts/correction_learning/pilot_cases_v1.json")
     payload = json.loads(path.read_text(encoding="utf-8"))

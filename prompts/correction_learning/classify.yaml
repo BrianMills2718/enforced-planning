@@ -1,5 +1,5 @@
 name: correction_learning_classification
-version: "1.1"
+version: "1.2"
 description: Distinguish user corrections of agent mistakes from ordinary steering.
 messages:
   - role: system
@@ -25,6 +25,15 @@ messages:
       are not corrections unless the user clearly disputes the preceding
       assistant claim or handling; use ambiguous when that implication is not
       clear from the adjacent pair.
+
+      Correction is an independent property, not a mutually exclusive intent.
+      A user can continue, resume, add scope, or issue implementation commands
+      while also correcting the preceding assistant's status, assumption, or
+      handling. Choose correction when any part clearly disputes that prior
+      handling and supplies the replacement constraint or behavior; do not let
+      imperative task language hide the correction. Conversely, a terse request
+      for explanation or clarification is not enough by itself; choose ambiguous
+      unless the user actually asserts or clearly implies prior error.
 
       For each correction, set matching_learning_id only when one supplied learning
       directly captures the corrected mistake. A merely later or generally useful

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from datetime import UTC, datetime
@@ -152,12 +153,39 @@ def atomic_write(path: Path, payload: str) -> None:
             os.unlink(temporary)
 
 
+def verified_frozen_revision(revision: str, *paths: Path) -> str:
+    """Resolve a real commit and prove each evaluation input matches its blob."""
+
+    resolved = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if resolved.returncode != 0:
+        raise ValueError("source revision is not a resolvable Git commit")
+    full_revision = resolved.stdout.strip()
+    for path in paths:
+        relative = path.resolve().relative_to(ROOT)
+        frozen = subprocess.run(
+            ["git", "show", f"{full_revision}:{relative}"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        if frozen.returncode != 0 or frozen.stdout != path.read_bytes():
+            raise ValueError(f"evaluation input is not frozen at source revision: {relative}")
+    return full_revision
+
+
 def evaluate_native_corpus(args: argparse.Namespace) -> int:
     """Replay frozen native cases and retain only privacy-reduced verdicts."""
 
+    source_revision = verified_frozen_revision(args.source_revision, args.corpus, PROMPT)
     corpus, exchanges = load_native_corpus_exchanges(args.corpus)
     corpus_bytes = args.corpus.read_bytes()
-    trace_id = f"correction-learning/native-v1/{args.source_revision[:12]}"
+    trace_id = f"correction-learning/{corpus.corpus_id}/{source_revision[:12]}"
     classified = classify_in_batches(
         exchanges,
         [],
@@ -204,7 +232,7 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
         "record_type": "correction_native_corpus_result",
         "corpus_id": corpus.corpus_id,
         "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "source_revision": args.source_revision,
+        "source_revision": source_revision,
         "corpus": str(args.corpus),
         "corpus_sha256": hashlib.sha256(corpus_bytes).hexdigest(),
         "prompt": str(PROMPT.relative_to(ROOT)),

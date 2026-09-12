@@ -11,6 +11,40 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "learning_capture_hook.py"
 
 
+def codex_learning_config(config_path: Path, script_path: Path = SCRIPT) -> str:
+    """Build an independently fingerprinted trusted Codex fixture."""
+    command = f"python3 {script_path} --agent codex"
+
+    def trusted_hash(event_name: str) -> str:
+        identity = {
+            "event_name": event_name,
+            "hooks": [
+                {
+                    "async": False,
+                    "command": command,
+                    "timeout": 600,
+                    "type": "command",
+                }
+            ],
+        }
+        encoded = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+        return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+    source = str(config_path.resolve())
+    return (
+        "[[hooks.UserPromptSubmit]]\n"
+        "[[hooks.UserPromptSubmit.hooks]]\n"
+        f'command = "{command}"\n'
+        "[[hooks.Stop]]\n"
+        "[[hooks.Stop.hooks]]\n"
+        f'command = "{command}"\n'
+        f'[hooks.state."{source}:user_prompt_submit:0:0"]\n'
+        f'trusted_hash = "{trusted_hash("user_prompt_submit")}"\n'
+        f'[hooks.state."{source}:stop:0:0"]\n'
+        f'trusted_hash = "{trusted_hash("stop")}"\n'
+    )
+
+
 def run_hook(
     tmp_path: Path,
     report: str,
@@ -401,17 +435,7 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     codex = tmp_path / "config.toml"
     claude = tmp_path / "settings.json"
     openclaw = tmp_path / "run_task.py"
-    codex.write_text(
-        '[[hooks.UserPromptSubmit]]\n'
-        '[[hooks.UserPromptSubmit.hooks]]\n'
-        'command = "python3 '
-        f'{SCRIPT} --agent codex"\n'
-        '[[hooks.Stop]]\n'
-        '[[hooks.Stop.hooks]]\n'
-        'command = "python3 '
-        f'{SCRIPT} --agent codex"\n',
-        encoding="utf-8",
-    )
+    codex.write_text(codex_learning_config(codex), encoding="utf-8")
     claude.write_text(
         json.dumps(
             {
@@ -460,6 +484,60 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     )
     assert live.returncode == 0
     assert json.loads(live.stdout)["live"] is True
+
+    codex.write_text(
+        codex_learning_config(codex).replace("sha256:", "sha256:stale", 1),
+        encoding="utf-8",
+    )
+    modified = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--check-install",
+            "--codex-config",
+            str(codex),
+            "--claude-settings",
+            str(claude),
+            "--openclaw-runner",
+            str(openclaw),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    modified_payload = json.loads(modified.stdout)
+    assert modified.returncode == 1
+    assert modified_payload["codex_prompt_operational"] is False
+
+    codex.write_text(
+        codex_learning_config(codex).replace(
+            f'[hooks.state."{codex.resolve()}:stop:0:0"]\n',
+            f'[hooks.state."{codex.resolve()}:stop:0:0"]\nenabled = false\n',
+        ),
+        encoding="utf-8",
+    )
+    disabled = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "--check-install",
+            "--codex-config",
+            str(codex),
+            "--claude-settings",
+            str(claude),
+            "--openclaw-runner",
+            str(openclaw),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    disabled_payload = json.loads(disabled.stdout)
+    assert disabled.returncode == 1
+    assert disabled_payload["codex_stop_hook"] is True
+    assert disabled_payload["codex_stop_operational"] is False
+
+    codex.write_text(codex_learning_config(codex), encoding="utf-8")
 
     claude.write_text("{}", encoding="utf-8")
     missing = subprocess.run(
@@ -525,17 +603,7 @@ def test_install_check_accepts_symlink_equivalent_hook_path(tmp_path: Path) -> N
     checkout_alias = tmp_path / "active-enforced-planning"
     checkout_alias.symlink_to(SCRIPT.parent.parent, target_is_directory=True)
     aliased_script = checkout_alias / "scripts" / SCRIPT.name
-    codex.write_text(
-        '[[hooks.UserPromptSubmit]]\n'
-        '[[hooks.UserPromptSubmit.hooks]]\n'
-        'command = "python3 '
-        f'{aliased_script} --agent codex"\n'
-        '[[hooks.Stop]]\n'
-        '[[hooks.Stop.hooks]]\n'
-        'command = "python3 '
-        f'{aliased_script} --agent codex"\n',
-        encoding="utf-8",
-    )
+    codex.write_text(codex_learning_config(codex, aliased_script), encoding="utf-8")
     claude.write_text(
         json.dumps(
             {

@@ -127,6 +127,13 @@ immediate learning checkpoint and retain a privacy-reduced attention receipt. It
 does not classify the prompt, depend on transcript bytes, or claim that an
 asynchronous classifier completed before Stop. Semantic blocking remains off.
 
+The installed-health check now treats Codex configuration presence and runtime
+eligibility as separate facts. For each exact learning hook slot it reproduces
+Codex's normalized command-hook fingerprint and requires both an enabled state
+and a matching `trusted_hash`; a configured but disabled, untrusted, or modified
+hook makes `live` false. Claude Code and OpenClaw retain their native structural
+checks because they do not expose the same per-slot trust contract.
+
 ## Landscape And Prior Art
 
 | Alternative | Disposition | Reason |
@@ -333,6 +340,12 @@ Implementation checkpoint (2026-09-11):
   `correction-learning/codex/01a09111-50bc-7b21-944b-1e597e6247ce/3f819cac1da3e2246883`
   ended in an audit error after one slow successful batch; both remain
   non-blocking evidence against activation.
+- Prompt-time attention and Stop disposition hooks are installed for Codex and
+  Claude Code. Direct native-shaped canaries emitted privacy-reduced attention
+  receipts for both clients. Codex's exact prompt and Stop slots were enabled
+  and trusted through its config API; the install checker now rejects stale
+  trust fingerprints and explicitly disabled slots instead of equating text
+  presence with operational liveness.
 
 ### Classifier pilot pre-registration
 

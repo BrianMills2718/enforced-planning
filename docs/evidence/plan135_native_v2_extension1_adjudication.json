@@ -1,0 +1,31 @@
+{
+  "annotator": "adjudicator",
+  "labels": [
+    {
+      "event_id": "743862aafc29fbd94d8210d4",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "9a11774eca89737d8c4eadb5",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "127e220a6d967978cc5afbd8",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7d06302250255936cccc707e",
+      "label": "correction"
+    },
+    {
+      "event_id": "cea735e05b8e01e0d47a250e",
+      "label": "ambiguous"
+    }
+  ],
+  "non_claims": [
+    "Annotation rationales and conversation prose are intentionally omitted."
+  ],
+  "original_sha256": "1ca288da3fc87dbd87e7666a0de3f7d6188b81965a140303f064f2426471023e",
+  "record_type": "privacy_reduced_native_annotation",
+  "schema_version": "1.0"
+}

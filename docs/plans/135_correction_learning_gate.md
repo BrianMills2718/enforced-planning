@@ -298,10 +298,11 @@ works would only multiply an unproven control.
   hook entry? — **Status: OPEN**; prefer extension, prove process lifetime with
   a native canary.
 - [ ] Does the first sanctioned light-model route meet the threshold? —
-  **Status: PARTIAL, NOT PROMOTABLE**; subscription-backed Haiku was unreliable
-  and slow. A stripped Sonnet route passed the frozen synthetic threshold, but
-  independent sign-off rejected promotion because no representative native
-  held-out corpus established generalization. The route remains manual/off.
+  **Status: NO ON THE FROZEN NATIVE CORPUS**; subscription-backed Haiku was
+  unreliable and slow. A stripped Sonnet route passed the synthetic threshold,
+  but the pre-registered native replay missed one of two corrections and added
+  one scored false positive plus three protocol-control false positives. The
+  route remains manual/off; any revised mechanism needs new held-out evidence.
 
 ## Notes
 
@@ -392,3 +393,16 @@ relative source locators, timestamps, event IDs, and content-derived hashes, but
 no assistant or user prose. Replay must resolve the exact local event hashes and
 emit only classifications plus rationale hashes. A passing run advances only to
 fresh independent sign-off; it cannot authorize block mode by itself.
+
+**Native result: VALID FAIL.** The single pre-registered replay at source
+revision `ce5dfff` resolved all 14/14 frozen events across eight sessions, but
+recalled only 1/2 scored corrections and produced one false positive across six
+scored non-corrections. It also classified 3/5 Claude Code native-format
+negative controls as corrections; those controls test extraction/protocol
+boundaries, not human-conversation accuracy. The three subscription-backed
+Sonnet calls completed without retry or schema error in 28.381, 21.545, and
+8.521 seconds at recorded marginal cost `$0.00`. The privacy-reduced result is
+`prompts/correction_learning/native_result_v1.json`; durable traces are under
+`correction-learning/native-v1/ce5dfffd8265/`. No retry or prompt revision was
+run against this holdout. The classifier therefore remains manual/off pending
+fresh independent sign-off on the validity of this negative decision.

@@ -31,6 +31,16 @@ from enforced_planning.correction_learning import (
 PROMPT = ROOT / "prompts/correction_learning/classify.yaml"
 
 
+class BatchVerdictMismatch(ValueError):
+    """A structured batch omitted or invented one or more frozen event IDs."""
+
+    def __init__(self, batch_index: int, expected: set[str], actual: set[str]) -> None:
+        super().__init__(f"native classifier batch {batch_index} verdict IDs do not match")
+        self.batch_index = batch_index
+        self.missing_event_ids = sorted(expected - actual)
+        self.unexpected_event_ids = sorted(actual - expected)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--agent", choices=("codex", "claude-code"))
@@ -127,12 +137,17 @@ def classify_in_batches(
     verdicts = []
     for index in range(0, len(exchanges), batch_size):
         batch = exchanges[index : index + batch_size]
+        batch_index = index // batch_size + 1
         classified = classify_with_model(
             batch,
             learning_candidates,
             model=model,
-            trace_id=f"{trace_id}/batch-{index // batch_size + 1}",
+            trace_id=f"{trace_id}/batch-{batch_index}",
         )
+        expected_ids = {exchange.event_id for exchange in batch}
+        actual_ids = {verdict.event_id for verdict in classified.verdicts}
+        if actual_ids != expected_ids:
+            raise BatchVerdictMismatch(batch_index, expected_ids, actual_ids)
         verdicts.extend(classified.verdicts)
     return CorrectionClassification(verdicts=verdicts)
 
@@ -186,13 +201,45 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
     corpus, exchanges = load_native_corpus_exchanges(args.corpus)
     corpus_bytes = args.corpus.read_bytes()
     trace_id = f"correction-learning/{corpus.corpus_id}/{source_revision[:12]}"
-    classified = classify_in_batches(
-        exchanges,
-        [],
-        model=args.model,
-        trace_id=trace_id,
-        batch_size=args.batch_size,
-    )
+    try:
+        classified = classify_in_batches(
+            exchanges,
+            [],
+            model=args.model,
+            trace_id=trace_id,
+            batch_size=args.batch_size,
+        )
+    except BatchVerdictMismatch as exc:
+        payload = {
+            "schema_version": "1.1",
+            "record_type": "correction_native_corpus_result",
+            "corpus_id": corpus.corpus_id,
+            "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "source_revision": source_revision,
+            "corpus": str(args.corpus),
+            "corpus_sha256": hashlib.sha256(corpus_bytes).hexdigest(),
+            "prompt": str(PROMPT.relative_to(ROOT)),
+            "prompt_sha256": hashlib.sha256(PROMPT.read_bytes()).hexdigest(),
+            "model": args.model,
+            "batch_size": args.batch_size,
+            "trace_prefix": trace_id,
+            "run_status": "invalid",
+            "decision_status": "retain_manual_off",
+            "failure": {
+                "code": "batch_verdict_id_mismatch",
+                "batch_index": exc.batch_index,
+                "missing_event_ids": exc.missing_event_ids,
+                "unexpected_event_ids": exc.unexpected_event_ids,
+            },
+            "non_claims": [
+                "No classifier accuracy metric is valid for this partial run.",
+                "No assistant text, user text, or model rationale is retained.",
+            ],
+        }
+        serialized = json.dumps(payload, indent=2, sort_keys=True)
+        atomic_write(args.result, serialized)
+        print(serialized)
+        return 2
     verdicts = {verdict.event_id: verdict for verdict in classified.verdicts}
     expected_ids = {case.event_id for case in corpus.cases}
     if set(verdicts) != expected_ids:

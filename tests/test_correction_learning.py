@@ -345,6 +345,33 @@ def test_classifier_route_disables_agent_context_and_ordinary_tools(monkeypatch)
     assert captured["cwd"] == str(correction_learning_audit.ROOT)
 
 
+def test_classifier_rejects_a_missing_event_within_its_batch(monkeypatch) -> None:
+    exchanges = [_exchange("turn-1"), _exchange("turn-2")]
+
+    def incomplete(*_args, **_kwargs):
+        return CorrectionClassification(
+            verdicts=[
+                CorrectionVerdict(
+                    event_id="turn-1",
+                    classification="not_correction",
+                    rationale="Only one verdict returned.",
+                )
+            ]
+        )
+
+    monkeypatch.setattr(correction_learning_audit, "classify_with_model", incomplete)
+    with pytest.raises(correction_learning_audit.BatchVerdictMismatch) as caught:
+        correction_learning_audit.classify_in_batches(
+            exchanges,
+            [],
+            model="claude-code/sonnet",
+            trace_id="test/batch-id-mismatch",
+            batch_size=6,
+        )
+    assert caught.value.batch_index == 1
+    assert caught.value.missing_event_ids == ["turn-2"]
+
+
 def test_native_replay_rejects_nonexistent_source_revision() -> None:
     with pytest.raises(ValueError, match="resolvable Git commit"):
         correction_learning_audit.verified_frozen_revision(

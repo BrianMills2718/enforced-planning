@@ -542,3 +542,20 @@ leakage, or annotation below the ten-positive floor invalidates the run. Exact
 coverage, agreement, subgroup results by client, call latency/cost, prompt and
 corpus hashes, and trace IDs are secondary readouts. Any consequential decision
 requires fresh adversarial `eval-decision-signoff`.
+
+**Native v3 result: INVALID.** The single replay dispatched 17
+subscription-backed Sonnet calls with no route/schema error or retry, but batch
+four returned only five verdicts for its six frozen event IDs. The missing ID
+was `c76f54d31b2d26e76e9d8753`; no unexpected ID was returned. Because the
+pre-run contract makes any missing verdict invalidating, no accuracy metric or
+promotion claim is valid. The privacy-reduced invalid-run record reconstructed
+from the durable traces is
+`prompts/correction_learning/native_result_v3.json`; traces are under
+`correction-learning/correction-learning-native-v3/14d8820e9e4f/`.
+
+The harness defect was that it checked the combined ID set only after every
+batch, then raised before writing any result. It now validates each batch's
+exact event-ID set immediately and atomically preserves a privacy-reduced
+invalid result before returning failure. V3 remains development evidence and
+must not be retried or scored. A consequential decision still requires a fresh,
+precommitted holdout run followed by independent adversarial sign-off.

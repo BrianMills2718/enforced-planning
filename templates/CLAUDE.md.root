@@ -193,7 +193,9 @@ Non-interactive PR operations with preflight gates:
 
 `pr-auto` enforces:
 1. feature-branch only (not `main`)
-2. origin repo match (default from current directory via `PR_AUTO_EXPECTED_REPO`)
+2. origin repo match (default from the canonical Git common-directory parent
+   via `PR_AUTO_EXPECTED_REPO`, so a linked-worktree folder cannot replace the
+   repository identity)
 3. sanitized, process-isolated GitHub CLI auth (ignores token overrides and
    never changes the shared active account)
 4. rebase/push + PR create/reuse + auto-merge request

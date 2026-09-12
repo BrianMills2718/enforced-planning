@@ -665,3 +665,12 @@ metric name after controls became client-neutral. Neither defect changes v5's
 failure. Future result schema 1.1 now computes the declared 90%-recall,
 zero-false-positive, zero-ambiguous-positive, and zero-control-positive gate
 directly and uses `native_format_control_false_positives`.
+
+**Native v5 sign-off: ACCEPTED.** Independent verification reproduced source
+selection, exact event loading, annotation reconstruction, Git ordering,
+privacy boundaries, all 128 predictions, and 32 successful trace calls. The
+signed decision rejects the unchanged Prompt 1.2/Sonnet route for promotion,
+retains correction learning as manual/off, and stops further holdout spend or
+retuning on this route. This is a negative promotion decision, not activation or
+proof that the broader correction-learning objective is complete. The signed
+artifact is `docs/evidence/plan135_native_v5_signoff.md`.

@@ -1,6 +1,6 @@
 # Plan #136: Criterion-Bound Outcome Gate
 
-**Status:** Complete — local criterion gate and exact Plan 52 browser consumer evidenced; integration and fleet activation remain excluded
+**Status:** Complete — criterion gate and exact Plan 52 browser consumer evidenced; integration permitted under Brian's 2026-09-12 observe-only implementation authorization; fleet activation remains excluded
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -68,8 +68,10 @@ planning runtime owns the deterministic state transition.
 Version `1.2.0` activates the stronger contract. Older contracts remain valid
 but receive no implicit `review-ready` authority.
 
-The first slice is local and reversible. It does not install the change into
-other repositories, push, merge, publish, deploy, or invoke a model.
+The first slice is local and reversible. Brian's 2026-09-12 continuation
+authorizes normal recoverable branch integration for the observe-only
+implementation. It does not install the change into other repositories,
+activate a blocking gate, publish, deploy, or invoke a model.
 
 ## References Reviewed
 
@@ -178,8 +180,9 @@ authentic consumer before any rollout.
   `docs/evidence/plan136_criterion_bound_outcome_disposition.json` after the
   source and browser evidence were retained.
 
-This is local implementation and consumer evidence. It does not claim that the
-branch is merged, installed, or active across ordinary Codex sessions.
+This is implementation and consumer evidence suitable for normal branch
+integration. It does not claim installation, blocking enforcement, or active
+use across ordinary Codex sessions.
 
 ## Reassessment Contract
 

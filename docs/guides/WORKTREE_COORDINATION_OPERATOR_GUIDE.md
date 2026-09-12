@@ -238,6 +238,17 @@ without mutation. The acceptance alone never transfers or releases custody;
 the existing fenced claim/tracker transaction remains the only commit point.
 Manual handoff and recovery remain compatible and do not require these flags.
 
+Automatic same-thread owner resume is restricted to claims whose typed status
+is `active`. A `blocked` claim requires explicit progress that returns it to
+`active`; a `handoff` requires an explicit successor and is never translated
+into an owner prompt merely because its free-form `next_action` is non-empty.
+When more than one active claim for the same native session would otherwise be
+actionable, the shared sweep reports
+`multiple_auto_resume_claims_for_session` for every competing claim and queues
+none. This fail-closed rule prevents one thread from receiving unrelated
+project instructions; narrow custody to one active claim before automatic
+resume can continue.
+
 Before any successor exists, an operator or lifecycle service may preflight one
 prepared packet through the same live claim and Git checks without accepting or
 transferring custody:

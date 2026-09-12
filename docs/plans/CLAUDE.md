@@ -112,7 +112,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 132 | Overbroad Claim Narrowing and False-Serialization Repair (`132_overbroad_claim_narrowing.md`) | Critical | ✅ Complete | schema-v6 atomic narrowing and installed deny-narrow-admit-close proof accepted; Project Meta rollout is a separately claimed consumer phase |
 | 133 | Shared-surface change disclosure at closeout (`133_shared-surface-change-disclosure.md`) | Medium | 📋 Planned | closes the mechanism gap under pending policy `shared-surface-state-claims` (project-meta `0cda1bc2f0`) |
 | 134 | Resume-First Owner-Loss Recovery (`134_owner_loss_recovery.md`) | Critical | ✅ Complete — source accepted; host and three real consumers activated | low-friction recovery from stale or dead claim owners |
-| 135 | Correction-Aware Learning Gate (`135_correction_learning_gate.md`) | High | 🚧 In Progress — typed audit implemented; classifier manual/off | representative native corpus and independent sign-off before observe wiring |
+| 135 | Correction-Aware Learning Gate (`135_correction_learning_gate.md`) | High | 🚧 In Progress — Prompt 1.2/Sonnet route rejected; classifier manual/off | materially different detection design and new evidence before observe wiring |
 
 ## Status Key
 

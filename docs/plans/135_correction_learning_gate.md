@@ -1,8 +1,8 @@
 # Plan #135: Correction-Aware Learning Gate
 
-**Status:** In Progress — typed audit and deterministic Stop verifier
-implemented; native classifier remains manual/off pending representative native
-evidence
+**Status:** In Progress — Prompt 1.2/Sonnet promotion route rejected by signed
+native evidence; classifier remains manual/off pending a materially different
+detection design
 **Type:** implementation
 **Priority:** High
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -10,7 +10,8 @@ evidence
 **adrs_referenced:** []
 **research_citations:** []
 **Landscape disposition:** inline
-**Blocked By:** None
+**Blocked By:** A materially different correction-detection design with new
+evidence; further retuning or holdouts on the rejected route are not ready work
 **Blocks:** None
 
 `trace_evaluable: true`

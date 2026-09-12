@@ -43,6 +43,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+import yaml  # type: ignore[import-untyped]
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -144,6 +145,10 @@ def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> N
         )
         claim_files = list(CLAIMS_DIR.glob(f"*{branch}*"))
         assert claim_files, "no coordination claim file was created for the new branch"
+        claim = yaml.safe_load(claim_files[0].read_text(encoding="utf-8"))
+        assert claim["start_revision"] == payload["result"]["start_revision"]
+        tracker = yaml.safe_load(Path(claim["tracker_path"]).read_text(encoding="utf-8"))
+        assert tracker["claim"]["start_revision"] == payload["result"]["start_revision"]
     finally:
         close = _run_make(
             "session-close",
@@ -154,6 +159,7 @@ def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> N
             SESSION_NOTE="pytest e2e probe cleanup",
         )
         assert close.returncode == 0, close.stdout + close.stderr
+        assert "NOT CHECKED" not in close.stdout
         assert not worktree_dir.exists(), f"make session-close reported ok but {worktree_dir} still exists"
         assert not _branch_exists(branch, cwd=canonical_root), (
             "make session-close reported ok but branch still exists"

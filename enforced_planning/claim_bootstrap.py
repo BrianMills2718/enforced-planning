@@ -1974,6 +1974,43 @@ def _execute_maintenance_worktree(
                 populated.stderr.strip() or "maintenance worktree population failed after branch creation"
             )
 
+    def start_primary_session(*, start_revision: str | None) -> dict[str, Any]:
+        """Create or refresh the primary claim around the Git artifact boundary."""
+        return session_lifecycle.start_session(
+            agent=agent,
+            project=request.project,
+            scope=request.scope,
+            intent=goal,
+            repo_root=str(repo),
+            worktree_path=str(worktree),
+            branch=request.branch,
+            broader_goal=goal,
+            current_phase=request.current_phase if goal_bound else "maintenance-bootstrap",
+            plan_ref=request.plan_ref if goal_bound else None,
+            session_id=owner_session_id,
+            session_name=session_name,
+            claim_type=claim_type,
+            write_paths=request.write_paths,
+            read_paths=[],
+            parent_scope=parent_scope,
+            tracker_dir=SESSION_TRACKERS_DIR,
+            start_revision=start_revision,
+            intended_next_phases=(
+                [request.next_action]
+                if goal_bound and request.next_action
+                else None
+            ),
+            allow_unplanned=not goal_bound,
+            broad_scope_mode="bootstrap" if bootstrap_broad else None,
+            broad_scope_reason=(
+                f"construct this {bootstrap_kind} lane, then narrow before its first repository write"
+                if bootstrap_broad
+                else None
+            ),
+            target_worktree_path=str(worktree) if bootstrap_broad else None,
+            verified_goal_default_revision=starting_head if goal_bound else None,
+        )
+
     try:
         if delegated:
             start_delegated = getattr(session_lifecycle, "start_delegated_session", None)
@@ -2003,39 +2040,8 @@ def _execute_maintenance_worktree(
         else:
             if goal_bound:
                 create_git_artifacts()
-            payload = session_lifecycle.start_session(
-                agent=agent,
-                project=request.project,
-                scope=request.scope,
-                intent=goal,
-                repo_root=str(repo),
-                worktree_path=str(worktree),
-                branch=request.branch,
-                broader_goal=goal,
-                current_phase=request.current_phase if goal_bound else "maintenance-bootstrap",
-                plan_ref=request.plan_ref if goal_bound else None,
-                session_id=owner_session_id,
-                session_name=session_name,
-                claim_type=claim_type,
-                write_paths=request.write_paths,
-                read_paths=[],
-                parent_scope=parent_scope,
-                tracker_dir=SESSION_TRACKERS_DIR,
-                start_revision=starting_head if goal_bound else None,
-                intended_next_phases=(
-                    [request.next_action]
-                    if goal_bound and request.next_action
-                    else None
-                ),
-                allow_unplanned=not goal_bound,
-                broad_scope_mode="bootstrap" if bootstrap_broad else None,
-                broad_scope_reason=(
-                    f"construct this {bootstrap_kind} lane, then narrow before its first repository write"
-                    if bootstrap_broad
-                    else None
-                ),
-                target_worktree_path=str(worktree) if bootstrap_broad else None,
-                verified_goal_default_revision=starting_head if goal_bound else None,
+            payload = start_primary_session(
+                start_revision=starting_head if goal_bound else None
             )
     except Exception as exc:
         if delegated:
@@ -2155,6 +2161,10 @@ def _execute_maintenance_worktree(
     try:
         if not delegated and not goal_bound:
             create_git_artifacts()
+            # The initial claim authorizes Git artifact creation. Once those
+            # exact artifacts exist, attach the already-resolved remote-default
+            # revision so closeout can measure concurrent arrivals precisely.
+            payload = start_primary_session(start_revision=starting_head)
         lock_reconciliation = _reconcile_canonical_after_claim(
             repo,
             session_id=session_id,

@@ -2753,6 +2753,21 @@ def _validate_locked_sanctioned_maintenance_refresh(
     """Validate immutable refresh inputs against one locked claim/tracker snapshot."""
 
     effective_start_revision = existing_claim.start_revision if start_revision is None else start_revision
+    attaching_bootstrap_start_revision = (
+        existing_claim.start_revision is None
+        and start_revision is not None
+        and existing_claim.plan_ref == "UNPLANNED"
+        and current_phase == "maintenance-bootstrap"
+    )
+    if attaching_bootstrap_start_revision:
+        coordination_claims.validate_start_revision_targets(
+            repo_root=repo_root,
+            start_revision=start_revision,
+            branch=branch,
+            worktree_path=worktree_path,
+            require_branch=True,
+            require_worktree=True,
+        )
     effective_plan_repo_root = existing_claim.plan_repo_root if plan_repo_root is None else plan_repo_root
     effective_plan_revision = existing_claim.plan_revision if plan_start_point is None else plan_start_point
     effective_broad_scope_mode = existing_claim.broad_scope_mode if broad_scope_mode is None else broad_scope_mode
@@ -2836,7 +2851,12 @@ def _validate_locked_sanctioned_maintenance_refresh(
         "parent_scope": (parent_scope, existing_claim.parent_scope),
         "work_graph_path": (work_graph_path, existing_claim.work_graph_path),
         "work_unit_id": (work_unit_id, existing_claim.work_unit_id),
-        "start_revision": (effective_start_revision, existing_claim.start_revision),
+        "start_revision": (
+            existing_claim.start_revision
+            if attaching_bootstrap_start_revision
+            else effective_start_revision,
+            existing_claim.start_revision,
+        ),
         "plan_repo_root": (contract.plan_repo_root, existing_claim.plan_repo_root),
         "plan_revision": (contract.plan_revision, existing_claim.plan_revision),
         "allow_parallel": (allow_parallel, existing_claim.parallel_root_authorized),
@@ -3246,11 +3266,18 @@ def start_session(
                             tracker_dir=tracker_dir,
                         )
                         tracker_section = locked_tracker_payload.get("tracker")
+                        tracker_claim_section = locked_tracker_payload.get("claim")
                         timestamps = locked_tracker_payload.get("timestamps")
-                        if not isinstance(tracker_section, dict) or not isinstance(timestamps, dict):
+                        if (
+                            not isinstance(tracker_claim_section, dict)
+                            or not isinstance(tracker_section, dict)
+                            or not isinstance(timestamps, dict)
+                        ):
                             raise ValueError(
-                                "sanctioned maintenance tracker is missing execution or timestamp metadata"
+                                "sanctioned maintenance tracker is missing claim, execution, or timestamp metadata"
                             )
+                        if locked_claim.start_revision is None and contract.start_revision is not None:
+                            tracker_claim_section["start_revision"] = contract.start_revision
                         tracker_section["current_phase"] = tracker.current_phase
                         timestamps["updated_at"] = tracker.updated_at
                         session_contracts._atomic_write_session_tracker(

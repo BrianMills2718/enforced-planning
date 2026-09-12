@@ -405,8 +405,13 @@ and refresh the pre-write projection in the same locked mutation.
    `make maintenance-worktree BRANCH=<name>`; the Make target builds one typed
    `maintenance_worktree` request and delegates claim, worktree, tracker, and
    explicit `UNPLANNED` linkage creation to the atomic claim-bootstrap
-   transaction. `BRANCH` is the only required input and the agent defaults from
-   the runtime. When the lane does not declare `SESSION_WRITE_PATHS`, the typed
+   transaction. Because the claim must authorize branch creation, this is a
+   two-phase transaction: it first records the exact session ownership, creates
+   the branch/worktree at the freshly resolved remote-default revision, then
+   atomically attaches that same `start_revision` to both claim and tracker.
+   Closeout therefore has an exact lower bound for reporting commits that
+   arrived outside the lane. `BRANCH` is the only required input and the agent
+   defaults from the runtime. When the lane does not declare `SESSION_WRITE_PATHS`, the typed
    transaction supplies the one temporary program write scope itself (`.`): it
    is bounded by the named repository, branch, worktree, and native session,
    then must be narrowed before scoped implementation begins.
@@ -851,11 +856,11 @@ Three outcomes, and the last two are deliberately not interchangeable:
   landed
 
 The range's lower bound is the claim's `start_revision` where one exists, and the
-lane's merge-base otherwise. Only 2 of 72 live claims carried a `start_revision`
-when this shipped, because it is populated for plan-graph-backed lanes and
-nothing else, so the merge-base is the common case; the rendered line says which
-was used, because a lane that rebased onto newer main moves its merge-base
-forward and will under-report.
+lane's merge-base otherwise. Plan-, goal-, delegated-maintenance, and newly
+created ordinary maintenance lanes retain that revision. Legacy lanes without
+it still use the merge-base fallback; the rendered line says which was used,
+because a lane that rebased onto newer main moves its merge-base forward and
+will under-report.
 
 ### Overlapping an undeclared whole-repository claim
 

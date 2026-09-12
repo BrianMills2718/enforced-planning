@@ -163,6 +163,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 
+def _resolve_durable_repo_root(repo_root: Path = REPO_ROOT) -> Path:
+    """Return the canonical checkout that survives linked-worktree removal."""
+
+    common_dir = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if common_dir.returncode != 0 or not common_dir.stdout.strip():
+        return repo_root.resolve()
+    return Path(common_dir.stdout.strip()).resolve().parent
+
+
 def _resolve_canonical_lock_module(
     *,
     repo_root: Path = REPO_ROOT,
@@ -180,21 +201,8 @@ def _resolve_canonical_lock_module(
     resolved_script = (script_path or Path(__file__)).resolve()
     here = resolved_script.parent
     bases: list[Path] = []
-    common_dir = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo_root),
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-common-dir",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if common_dir.returncode == 0:
-        canonical_root = Path(common_dir.stdout.strip()).resolve().parent
+    canonical_root = _resolve_durable_repo_root(repo_root)
+    if canonical_root != repo_root.resolve():
         try:
             script_directory = here.relative_to(repo_root.resolve())
         except ValueError:
@@ -275,7 +283,11 @@ def _lane_range_basis(project: str, scope: str, branch: str | None) -> tuple[str
 
 
 def _report_shared_ref_movement(
-    since_revision: str | None, basis: str, lane_refs: tuple[str, ...]
+    since_revision: str | None,
+    basis: str,
+    lane_refs: tuple[str, ...],
+    *,
+    repo_root: Path = REPO_ROOT,
 ) -> None:
     """Say whether the shared branch moved from outside this lane while it was open.
 
@@ -284,7 +296,7 @@ def _report_shared_ref_movement(
     reaches the operator without disturbing --json consumers.
     """
     report = concurrent_writers.collect_shared_ref_movement(
-        REPO_ROOT,
+        repo_root,
         ref="origin/main",
         since_revision=since_revision,
         lane_refs=lane_refs,
@@ -296,6 +308,7 @@ def _report_shared_ref_movement(
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     since_revision, range_basis = _lane_range_basis(args.project, args.scope, args.branch)
+    durable_repo_root = _resolve_durable_repo_root()
     # Resolve this while the lane still exists. close_session() can remove the
     # worktree containing this script, so a relative lookup after closeout can
     # no longer find the reconciliation helper.
@@ -314,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         since_revision,
         range_basis,
         tuple(ref for ref in (args.branch or args.scope, args.merge_commit) if ref),
+        repo_root=durable_repo_root,
     )
     return 0
 

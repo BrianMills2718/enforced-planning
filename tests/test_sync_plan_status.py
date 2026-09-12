@@ -12,6 +12,7 @@ import sys
 import textwrap
 from pathlib import Path
 
+import pytest
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 
@@ -258,3 +259,111 @@ def test_parse_index_table_plan_numbers_are_integers(tmp_path: Path) -> None:
     result = m.parse_index_table(index_path)  # type: ignore[attr-defined]
     for key in result:
         assert isinstance(key, int)
+
+
+def test_consistency_uses_index_link_to_select_numbered_plan_from_supporting_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A numbered mockup must not overwrite its canonical plan's status."""
+
+    m = _load()
+    plans_dir = tmp_path / "plans"
+    plans_dir.mkdir()
+    index_path = plans_dir / "CLAUDE.md"
+    index_path.write_text(
+        textwrap.dedent(
+            """\
+            | # | Gap | Priority | Status | Blocks |
+            |---|-----|----------|--------|--------|
+            | 66 | Lifecycle (`66_lifecycle.md`) | High | ✅ Design complete | future |
+            | — | Lifecycle mockup (`66_lifecycle_mockup.md`) | High | 🟡 Proposed | review |
+            """
+        ),
+        encoding="utf-8",
+    )
+    _write_plan(
+        plans_dir,
+        "66_lifecycle.md",
+        """
+        # Plan #66: Lifecycle
+        **Status:** Design complete
+        """,
+    )
+    _write_plan(
+        plans_dir,
+        "66_lifecycle_mockup.md",
+        """
+        # Plan 66 lifecycle mockup
+        > **Status:** Proposed design seam
+        """,
+    )
+    monkeypatch.setattr(m, "PLANS_DIR", plans_dir)
+    monkeypatch.setattr(m, "INDEX_FILE", index_path)
+
+    assert m.check_consistency() == []  # type: ignore[attr-defined]
+
+
+def test_ambiguous_numbered_plan_files_fail_visible_instead_of_overwriting_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A duplicate without one exact index filename cannot be selected by sort order."""
+
+    m = _load()
+    plans_dir = tmp_path / "plans"
+    plans_dir.mkdir()
+    index_path = plans_dir / "CLAUDE.md"
+    index_path.write_text(
+        textwrap.dedent(
+            """\
+            | # | Gap | Priority | Status | Blocks |
+            |---|-----|----------|--------|--------|
+            | 7 | Ambiguous plan | High | ✅ Complete | - |
+            """
+        ),
+        encoding="utf-8",
+    )
+    _write_plan(plans_dir, "07_alpha.md", "# Alpha\n**Status:** ✅ Complete\n")
+    _write_plan(plans_dir, "07_beta.md", "# Beta\n**Status:** 🚧 In Progress\n")
+    monkeypatch.setattr(m, "PLANS_DIR", plans_dir)
+    monkeypatch.setattr(m, "INDEX_FILE", index_path)
+
+    issues = m.check_consistency()  # type: ignore[attr-defined]
+
+    assert [issue["issue"] for issue in issues] == ["ambiguous_plan_files"]
+    assert "07_alpha.md, 07_beta.md" in issues[0]["message"]
+    assert m.sync_index_to_plans() == 1  # type: ignore[attr-defined]
+
+
+def test_sync_preserves_custom_status_unknown_to_legacy_emoji_map(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sync must not replace a richer custom status with an unknown marker."""
+
+    m = _load()
+    plans_dir = tmp_path / "plans"
+    plans_dir.mkdir()
+    index_path = plans_dir / "CLAUDE.md"
+    original = textwrap.dedent(
+        """\
+        | # | Gap | Priority | Status | Blocks |
+        |---|-----|----------|--------|--------|
+        | 51 | Upgrade (`51_upgrade.md`) | High | 🟡 Partial — rollout pending | future |
+        """
+    )
+    index_path.write_text(original, encoding="utf-8")
+    _write_plan(
+        plans_dir,
+        "51_upgrade.md",
+        """
+        # Plan #51: Upgrade
+        **Status:** Partial — rollout pending
+        """,
+    )
+    monkeypatch.setattr(m, "PLANS_DIR", plans_dir)
+    monkeypatch.setattr(m, "INDEX_FILE", index_path)
+
+    assert m.sync_index_to_plans() == 0  # type: ignore[attr-defined]
+    assert index_path.read_text(encoding="utf-8") == original

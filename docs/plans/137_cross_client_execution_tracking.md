@@ -1,6 +1,6 @@
 # Plan #137: Observe-Only Cross-Client Execution Tracking
 
-**Status:** Planned — user-authorized local implementation; no host activation or blocking enforcement
+**Status:** In Progress — XCET-01 accepted locally; Codex and Claude adapter lanes ready; no host activation or blocking enforcement
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -218,12 +218,12 @@ graph, roadmap, and plan index.
 
 ## Acceptance criteria
 
-- [ ] The neutral contract adds no duplicate outcome, claim, session, mailbox,
+- [x] The neutral contract adds no duplicate outcome, claim, session, mailbox,
       project, or work-unit authority.
-- [ ] Stable item identity survives display rename/reorder and event replay.
-- [ ] All-green native items with one missing or stale criterion receipt cannot
+- [x] Stable item identity survives display rename/reorder and event replay.
+- [x] All-green native items with one missing or stale criterion receipt cannot
       close the canonical goal.
-- [ ] A current fully evidenced result closes exactly once through
+- [x] A current fully evidenced result closes exactly once through
       `propose_goal_completion`.
 - [ ] Codex and Claude isolated sessions visibly project the same canonical
       fixture and retain native event evidence with client/version/configuration.
@@ -238,6 +238,20 @@ graph, roadmap, and plan index.
       friction, latency, and unsupported capability incidence.
 
 ## Verification
+
+- XCET-01 implementation commit
+  `56f530bf6e25bfe74db17c217e0879e6a990c59b` adds only the neutral execution
+  projection, native divergence observation, completion proposal, and focused
+  tests to the existing outcome lineage. It does not add persistence, mailbox,
+  claim, session, or project authority.
+- 123 focused and compatibility tests pass across cross-client execution,
+  criterion-bound outcomes, outcome continuation, portfolio admission, and
+  outcome selection. Source and test mypy pass; affected Ruff passes with the
+  repository's existing `FLY002` exception.
+- Negative controls cover stale projection and lease revisions, unresolved
+  dependencies, transition and completion ID collisions, missing/stale
+  criterion evidence, omitted and unknown criterion links, false native match,
+  and unavailable native capability.
 
 - Focused Pydantic contract tests for identity, revision, dependencies,
   idempotency, evidence freshness, completion, and divergence.

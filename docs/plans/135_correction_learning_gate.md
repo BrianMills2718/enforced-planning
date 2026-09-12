@@ -508,6 +508,23 @@ retaining. `docs/evidence/plan135_native_v2_signoff_r1.md` and
 privacy to rescue the run, v2 is development evidence only. A v3 holdout must
 commit privacy-reduced independent labels and adjudications before replay.
 
+### Native corpus v3 pre-registration
+
+Prompt 1.2 and the revision-validating replay harness were frozen at
+`29ab33b8bd31e86929518b35f8b98c8a2c51e5f7` before v3 source selection. V3 uses
+the next unseen rank window (`16:32`) from the unchanged deterministic v2
+source-ranking rule. The eligible universe contained 16 further Codex and nine
+further Claude Code session windows, yielding 100 exact cases across 25 native
+sessions in `docs/evidence/plan135_native_v3_candidates.json`. No source prose
+was inspected during selection and no v1/v2/development session is eligible.
+
+The v2 claim, thresholds, invalid-run rules, six-case batches, model, tools,
+budget, and sign-off requirement remain unchanged. Two blind annotators and a
+third disagreement adjudicator must emit privacy-reduced event-ID/label records
+that are committed before the final corpus and before replay. If fewer than ten
+adjudicated corrections are present, the next available Codex ranks must be
+frozen and annotated before replay; cases may not be removed after annotation.
+
 The primary gates are at least 90% correction recall, zero correction verdicts
 among adjudicated non-corrections, and zero correction verdicts among ambiguous
 boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source

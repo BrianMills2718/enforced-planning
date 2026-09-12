@@ -1,0 +1,61 @@
+{
+  "active_slice": {
+    "description": "Implement and verify the stable execution projection, divergence observation, and canonical completion proposal.",
+    "next_action": "Write focused failing tests for stable identity, replay, stale evidence, incomplete completion, and divergence before implementing the contract.",
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "xcet-01-neutral-contract",
+    "status": "executing",
+    "target_revision": "22664715dfb995210073a9fca54b38555f78b5e0"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 3,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "plan137-xcet01-contract-implementation",
+  "cursor_revision": 1,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "cross-client-outcome-alignment",
+  "lifecycle_state": "active",
+  "observations": [],
+  "plan_revision": "22664715dfb995210073a9fca54b38555f78b5e0",
+  "ready_alternatives": [
+    {
+      "description": "Extend the AES native Codex adapter after XCET-01 acceptance.",
+      "ready": false,
+      "slice_id": "xcet-02-codex-adapter"
+    },
+    {
+      "description": "Add the isolated Claude Task adapter after XCET-01 acceptance.",
+      "ready": false,
+      "slice_id": "xcet-03-claude-adapter"
+    }
+  ],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan137-xcet01-contract-implementation",
+    "repository": "enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/plan137-xcet01-contract-implementation"
+  }
+}

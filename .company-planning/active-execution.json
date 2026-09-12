@@ -1,12 +1,12 @@
 {
   "active_slice": {
     "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
-    "next_action": "After new unseen native correction traffic exists, freeze a schema 1.1 complete corpus and obtain fresh independent signoff.",
+    "next_action": "Obtain fresh independent signoff on the v4 invalidation, cumulative manual-off decision, and execution circuit breaker.",
     "requires_external_action": false,
     "requires_spend": false,
     "slice_id": "native-corpus-and-signoff",
     "status": "verifying",
-    "target_revision": "f5680f7"
+    "target_revision": "d7949af566021eca4f1dccf3dbf866a867f868f9"
   },
   "authority": {
     "external_action_authorized": false,
@@ -24,53 +24,60 @@
   "completion": {
     "evidence_revision": null,
     "receipt_ref": null,
-    "remaining_ready_work": 0,
+    "remaining_ready_work": 1,
     "requested": false,
     "verifier_outcome": "fail"
   },
   "cursor_id": "plan-135-native-corpus-signoff-v3",
-  "cursor_revision": 4,
+  "cursor_revision": 5,
   "failure_state": {
-    "boundary": "native-corpus-integrity",
-    "last_failure_ref": "docs/evidence/plan135_native_corpus_signoff.md@b6303b3",
-    "same_boundary_failures": 1
+    "boundary": "evaluation-runtime-integrity",
+    "last_failure_ref": "prompts/correction_learning/native_result_v4.json@d7949af566021eca4f1dccf3dbf866a867f868f9",
+    "same_boundary_failures": 2
   },
   "goal_ref": "correction-aware-agent-learning",
   "lifecycle_state": "active",
   "observations": [
     {
       "boundary": "promotion-evidence",
-      "evidence_ref": "docs/plans/135_correction_learning_gate.md#classifier-pilot-pre-registration",
+      "evidence_ref": "prompts/correction_learning/native_result_v2.json@7f35f22",
       "kind": "verification_failure",
-      "observation_id": "synthetic-pilot-rejected",
+      "observation_id": "native-v2-valid-fail",
       "outcome": "fail"
     },
     {
-      "boundary": "promotion-evidence",
-      "evidence_ref": "prompts/correction_learning/native_corpus_v1.json@2434017",
+      "boundary": "native-corpus-integrity",
+      "evidence_ref": "docs/evidence/plan135_native_v2_signoff_r2.md@29ab33b",
+      "kind": "verification_failure",
+      "observation_id": "native-v2-signoff-rejected",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "prompts/correction_learning/native_result_v3.json@84b8d2d",
+      "kind": "verification_failure",
+      "observation_id": "native-v3-missing-verdict-invalid",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "scripts/correction_learning_audit.py@84b8d2d",
       "kind": "supporting_work",
-      "observation_id": "native-corpus-frozen",
+      "observation_id": "per-batch-id-guard",
       "outcome": "pass"
     },
     {
-      "boundary": "native-classifier-generalization",
-      "evidence_ref": "prompts/correction_learning/native_result_v1.json@85095b1",
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "prompts/correction_learning/native_result_v4.json@d7949af566021eca4f1dccf3dbf866a867f868f9",
       "kind": "verification_failure",
-      "observation_id": "native-corpus-classifier-failed",
+      "observation_id": "native-v4-route-failure-invalid",
       "outcome": "fail"
     },
     {
-      "boundary": "native-corpus-integrity",
-      "evidence_ref": "docs/evidence/plan135_native_corpus_signoff.md@b6303b3",
-      "kind": "verification_failure",
-      "observation_id": "native-corpus-signoff-rejected",
-      "outcome": "fail"
-    },
-    {
-      "boundary": "native-corpus-integrity",
-      "evidence_ref": "enforced_planning/correction_learning.py@f5680f7",
+      "boundary": "evaluation-runtime-integrity",
+      "evidence_ref": "scripts/correction_learning_audit.py@d7949af566021eca4f1dccf3dbf866a867f868f9",
       "kind": "supporting_work",
-      "observation_id": "native-evidence-boundaries-repaired",
+      "observation_id": "all-batch-failures-retained",
       "outcome": "pass"
     }
   ],

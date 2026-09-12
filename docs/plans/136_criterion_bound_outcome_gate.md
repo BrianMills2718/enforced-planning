@@ -110,7 +110,8 @@ but not adoption.
 
 - A `1.2.0` outcome contract must contain unique, frozen success criteria.
 - Behavioral progress must name at least one criterion, bind it to one artifact
-  SHA-256, carry discriminating evidence, and identify an independent verifier.
+  SHA-256, carry discriminating evidence, and identify both the producer and an
+  independent verifier whose identities differ.
 - Changing the candidate artifact clears accumulated passing criteria rather
   than inheriting them.
 - A rejection receipt adds the exact artifact digest to the lineage's durable

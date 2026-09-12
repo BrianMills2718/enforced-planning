@@ -263,6 +263,7 @@ class OutcomeProgressReceiptV1(StrictModel):
     artifact_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     artifact_disposition: ArtifactDisposition | None = None
     criterion_ids: list[str] = Field(default_factory=list)
+    producer_id: str | None = None
     verifier_id: str | None = None
     verification_role: VerificationRole | None = None
 
@@ -286,9 +287,17 @@ class OutcomeProgressReceiptV1(StrictModel):
         artifact_fields = (self.artifact_sha256, self.artifact_disposition)
         if any(value is None for value in artifact_fields) != all(value is None for value in artifact_fields):
             raise ValueError("artifact_sha256 and artifact_disposition must be supplied together")
-        verification_fields = (self.verifier_id, self.verification_role)
+        verification_fields = (self.producer_id, self.verifier_id, self.verification_role)
         if any(value is None for value in verification_fields) != all(value is None for value in verification_fields):
-            raise ValueError("verifier_id and verification_role must be supplied together")
+            raise ValueError(
+                "producer_id, verifier_id, and verification_role must be supplied together"
+            )
+        if self.producer_id is not None:
+            _portable_id(self.producer_id, field_name="producer_id")
+        if self.verifier_id is not None:
+            _portable_id(self.verifier_id, field_name="verifier_id")
+        if self.verification_role == "independent" and self.producer_id == self.verifier_id:
+            raise ValueError("independent verifier_id must differ from producer_id")
         for criterion_id in self.criterion_ids:
             _portable_id(criterion_id, field_name="criterion_ids")
         if len(set(self.criterion_ids)) != len(self.criterion_ids):
@@ -572,6 +581,7 @@ def transition_lease(
                 or receipt.artifact_sha256 is None
                 or not receipt.criterion_ids
                 or receipt.verification_role != "independent"
+                or receipt.producer_id is None
                 or receipt.verifier_id is None
                 or not receipt.discriminating_evidence
             ):

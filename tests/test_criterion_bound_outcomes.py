@@ -75,6 +75,8 @@ def receipt(
     artifact: str,
     criteria: list[str],
     role: str = "independent",
+    producer_id: str = "dashboard-producer",
+    verifier_id: str = "browser-verifier",
 ) -> OutcomeProgressReceiptV1:
     return OutcomeProgressReceiptV1(
         receipt_id=receipt_id,
@@ -88,7 +90,8 @@ def receipt(
         artifact_sha256=artifact,
         artifact_disposition="evidenced",
         criterion_ids=criteria,
-        verifier_id="browser-verifier",
+        producer_id=producer_id,
+        verifier_id=verifier_id,
         verification_role=role,
     )
 
@@ -141,6 +144,18 @@ def test_producer_cannot_self_verify_behavioral_progress() -> None:
                 criteria=["company-work-top-to-bottom"],
                 role="producer",
             ),
+        )
+
+
+def test_independent_label_cannot_hide_same_producer_and_verifier() -> None:
+    with pytest.raises(ValidationError, match="must differ from producer_id"):
+        receipt(
+            receipt_id="same-identity",
+            prior=None,
+            artifact=ARTIFACT_A,
+            criteria=["company-work-top-to-bottom"],
+            producer_id="dashboard-producer",
+            verifier_id="dashboard-producer",
         )
 
 

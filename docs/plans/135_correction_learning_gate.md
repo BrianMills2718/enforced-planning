@@ -453,6 +453,15 @@ before replay. Otherwise the one permitted held-out run uses the committed
 prompt, typed schema, stripped Sonnet route, six cases per batch, no tools or
 setting sources, and a `$0.05` maximum marginal budget.
 
+The initial blind annotations contained only five unanimously labeled
+corrections (six from one annotator before adjudication), below the frozen
+ten-positive floor. Before any classifier replay, the next eight paths per
+client in the same hash order and their hash-derived four-exchange windows were
+therefore frozen as
+`docs/evidence/plan135_native_v2_extension1_candidates.json`. The original 64
+cases remain in the combined population; none were removed or relabeled to meet
+the floor.
+
 The primary gates are at least 90% correction recall, zero correction verdicts
 among adjudicated non-corrections, and zero correction verdicts among ambiguous
 boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source

@@ -197,10 +197,14 @@ the single `vertical` unit. No enabler or hardening unit may delay that fixture.
    false-pass, false-block, divergence, replay, friction, version, and latency
    observations suitable for a later promotion decision.
 
-XCET-02 and XCET-03 become ready after XCET-01 and can execute in parallel in
-disjoint repositories. XCET-04 requires both adapters. Completion/status
-updates are owned by XCET-04 so the plan, graph, roadmap, and plan index cannot
-drift at closeout.
+XCET-01 owns its own acceptance update across the graph and three human-facing
+status surfaces. XCET-02 and XCET-03 become ready after XCET-01 and can execute
+in parallel in disjoint repositories. Because the AES lane cannot write the
+Enforced Planning graph, XCET-03 owns the joint adapter acceptance transition:
+it may mark XCET-02 and XCET-03 accepted only after independently verifying the
+exact merged AES evidence and its own Claude evidence. XCET-04 requires both
+accepted adapters and owns the final synchronized closeout across the plan,
+graph, roadmap, and plan index.
 
 ## Epistemic Planning Frontier
 

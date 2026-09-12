@@ -8,6 +8,7 @@ generated/*
 !generated/README.md
 .codex/
 worktrees/
+.doc-coupling-acks
 !.company-planning/
 !.company-planning/active-execution.json
 !.company-planning/history/

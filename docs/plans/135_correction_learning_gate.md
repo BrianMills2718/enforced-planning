@@ -525,6 +525,15 @@ that are committed before the final corpus and before replay. If fewer than ten
 adjudicated corrections are present, the next available Codex ranks must be
 frozen and annotated before replay; cases may not be removed after annotation.
 
+V3 annotation produced 91/100 independent agreement and nine blindly
+adjudicated disagreements, yielding 17 corrections and 83 non-corrections. The
+candidate, both privacy-reduced label sets, and privacy-reduced adjudication were
+committed in that order before `native_corpus_v3.json` was assembled. Run
+`docs/evidence/plan135_native_v3_annotation_check.py` to recompute the final
+labels, and `plan135_native_v2_selection.py` to reproduce the rank-16:32 source
+sample. The corpus is frozen; the next permitted action is its one held-out
+replay from the exact Git revision containing these bytes.
+
 The primary gates are at least 90% correction recall, zero correction verdicts
 among adjudicated non-corrections, and zero correction verdicts among ambiguous
 boundaries. Missing/duplicate IDs, provenance mismatch, incomplete source

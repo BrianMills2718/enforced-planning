@@ -141,8 +141,8 @@ WORKTREE_RAISE_CONCERN_SCRIPT := scripts/meta/worktree-coordination/raise_concer
 WORKTREE_PLAN_READINESS_SCRIPT := scripts/check_plan_readiness.py
 WORKTREE_FINISH_SCRIPT := scripts/worktree-coordination/finish_pr.py
 SURFACE_RUNTIME_SCRIPT := scripts/surface_runtime.py
-WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
+WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root "$(WORKTREE_REPO_ROOT)" --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_START_REVISION ?=
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)

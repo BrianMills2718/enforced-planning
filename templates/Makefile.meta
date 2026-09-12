@@ -6,7 +6,7 @@ SCRIPTS_META := scripts/meta
 PLANS_DIR := docs/plans
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 GITHUB_ACCOUNT ?= BrianMills2718
-PR_AUTO_EXPECTED_REPO ?= $(notdir $(CURDIR))
+PR_AUTO_EXPECTED_REPO ?= $(notdir $(shell dirname $$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) 2>/dev/null))
 
 # --- Session Start ---
 .PHONY: status

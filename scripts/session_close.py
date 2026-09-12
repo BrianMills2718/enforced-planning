@@ -326,7 +326,17 @@ def main(argv: list[str] | None = None) -> int:
     _report_shared_ref_movement(
         since_revision,
         range_basis,
-        tuple(ref for ref in (args.branch or args.scope, args.merge_commit) if ref),
+        tuple(
+            dict.fromkeys(
+                ref
+                for ref in (
+                    args.branch or args.scope,
+                    args.merge_commit,
+                    payload.get("merge_commit"),
+                )
+                if ref
+            )
+        ),
         repo_root=durable_repo_root,
     )
     return 0

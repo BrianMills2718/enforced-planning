@@ -217,6 +217,7 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
             "branch_action": "deleted",
             "disposition": "merged",
             "released": True,
+            "merge_commit": "abc123",
         }
 
     monkeypatch.setattr(module.session_lifecycle, "close_session", close_session)
@@ -228,9 +229,10 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
 
     monkeypatch.setattr(module, "_reconcile_canonical_lock", reconcile)
 
-    def report(*_args, repo_root: Path) -> None:
+    def report(_since_revision, _basis, lane_refs, *, repo_root: Path) -> None:
         events.append("report")
         assert repo_root == durable_root
+        assert lane_refs == ("lane", "abc123")
 
     monkeypatch.setattr(module, "_report_shared_ref_movement", report)
 

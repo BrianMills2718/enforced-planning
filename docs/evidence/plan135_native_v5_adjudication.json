@@ -1,0 +1,49 @@
+{
+  "annotator": "adjudicator",
+  "labels": [
+    {
+      "event_id": "17680fc23c76b54e6d8e691c",
+      "label": "correction"
+    },
+    {
+      "event_id": "fbbb5ca3de005e77e0e70f15",
+      "label": "ambiguous"
+    },
+    {
+      "event_id": "f450a38e2bb1d2ce6f7e2b1a",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7c18e3ed628cf17e23d1ce15",
+      "label": "correction"
+    },
+    {
+      "event_id": "619bd77654106c2aa3f1876e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "bf8e956dc09a854e6a7adb3f",
+      "label": "correction"
+    },
+    {
+      "event_id": "6d908f2f67a5317ee1e060f7",
+      "label": "correction"
+    },
+    {
+      "event_id": "3908642c2f1035bc5ba757c3",
+      "label": "correction"
+    },
+    {
+      "event_id": "b84cb681d02a1dfca28ce244",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "701ceff9d1cda7633674ed44",
+      "label": "correction"
+    },
+    {
+      "event_id": "ba46d1bb063e7ae7c7b01b44",
+      "label": "correction"
+    }
+  ]
+}

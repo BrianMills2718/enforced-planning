@@ -80,55 +80,6 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
-      "id": "xcet-02-codex-adapter",
-      "initiative_id": "agentic-engineering",
-      "goal_id": "cross-client-outcome-alignment",
-      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
-      "spec_revision": "plan-137-work-graph-v1",
-      "title": "Project canonical execution state through native Codex",
-      "class": "implementation",
-      "objective": "Extend the existing AES App Server adapter with an observe-only translation of neutral execution state and correlated pushed observations.",
-      "profile": "standard",
-      "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
-      "scope": {
-        "included": ["AES App Server projection", "Pushed plan-event observation", "Capability diagnostics", "Isolated authentic Codex probe"],
-        "excluded": ["New process supervisor", "TUI attachment", "Global hook activation", "Canonical state ownership"]
-      },
-      "inputs": [{"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"}],
-      "outputs": ["Codex projection adapter", "Native event correlations", "Capability/limitation evidence"],
-      "dependencies": [
-        {
-          "unit_id": "xcet-01-neutral-contract",
-          "type": "hard",
-          "gate": {"type": "unit_status", "required_status": "accepted"},
-          "rationale": "The adapter must consume one accepted neutral contract rather than defining runtime-owned state."
-        }
-      ],
-      "conflict_surfaces": [
-        {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "agentic-engineering-system", "access": "exclusive"},
-        {"kind": "repository_path", "target": "src/aes/orchestration/native_codex.py", "repository": "agentic-engineering-system", "access": "exclusive"},
-        {"kind": "repository_path", "target": "src/aes/orchestration/contracts.py", "repository": "agentic-engineering-system", "access": "exclusive"},
-        {"kind": "repository_path", "target": "tests/test_native_codex_adapter.py", "repository": "agentic-engineering-system", "access": "exclusive"}
-      ],
-      "acceptance": [
-        {
-          "id": "XCET02-A1",
-          "criterion": "An isolated native Codex session renders the neutral fixture and correlates pushed observations without gaining canonical completion authority.",
-          "evidence_required": ["Focused adapter tests", "Authentic App Server command, version, configuration, and event trace"],
-          "negative_control": "Missing, malformed, bypassed, or reordered native events remain unavailable or divergent rather than successful."
-        }
-      ],
-      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
-      "authorization_mode": "registry_claim",
-      "status": "ready",
-      "record_version": 1,
-      "created_at": "2026-09-12T17:00:00Z",
-      "updated_at": "2026-09-12T22:25:00Z"
-    },
-    {
-      "schema_version": "1.0",
-      "record_type": "work_unit",
       "id": "xcet-03-claude-adapter",
       "initiative_id": "agentic-engineering",
       "goal_id": "cross-client-outcome-alignment",
@@ -141,7 +92,7 @@
       "execution_class": "independently_executable",
       "claimability": "ready_for_execution",
       "scope": {
-        "included": ["Claude Task projection", "Tool/hook observation translation", "Capability diagnostics", "Isolated authentic Claude probe"],
+        "included": ["Claude Task projection", "Tool/hook observation translation", "Capability diagnostics", "Isolated authentic Claude probe", "Independent validation of the exact accepted AES Codex adapter evidence"],
         "excluded": ["Global hook activation", "Always-on review", "Automatic continuation", "Canonical state ownership"]
       },
       "inputs": [{"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"}],
@@ -169,6 +120,12 @@
           "criterion": "An isolated Claude session renders the neutral fixture and correlates Task tool or hook observations without gaining canonical completion authority.",
           "evidence_required": ["Focused adapter tests", "Authentic Claude command, version, configuration, and event trace"],
           "negative_control": "Disabled tools, hook failure, interruption, or task completion remains explicit non-success for the canonical goal."
+        },
+        {
+          "id": "XCET03-A2",
+          "criterion": "Joint adapter acceptance names and independently validates the exact merged AES target-graph evidence before this Enforced Planning unit becomes accepted.",
+          "evidence_required": ["Exact AES merge revision", "AES target work graph acceptance", "Independent focused replay of retained Codex evidence"],
+          "negative_control": "AES worker prose, a branch-only result, or an unaccepted AES target unit cannot unblock the integrated fixture."
         }
       ],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
@@ -197,17 +154,10 @@
         "excluded": ["Fleet rollout", "Global configuration", "Blocking host enforcement", "New dashboard or feedback store"]
       },
       "inputs": [
-        {"kind": "work_unit_output", "id": "xcet-02-codex-adapter", "revision": "accepted"},
         {"kind": "work_unit_output", "id": "xcet-03-claude-adapter", "revision": "accepted"}
       ],
       "outputs": ["Integrated cross-client evidence", "False-pass/false-block and friction readout", "Synchronized terminal plan state"],
       "dependencies": [
-        {
-          "unit_id": "xcet-02-codex-adapter",
-          "type": "hard",
-          "gate": {"type": "unit_status", "required_status": "accepted"},
-          "rationale": "The integrated fixture requires an accepted authentic Codex adapter boundary."
-        },
         {
           "unit_id": "xcet-03-claude-adapter",
           "type": "hard",
@@ -238,7 +188,7 @@
           "negative_control": "A green unit suite or hand-authored result cannot substitute for the authentic client journey."
         }
       ],
-      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependencies xcet-02-codex-adapter and xcet-03-claude-adapter are not accepted"]},
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependency xcet-03-claude-adapter is not accepted with exact AES adapter evidence"]},
       "authorization_mode": "registry_claim",
       "status": "blocked",
       "record_version": 1,

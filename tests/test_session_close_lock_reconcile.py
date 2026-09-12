@@ -124,10 +124,13 @@ def test_resolver_returns_executable_helper_outside_disposable_worktree(
     canonical = tmp_path / "canonical"
     canonical.mkdir()
     subprocess.run(["git", "init", "-q", str(canonical)], check=True)
-    helper = canonical / script_directory / "worktree-coordination" / "canonical_lock.py"
+    # Both shipped entrypoints use the shared helper under scripts/, including
+    # the installed scripts/meta/session_close.py layout.
+    helper = canonical / "scripts" / "worktree-coordination" / "canonical_lock.py"
     helper.parent.mkdir(parents=True)
     helper.write_text("print('durable-helper')\n", encoding="utf-8")
     script = canonical / script_directory / "session_close.py"
+    script.parent.mkdir(parents=True, exist_ok=True)
     script.write_text("# fixture\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(canonical), "add", "-A"], check=True)
     subprocess.run(

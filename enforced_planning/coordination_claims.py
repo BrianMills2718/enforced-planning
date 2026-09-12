@@ -3723,9 +3723,10 @@ def heartbeat_claims(
             data["session_id"] = resolved_session_id
             data["heartbeat_at"] = heartbeat_at
             data["updated_at"] = heartbeat_at
-            # A heartbeat's documented job is to "refresh the lease", and the
-            # lease is expires_at -- the guide contrasts it with session-narrow
-            # precisely by saying narrow renews neither heartbeat nor expiry.
+            # An ordinary heartbeat refreshes the lease as well as liveness.
+            # A deliberately bounded broad claim is the exception: its expiry
+            # is an ownership ceiling, so background activity must not silently
+            # turn that fixed window into a rolling reservation.
             # Until 2026-09-08 this wrote only the heartbeat, so a session that
             # kept heartbeating past its 24-hour TTL expired anyway. That is
             # worse than a stale timestamp: load_claims() above drops an expired
@@ -3745,9 +3746,10 @@ def heartbeat_claims(
             # what shortens it: clamping every heartbeat to now + TTL would pull
             # a long-lived lease back to a day. The existing invariant test that
             # lists expires_at as heartbeat-preserved is what caught that.
-            data["expires_at"] = _extended_lease_expiry(
-                data.get("expires_at"), heartbeat_at, ttl_hours
-            )
+            if claim.broad_scope_mode != "bounded":
+                data["expires_at"] = _extended_lease_expiry(
+                    data.get("expires_at"), heartbeat_at, ttl_hours
+                )
             _atomic_write_claim(claim_file, data)
             updated_claims.append((claim_file, claim))
         if updated_claims:

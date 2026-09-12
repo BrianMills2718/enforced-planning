@@ -346,6 +346,16 @@ def test_classifier_route_disables_agent_context_and_ordinary_tools(monkeypatch)
     assert captured["cwd"] == str(correction_learning_audit.ROOT)
 
 
+def test_verdict_accepts_long_transient_rationale() -> None:
+    verdict = CorrectionVerdict(
+        event_id="turn-1",
+        classification="not_correction",
+        rationale="r" * 500,
+    )
+
+    assert len(verdict.rationale) == 500
+
+
 def test_classifier_rejects_a_missing_event_within_its_batch(monkeypatch) -> None:
     exchanges = [_exchange("turn-1"), _exchange("turn-2")]
 

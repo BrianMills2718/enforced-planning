@@ -587,7 +587,8 @@ adjudication, and the corpus were committed in the preregistered order before
 replay.
 
 **Native v4 result: INVALID.** The one replay completed eight four-case batches,
-then the ninth call failed when Claude Code reached the configured two-turn
+then the ninth call failed after both permitted `StructuredOutput` attempts
+returned a rationale longer than the model-facing schema's 240-character
 maximum. The trace contains eight completed calls and one failed call, with no
 retry and `$0.00` recorded marginal cost. Completed-call model latency totaled
 176.677 seconds (13.580–38.632 seconds). Because route failure is explicitly
@@ -601,3 +602,15 @@ durable invalid results; provider, route, and schema exceptions escaped before
 artifact creation. Batch execution now wraps every evaluation exception with
 its batch index and privacy-safe exception type, then uses the same atomic
 invalid-result path. This fixes evidence retention but does not make v4 valid.
+
+Independent sign-off accepted v4's invalidation, sample reconstruction,
+privacy-reduced commit ordering, and the manual/off decision. It rejected the
+proposal to declare the execution cursor circuit-broken: the cursor records two
+failures at the same runtime-integrity boundary against a cap of three. It also
+required a mechanism change before any further fresh holdout. The exact v4
+trace shows the same unsupported rationale length constraint failed twice; the
+turn limit was the terminal symptom, not the root cause. The classifier schema
+now keeps rationale non-empty but unbounded because rationale prose is transient
+and only its hash crosses the privacy boundary. An authentic development canary
+on the contaminated failing batch must pass before another unseen holdout is
+selected.

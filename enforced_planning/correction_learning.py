@@ -44,7 +44,7 @@ class CorrectionVerdict(StrictModel):
 
     event_id: str = Field(min_length=1)
     classification: Literal["correction", "not_correction", "ambiguous"]
-    rationale: str = Field(min_length=1, max_length=240)
+    rationale: str = Field(min_length=1)
     matching_learning_id: str | None = None
 
 

@@ -13,6 +13,7 @@ import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -38,7 +39,9 @@ def test_every_shipped_copy_reconciles_on_close(script):
     text = script.read_text(encoding="utf-8")
     assert "_reconcile_canonical_lock" in text, f"{script} never reconciles"
     assert "--reconcile" in text
-    assert text.count("_reconcile_canonical_lock(args.scope)") == 1
+    assert text.count(
+        "_reconcile_canonical_lock(args.scope, canonical_lock_module)"
+    ) == 1
 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
@@ -105,3 +108,57 @@ def test_reconcile_actually_clears_a_stale_lock(tmp_path):
             [sys.executable, str(lock_script), "--unlock", str(repo), "--quiet"],
             check=False,
         )
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_main_resolves_reconcile_helper_before_close_removes_worktree(
+    script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The closeout must retain the helper path across worktree deletion."""
+
+    module = _load(script, f"session_close_order_{script.parent.name}")
+    helper = tmp_path / "canonical_lock.py"
+    helper.write_text("# retained path\n", encoding="utf-8")
+    events: list[str] = []
+    args = SimpleNamespace(
+        project="enforced-planning",
+        scope="lane",
+        branch="lane",
+        merge_commit=None,
+        json=False,
+    )
+
+    monkeypatch.setattr(module, "parse_args", lambda _argv: args)
+    monkeypatch.setattr(module, "_lane_range_basis", lambda *_args: (None, "merge_base"))
+    monkeypatch.setattr(module, "_supported_closeout_kwargs", lambda _args: {})
+    monkeypatch.setattr(
+        module,
+        "_resolve_canonical_lock_module",
+        lambda: events.append("resolve") or helper,
+    )
+
+    def close_session(**_kwargs):
+        events.append("close")
+        helper.unlink()
+        return {
+            "action": "closed",
+            "worktree_action": "removed",
+            "branch_action": "deleted",
+            "disposition": "merged",
+            "released": True,
+        }
+
+    monkeypatch.setattr(module.session_lifecycle, "close_session", close_session)
+
+    def reconcile(scope: str, module_path: Path | None = None) -> None:
+        events.append("reconcile")
+        assert scope == "lane"
+        assert module_path == helper
+
+    monkeypatch.setattr(module, "_reconcile_canonical_lock", reconcile)
+    monkeypatch.setattr(module, "_report_shared_ref_movement", lambda *_args: None)
+
+    assert module.main([]) == 0
+    assert events == ["resolve", "close", "reconcile"]

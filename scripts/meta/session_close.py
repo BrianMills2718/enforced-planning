@@ -181,7 +181,7 @@ def _resolve_canonical_lock_module() -> Path | None:
     return None
 
 
-def _reconcile_canonical_lock(scope: str) -> None:
+def _reconcile_canonical_lock(scope: str, module_path: Path | None = None) -> None:
     """Release the canonical lock once the lane that justified it is closed.
 
     close_session() releases the claim, but nothing was re-deriving lock state
@@ -194,7 +194,7 @@ def _reconcile_canonical_lock(scope: str) -> None:
     Reconcile is claim-driven, not path-driven: if another lane is still live
     against the same repository the lock correctly stays in place.
     """
-    module_path = _resolve_canonical_lock_module()
+    module_path = module_path or _resolve_canonical_lock_module()
     if module_path is None:
         # The optional worktree-coordination module is not installed here, so
         # there is no canonical lock to reconcile.
@@ -265,6 +265,10 @@ def _report_shared_ref_movement(
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     since_revision, range_basis = _lane_range_basis(args.project, args.scope, args.branch)
+    # Resolve this while the lane still exists. close_session() can remove the
+    # worktree containing this script, so a relative lookup after closeout can
+    # no longer find the reconciliation helper.
+    canonical_lock_module = _resolve_canonical_lock_module()
     payload = session_lifecycle.close_session(**_supported_closeout_kwargs(args))
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -274,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
             f"branch={payload['branch_action']} disposition={payload['disposition']} "
             f"released={payload['released']}"
         )
-    _reconcile_canonical_lock(args.scope)
+    _reconcile_canonical_lock(args.scope, canonical_lock_module)
     _report_shared_ref_movement(
         since_revision,
         range_basis,

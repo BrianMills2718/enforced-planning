@@ -1,0 +1,237 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "xcet-01-neutral-contract",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-client-outcome-alignment",
+      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
+      "spec_revision": "plan-137-work-graph-v1",
+      "title": "Define the neutral execution projection and completion proposal",
+      "class": "implementation",
+      "objective": "Extend the existing criterion-bound outcome lineage with stable execution-item projection, typed native divergence, and one canonical goal-completion proposal without duplicating project, mailbox, or session authority.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Stable execution item and projection types",
+          "Revision-checked idempotent transition results",
+          "Native divergence observations",
+          "Criterion-complete terminal proposal",
+          "Focused both-sign tests"
+        ],
+        "excluded": [
+          "Native client adapters",
+          "Duplicate mailbox acknowledgement",
+          "Host activation or blocking hooks",
+          "Semantic prose classification"
+        ]
+      },
+      "inputs": [
+        {"kind": "user_decision", "id": "plan-137-implementation-approval", "revision": "codex-session-01a09110-c715-7ed0-a135-25a865bf23c8@2026-09-12"},
+        {"kind": "existing_capability", "id": "criterion-bound-outcome-and-mailbox", "revision": "enforced-planning@7d4c1550b094cfd6dbb6b4fcd958117bbb77a00f"}
+      ],
+      "outputs": [
+        "Neutral execution projection contract",
+        "Canonical completion proposal",
+        "Divergence and replay results",
+        "Focused both-sign tests"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/outcome_continuation.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_cross_client_execution_tracking.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "contract", "target": "CrossClientExecutionProjectionV1", "access": "exclusive", "coordination_key": "cross-client-execution-projection"}
+      ],
+      "acceptance": [
+        {
+          "id": "XCET01-A1",
+          "criterion": "Stable item identity, prior revision, dependencies, criterion links, provenance, and idempotency are structural and do not depend on display text or order.",
+          "evidence_required": ["Focused contract tests", "Rename, reorder, stale-revision, and replay controls"],
+          "negative_control": "Changing display text or order cannot create a new item or discharge an obligation."
+        },
+        {
+          "id": "XCET01-A2",
+          "criterion": "The canonical goal closes only when every frozen criterion has current exact-artifact evidence and every required execution item is terminally resolved.",
+          "evidence_required": ["Missing-evidence denial", "Stale-evidence denial", "Fully evidenced acceptance", "Exact replay result"],
+          "negative_control": "All-green native tasks alone cannot close the goal."
+        },
+        {
+          "id": "XCET01-A3",
+          "criterion": "Native projection failure or malformed observations produce typed divergence without changing canonical completion state.",
+          "evidence_required": ["Projection-failure test", "Malformed and reordered event tests"],
+          "negative_control": "An adapter exception never becomes a successful canonical transition."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-12T17:00:00Z",
+      "updated_at": "2026-09-12T17:00:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "xcet-02-codex-adapter",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-client-outcome-alignment",
+      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
+      "spec_revision": "plan-137-work-graph-v1",
+      "title": "Project canonical execution state through native Codex",
+      "class": "implementation",
+      "objective": "Extend the existing AES App Server adapter with an observe-only translation of neutral execution state and correlated pushed observations.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "scope": {
+        "included": ["AES App Server projection", "Pushed plan-event observation", "Capability diagnostics", "Isolated authentic Codex probe"],
+        "excluded": ["New process supervisor", "TUI attachment", "Global hook activation", "Canonical state ownership"]
+      },
+      "inputs": [{"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"}],
+      "outputs": ["Codex projection adapter", "Native event correlations", "Capability/limitation evidence"],
+      "dependencies": [
+        {
+          "unit_id": "xcet-01-neutral-contract",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "The adapter must consume one accepted neutral contract rather than defining runtime-owned state."
+        }
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "src/aes/orchestration/native_codex.py", "repository": "agentic-engineering-system", "access": "exclusive"},
+        {"kind": "repository_path", "target": "src/aes/orchestration/contracts.py", "repository": "agentic-engineering-system", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_native_codex_adapter.py", "repository": "agentic-engineering-system", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {
+          "id": "XCET02-A1",
+          "criterion": "An isolated native Codex session renders the neutral fixture and correlates pushed observations without gaining canonical completion authority.",
+          "evidence_required": ["Focused adapter tests", "Authentic App Server command, version, configuration, and event trace"],
+          "negative_control": "Missing, malformed, bypassed, or reordered native events remain unavailable or divergent rather than successful."
+        }
+      ],
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependency xcet-01-neutral-contract is not accepted"]},
+      "authorization_mode": "registry_claim",
+      "status": "blocked",
+      "record_version": 1,
+      "created_at": "2026-09-12T17:00:00Z",
+      "updated_at": "2026-09-12T17:00:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "xcet-03-claude-adapter",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-client-outcome-alignment",
+      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
+      "spec_revision": "plan-137-work-graph-v1",
+      "title": "Project canonical execution state through Claude tasks",
+      "class": "implementation",
+      "objective": "Add an isolated observe-only Claude Task adapter that preserves stable neutral identity and typed tool or hook observations without changing host configuration.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "scope": {
+        "included": ["Claude Task projection", "Tool/hook observation translation", "Capability diagnostics", "Isolated authentic Claude probe"],
+        "excluded": ["Global hook activation", "Always-on review", "Automatic continuation", "Canonical state ownership"]
+      },
+      "inputs": [{"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"}],
+      "outputs": ["Claude task projection adapter", "Native event correlations", "Capability/limitation evidence"],
+      "dependencies": [
+        {
+          "unit_id": "xcet-01-neutral-contract",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "The adapter must consume one accepted neutral contract rather than defining client-owned state."
+        }
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {
+          "id": "XCET03-A1",
+          "criterion": "An isolated Claude session renders the neutral fixture and correlates Task tool or hook observations without gaining canonical completion authority.",
+          "evidence_required": ["Focused adapter tests", "Authentic Claude command, version, configuration, and event trace"],
+          "negative_control": "Disabled tools, hook failure, interruption, or task completion remains explicit non-success for the canonical goal."
+        }
+      ],
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependency xcet-01-neutral-contract is not accepted"]},
+      "authorization_mode": "registry_claim",
+      "status": "blocked",
+      "record_version": 1,
+      "created_at": "2026-09-12T17:00:00Z",
+      "updated_at": "2026-09-12T17:00:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "xcet-04-integrated-fixture",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-client-outcome-alignment",
+      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
+      "spec_revision": "plan-137-work-graph-v1",
+      "title": "Prove the observe-only cross-client journey and record feedback",
+      "class": "implementation",
+      "objective": "Run the public local two-criterion fixture through isolated Codex and Claude clients, prove denied incomplete closure and exactly-once evidenced closure across handoff/replay, and truthfully close the plan surfaces.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "blocked_dependencies",
+      "scope": {
+        "included": ["Public local fixture", "Cross-client handoff", "Both-sign completion proof", "Divergence/replay controls", "Feedback readout", "Synchronized plan closeout"],
+        "excluded": ["Fleet rollout", "Global configuration", "Blocking host enforcement", "New dashboard or feedback store"]
+      },
+      "inputs": [
+        {"kind": "work_unit_output", "id": "xcet-02-codex-adapter", "revision": "accepted"},
+        {"kind": "work_unit_output", "id": "xcet-03-claude-adapter", "revision": "accepted"}
+      ],
+      "outputs": ["Integrated cross-client evidence", "False-pass/false-block and friction readout", "Synchronized terminal plan state"],
+      "dependencies": [
+        {
+          "unit_id": "xcet-02-codex-adapter",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "The integrated fixture requires an accepted authentic Codex adapter boundary."
+        },
+        {
+          "unit_id": "xcet-03-claude-adapter",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "The integrated fixture requires an accepted authentic Claude adapter boundary."
+        }
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "tests/test_cross_client_execution_journey.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/evidence/plan137_cross_client_execution_tracking.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking_work_graph.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/CLAUDE.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "ROADMAP.md", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {
+          "id": "XCET04-A1",
+          "criterion": "The public local fixture first denies all-green but criterion-incomplete native state, then accepts the current fully evidenced outcome exactly once across rename, reorder, handoff, and replay.",
+          "evidence_required": ["Public entrypoint output", "Canonical transitions", "Codex and Claude native observations", "Exact replay result"],
+          "negative_control": "Queue acceptance, human review, interruption, hook failure, stale evidence, or native green state cannot become canonical completion."
+        },
+        {
+          "id": "XCET04-A2",
+          "criterion": "The retained episode reports false-pass, false-block, divergence, unsupported capability, latency, and operator-friction observations without prompt or response content.",
+          "evidence_required": ["Immutable evidence artifact", "Existing Plan 111 feedback route or explicit no-recurrence disposition"],
+          "negative_control": "A green unit suite or hand-authored result cannot substitute for the authentic client journey."
+        }
+      ],
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["dependencies xcet-02-codex-adapter and xcet-03-claude-adapter are not accepted"]},
+      "authorization_mode": "registry_claim",
+      "status": "blocked",
+      "record_version": 1,
+      "created_at": "2026-09-12T17:00:00Z",
+      "updated_at": "2026-09-12T17:00:00Z"
+    }
+  ]
+}

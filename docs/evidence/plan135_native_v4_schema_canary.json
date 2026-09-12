@@ -1,0 +1,40 @@
+{
+  "batch_index_from_native_v4": 9,
+  "batch_size": 4,
+  "decision_status": "mechanism_repair_canary_passed",
+  "model": "claude-code/sonnet",
+  "non_claims": [
+    "This contaminated development canary is not a native-v4 retry and has no classifier accuracy score.",
+    "One successful call does not establish route reliability across a complete holdout.",
+    "No conversation prose or model rationale is retained."
+  ],
+  "observability": {
+    "call_count": 1,
+    "error_count": 0,
+    "latency_seconds": 29.767,
+    "marginal_cost_usd": 0.0,
+    "retry_count": 0
+  },
+  "record_type": "correction_learning_development_canary",
+  "schema_version": "1.0",
+  "source_revision": "a82de7f6c576d4ab7c6d27252ffa859e19957903",
+  "trace_prefix": "correction-learning/development/schema-bound-canary/a82de7f6c576",
+  "verdicts": [
+    {
+      "classification": "not_correction",
+      "event_id": "8a5c5d232a61772cf9d21b3d"
+    },
+    {
+      "classification": "not_correction",
+      "event_id": "be4974b36d36539f7bcc81f5"
+    },
+    {
+      "classification": "ambiguous",
+      "event_id": "a8d0967d184520fe6a8ebff5"
+    },
+    {
+      "classification": "correction",
+      "event_id": "29215a63d1172ed4b03e66d5"
+    }
+  ]
+}

@@ -614,3 +614,11 @@ now keeps rationale non-empty but unbounded because rationale prose is transient
 and only its hash crosses the privacy boundary. An authentic development canary
 on the contaminated failing batch must pass before another unseen holdout is
 selected.
+
+The post-repair development canary replayed only the contaminated four-event v4
+batch nine from the exact repair revision. It returned all four required IDs in
+one 29.767-second call with no error or retry and `$0.00` recorded marginal
+cost. `plan135_native_v4_schema_canary.json` retains only IDs and classifications.
+This passes the mechanism-repair boundary but does not score v4 or establish
+full-run reliability. A new unseen holdout is now the next permitted evaluation
+action.

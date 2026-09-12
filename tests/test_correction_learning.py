@@ -438,6 +438,8 @@ def test_native_corpus_replay_requires_exact_event_provenance(tmp_path: Path) ->
                     "agent": case["agent"],
                     "session_id": case["session_id"],
                     "source_path": case["source_path"],
+                    "window_start": case["occurred_at"],
+                    "window_end": "2026-09-12T02:59:59Z",
                 }
                 for case in cases
                 if case["role"] == "scored"

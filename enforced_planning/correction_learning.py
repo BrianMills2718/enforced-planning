@@ -120,12 +120,16 @@ class NativeCorpusSourceV1(StrictModel):
     agent: Literal["codex", "claude-code"]
     session_id: str = Field(min_length=1)
     source_path: str = Field(min_length=1)
+    window_start: AwareDatetime
+    window_end: AwareDatetime
 
     @model_validator(mode="after")
     def portable_source(self) -> NativeCorpusSourceV1:
         source = Path(self.source_path)
         if source.is_absolute() or ".." in source.parts:
             raise ValueError("native corpus source_path must be home-relative and cannot escape")
+        if self.window_end < self.window_start:
+            raise ValueError("native corpus source window_end must not precede window_start")
         return self
 
 
@@ -186,6 +190,12 @@ class NativeCorrectionCorpusV1(StrictModel):
             raise ValueError("native corpus must cover at least five native sessions")
         if self.schema_version == "1.1" and not self.selection.scored_sources:
             raise ValueError("native corpus v1.1 requires explicit scored_sources")
+        if self.schema_version == "1.1" and any(
+            source.window_start < self.pilot_cutoff
+            or source.window_end > self.frozen_at
+            for source in self.selection.scored_sources
+        ):
+            raise ValueError("native corpus source windows must stay within corpus bounds")
         return self
 
 
@@ -226,7 +236,7 @@ def load_native_corpus_exchanges(
             if not source.is_relative_to(resolved_home):
                 raise ValueError("native corpus source escapes the configured home")
             for exchange in extract_transcript_exchanges(source, agent=selected.agent):
-                if corpus.pilot_cutoff <= exchange.occurred_at <= corpus.frozen_at:
+                if selected.window_start <= exchange.occurred_at <= selected.window_end:
                     expected_population.add(
                         (selected.agent, selected.session_id, exchange.event_id)
                     )

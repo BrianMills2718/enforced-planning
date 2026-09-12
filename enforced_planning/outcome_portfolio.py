@@ -3,7 +3,7 @@
 Project Graph owns static repository identity and reviewed owner class.  This
 module owns only local, append-only allocation and disposition events.  It
 never chooses an outcome implicitly: callers must provide an immutable request
-inside an exact live claim worktree before a schema-1.1 outcome can consume a
+inside an exact live claim worktree before a class-bearing outcome can consume a
 portfolio slot.
 """
 
@@ -76,9 +76,7 @@ class ProjectGraphOutcomeAuthorityV1(StrictModel):
     """Exact reviewed repository identity loaded from one Git object."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
-    record_type: Literal["project_graph_outcome_authority"] = (
-        "project_graph_outcome_authority"
-    )
+    record_type: Literal["project_graph_outcome_authority"] = "project_graph_outcome_authority"
     project_graph_repo: str = Field(min_length=1)
     project_graph_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
     project_graph_file_sha256: str = Field(pattern=HEX_SHA256_PATTERN)
@@ -120,9 +118,7 @@ class OutcomePortfolioAllocationRequestV1(StrictModel):
     """Explicit human/operator decision to consume one bounded WIP slot."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
-    record_type: Literal["outcome_portfolio_allocation_request"] = (
-        "outcome_portfolio_allocation_request"
-    )
+    record_type: Literal["outcome_portfolio_allocation_request"] = "outcome_portfolio_allocation_request"
     allocation_id: str = Field(min_length=3)
     requested_at: datetime
     project_id: str = Field(min_length=1)
@@ -153,9 +149,7 @@ class OutcomePortfolioDispositionRequestV1(StrictModel):
     """Explicit append-only release request for one exact allocation."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
-    record_type: Literal["outcome_portfolio_disposition_request"] = (
-        "outcome_portfolio_disposition_request"
-    )
+    record_type: Literal["outcome_portfolio_disposition_request"] = "outcome_portfolio_disposition_request"
     disposition_id: str = Field(min_length=3)
     requested_at: datetime
     allocation_id: str = Field(min_length=3)
@@ -176,9 +170,7 @@ class OutcomePortfolioAllocationV1(StrictModel):
     """Immutable accepted allocation event."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
-    record_type: Literal["outcome_portfolio_allocation"] = (
-        "outcome_portfolio_allocation"
-    )
+    record_type: Literal["outcome_portfolio_allocation"] = "outcome_portfolio_allocation"
     allocated_at: datetime
     allocation_id: str = Field(min_length=3)
     bucket: str = Field(min_length=3)
@@ -240,9 +232,7 @@ class OutcomePortfolioDispositionV1(StrictModel):
     """Immutable event that releases one allocation without deleting it."""
 
     schema_version: Literal["1.0.0"] = "1.0.0"
-    record_type: Literal["outcome_portfolio_disposition"] = (
-        "outcome_portfolio_disposition"
-    )
+    record_type: Literal["outcome_portfolio_disposition"] = "outcome_portfolio_disposition"
     recorded_at: datetime
     disposition_id: str = Field(min_length=3)
     allocation_id: str = Field(min_length=3)
@@ -324,11 +314,7 @@ class ResolvedOutcomePortfolioAllocationV1(StrictModel):
 def portfolio_bucket(portfolio_class: PortfolioClass, owner_class: str) -> str:
     """Return the approved WIP bucket for one class and reviewed owner."""
 
-    return (
-        f"product:{owner_class}"
-        if portfolio_class == "product"
-        else GLOBAL_NON_PRODUCT_BUCKET
-    )
+    return f"product:{owner_class}" if portfolio_class == "product" else GLOBAL_NON_PRODUCT_BUCKET
 
 
 def _run_git(repo: Path, *args: str) -> bytes:
@@ -370,12 +356,16 @@ def resolve_project_graph_authority(
             "Project Graph revision must be one full lowercase 40-character commit id",
         )
     resolved_repo = project_graph_repo.expanduser().resolve()
-    resolved_revision = _run_git(
-        resolved_repo,
-        "rev-parse",
-        "--verify",
-        f"{project_graph_revision}^{{commit}}",
-    ).decode("ascii", errors="strict").strip()
+    resolved_revision = (
+        _run_git(
+            resolved_repo,
+            "rev-parse",
+            "--verify",
+            f"{project_graph_revision}^{{commit}}",
+        )
+        .decode("ascii", errors="strict")
+        .strip()
+    )
     if resolved_revision != project_graph_revision:
         raise OutcomePortfolioError(
             "project_graph_revision_mismatch",
@@ -497,10 +487,7 @@ def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecor
                 f"canonical claim {path} must be a YAML mapping",
             )
         raw_status = payload.get("status")
-        if (
-            isinstance(raw_status, str)
-            and raw_status.strip().lower() in coordination_claims.COMPLETED_STATUSES
-        ):
+        if isinstance(raw_status, str) and raw_status.strip().lower() in coordination_claims.COMPLETED_STATUSES:
             continue
         record = coordination_claims.normalize_claim(
             payload,
@@ -786,10 +773,10 @@ def _allocation_candidate(
             f"portfolio scenario cannot be evaluated: {exc}",
         ) from exc
     contract = scenario.contract
-    if contract.schema_version != "1.1.0" or contract.portfolio_class is None:
+    if contract.schema_version not in {"1.1.0", "1.2.0"} or contract.portfolio_class is None:
         raise OutcomePortfolioError(
             "portfolio_class_required",
-            "portfolio allocation requires a schema-1.1 outcome contract with explicit class",
+            "portfolio allocation requires a class-bearing outcome contract",
         )
     if contract.project_id != claim.primary_project():
         raise OutcomePortfolioError(
@@ -933,11 +920,7 @@ def allocate_outcome_portfolio(
                 allocation = existing
             else:
                 occupying = next(
-                    (
-                        allocation
-                        for allocation in active.values()
-                        if allocation.bucket == candidate.bucket
-                    ),
+                    (allocation for allocation in active.values() if allocation.bucket == candidate.bucket),
                     None,
                 )
                 if occupying is not None:
@@ -1122,11 +1105,7 @@ def require_active_portfolio_allocation(
                 and record.outcome_contract_sha256 == result.outcome_contract_sha256
                 and record.scenario_sha256 == result.scenario_sha256
             ]
-            code = (
-                "portfolio_allocation_inactive"
-                if all_matching
-                else "portfolio_allocation_required"
-            )
+            code = "portfolio_allocation_inactive" if all_matching else "portfolio_allocation_required"
             raise OutcomePortfolioError(
                 code,
                 "classed selection requires one exact active portfolio allocation",

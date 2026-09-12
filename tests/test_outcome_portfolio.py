@@ -16,6 +16,7 @@ from enforced_planning.outcome_continuation import (
     CanonicalJourneyV1,
     OutcomeContinuationScenarioV1,
     OutcomeContractV1,
+    OutcomeCriterionV1,
     PortfolioClass,
     canonical_sha256,
 )
@@ -96,10 +97,11 @@ def _scenario(
     owner_class: str = "brian",
     outcome_id: str | None = None,
     scenario_id: str | None = None,
+    schema_version: str = "1.1.0",
 ) -> OutcomeContinuationScenarioV1:
     outcome_id = outcome_id or f"{project_id}-outcome"
     contract = OutcomeContractV1(
-        schema_version="1.1.0",
+        schema_version=schema_version,
         portfolio_class=portfolio_class,
         outcome_id=outcome_id,
         owner_class=owner_class,
@@ -117,6 +119,16 @@ def _scenario(
         baseline_revision="a" * 40,
         allowed_scope=[TARGET],
         progress_dimensions=["portfolio-bound outcome admission"],
+        success_criteria=(
+            [
+                OutcomeCriterionV1(
+                    criterion_id="visible-outcome",
+                    description="The exact user-visible outcome is independently evidenced.",
+                )
+            ]
+            if schema_version == "1.2.0"
+            else []
+        ),
     )
     return OutcomeContinuationScenarioV1(
         scenario_id=scenario_id or f"{project_id}-{portfolio_class.replace('_', '-')}-scenario",
@@ -314,6 +326,37 @@ def test_underscore_project_id_allocates_and_resolves_through_portfolio(
     assert allocated.allocation.project_id == project_id
     assert allocated.allocation.project_authority.project_id == project_id
     assert resolved.allocation_sha256 == allocated.allocation_sha256
+
+
+def test_criterion_bound_contract_allocates_through_existing_portfolio(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "portfolio-test")
+    project_id = "enforced-planning"
+    graph_repo, revision = _graph_repo(tmp_path, [_graph_record(project_id)])
+    claims_dir = tmp_path / "claims"
+    ledger_path = tmp_path / "portfolio-ledger.json"
+    scenario = _scenario(project_id, schema_version="1.2.0")
+    _worktree, scenario_path, request_path = _claimed_inputs(
+        tmp_path,
+        project_id=project_id,
+        scenario=scenario,
+        claims_dir=claims_dir,
+    )
+
+    allocated = _allocate(
+        project_id=project_id,
+        scenario_path=scenario_path,
+        request_path=request_path,
+        graph_repo=graph_repo,
+        graph_revision=revision,
+        claims_dir=claims_dir,
+        ledger_path=ledger_path,
+    )
+
+    assert allocated.status == "allocated"
+    assert allocated.allocation.outcome_contract_sha256 == canonical_sha256(scenario.contract)
 
 
 @pytest.mark.parametrize("terminal_status", ["complete", "completed", "COMPLETED"])

@@ -1,0 +1,131 @@
+{
+  "schema_version": "plan136-criterion-bound-consumer-evidence.v1",
+  "contract_sha256": "2474a056ebbdeef7909200b1826eeeebcd63f179dcfa7288a8a7825fce8c1b78",
+  "rejected_artifact": {
+    "revision": "8d663c75b15136bd389a06171c7fea167b2ab749",
+    "artifact_sha256": "24bfc04474af5fe9a29e318c1fe4cf557d0cf9828004aca699bb6ad823035a6c",
+    "screenshot_sha256": "d7c80de8f0c8474cbf955db800ce27df2796b05f5413b9e3ea6081caf642ba28"
+  },
+  "corrected_artifact": {
+    "revision": "bf30ef9a32459af12e5cbe3c885a99c13859ef82",
+    "artifact_sha256": "9218935126818d90d219c5345308ea9a3813a862a95534049d69631aadf7ab8f",
+    "screenshot_sha256": "d94c077dee4d1faf83114f53a25d624f16fc7a6497f3d03812c7067e4f9af3c2"
+  },
+  "receipts": [
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan52-rejected-sideways-artifact",
+      "outcome_contract_sha256": "2474a056ebbdeef7909200b1826eeeebcd63f179dcfa7288a8a7825fce8c1b78",
+      "prior_receipt_sha256": null,
+      "progress_kind": "non_outcome",
+      "dimension": "plan-52 authentic browser consumer",
+      "summary": "Brian rejected the sideways Plan 52 dashboard artifact.",
+      "evidence": {
+        "source_revision": "8d663c75b15136bd389a06171c7fea167b2ab749",
+        "configuration_sha256": "431f03bdc624debe48ab3caf7b5f36c6a9c253b527b72875e90987078ac1ac65",
+        "route": "file:public/index.html?view=work-map",
+        "command": ["chromium", "--headless=new", "--window-size=1440,1800", "--screenshot"],
+        "observation_sha256": "d7c80de8f0c8474cbf955db800ce27df2796b05f5413b9e3ea6081caf642ba28",
+        "artifact_refs": ["generated/plan52-real-work-dag-1440.png"],
+        "trace_ref": null,
+        "observed_at": "2026-09-12T09:10:00Z"
+      },
+      "failure_boundary": "rejected user-visible graph topology",
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": false,
+      "artifact_sha256": "24bfc04474af5fe9a29e318c1fe4cf557d0cf9828004aca699bb6ad823035a6c",
+      "artifact_disposition": "rejected",
+      "criterion_ids": [],
+      "producer_id": null,
+      "verifier_id": null,
+      "verification_role": null
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan52-top-down-browser-evidence",
+      "outcome_contract_sha256": "2474a056ebbdeef7909200b1826eeeebcd63f179dcfa7288a8a7825fce8c1b78",
+      "prior_receipt_sha256": "a379219762019c2b1e82f0645c37950940ca70dce81bfd5c333c3dba8b9af9f3",
+      "progress_kind": "behavioral_advance",
+      "dimension": "plan-52 authentic browser consumer",
+      "summary": "Chromium geometry and screenshot evidence show every dependency layer below its prerequisites.",
+      "evidence": {
+        "source_revision": "bf30ef9a32459af12e5cbe3c885a99c13859ef82",
+        "configuration_sha256": "431f03bdc624debe48ab3caf7b5f36c6a9c253b527b72875e90987078ac1ac65",
+        "route": "file:public/index.html?view=work-map",
+        "command": ["make", "ui-check"],
+        "observation_sha256": "d94c077dee4d1faf83114f53a25d624f16fc7a6497f3d03812c7067e4f9af3c2",
+        "artifact_refs": [
+          "generated/plan136-top-down-consumer-1440.png",
+          "tests/test_dashboard_browser.py::test_company_work_dependency_geometry_flows_down_in_chromium"
+        ],
+        "trace_ref": null,
+        "observed_at": "2026-09-12T09:17:00Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": true,
+      "artifact_sha256": "9218935126818d90d219c5345308ea9a3813a862a95534049d69631aadf7ab8f",
+      "artifact_disposition": "evidenced",
+      "criterion_ids": ["criterion-completeness", "artifact-revision-binding", "plan-52-browser-adoption"],
+      "producer_id": "codex-dashboard-producer",
+      "verifier_id": "chromium-geometry-probe",
+      "verification_role": "independent"
+    },
+    {
+      "schema_version": "1.0.0",
+      "receipt_id": "plan52-separate-purpose-map-browser-evidence",
+      "outcome_contract_sha256": "2474a056ebbdeef7909200b1826eeeebcd63f179dcfa7288a8a7825fce8c1b78",
+      "prior_receipt_sha256": "edf1b551d1b700127cc52bab89cc6e285e90da05f2f69f21afb3a0184b21c883",
+      "progress_kind": "behavioral_advance",
+      "dimension": "plan-52 authentic browser consumer",
+      "summary": "Existing Chromium navigation control proves Company Work and Purpose Map are distinct routes and panels.",
+      "evidence": {
+        "source_revision": "bf30ef9a32459af12e5cbe3c885a99c13859ef82",
+        "configuration_sha256": "431f03bdc624debe48ab3caf7b5f36c6a9c253b527b72875e90987078ac1ac65",
+        "route": "file:public/index.html?view=purpose-map",
+        "command": ["make", "ui-check"],
+        "observation_sha256": "d94c077dee4d1faf83114f53a25d624f16fc7a6497f3d03812c7067e4f9af3c2",
+        "artifact_refs": ["tests/test_dashboard_browser.py::test_company_work_is_separate_from_purpose_map"],
+        "trace_ref": null,
+        "observed_at": "2026-09-12T09:17:00Z"
+      },
+      "failure_boundary": null,
+      "exact_replay_result": null,
+      "decision_delta": null,
+      "discriminating_evidence": true,
+      "artifact_sha256": "9218935126818d90d219c5345308ea9a3813a862a95534049d69631aadf7ab8f",
+      "artifact_disposition": "evidenced",
+      "criterion_ids": ["independent-verification"],
+      "producer_id": "codex-dashboard-producer",
+      "verifier_id": "chromium-navigation-probe",
+      "verification_role": "independent"
+    }
+  ],
+  "partial_decision": {
+    "schema_version": "1.0.0",
+    "review_ready": false,
+    "reason_code": "criterion_evidence_missing",
+    "artifact_sha256": "9218935126818d90d219c5345308ea9a3813a862a95534049d69631aadf7ab8f",
+    "missing_criterion_ids": ["independent-verification"]
+  },
+  "final_decision": {
+    "schema_version": "1.0.0",
+    "review_ready": true,
+    "reason_code": "all_criteria_evidenced",
+    "artifact_sha256": "9218935126818d90d219c5345308ea9a3813a862a95534049d69631aadf7ab8f",
+    "missing_criterion_ids": []
+  },
+  "final_review_status": "review_ready",
+  "rejected_revival_control": {
+    "denied": true,
+    "error_type": "ContinuationError",
+    "message": "a rejected artifact cannot receive new passing criterion evidence"
+  },
+  "checks": {
+    "dashboard_ui_check": "67 passed",
+    "criterion_gate_focused_tests": "62 passed",
+    "integration_preflight": "117 passed across criterion-bound outcomes, portfolio, continuation, and selection; legacy Plan 114 retained hashes preserved"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-136-criterion-bound-outcome",
+  "contract": {
+    "schema_version": "1.2.0",
+    "outcome_id": "criterion-bound-outcome-enforcement",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-136-criterion-bound-outcome-gate",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "Brian reviewing the Plan 52 company-work and purpose-map dashboard",
+    "outcome": "Review readiness is impossible until independent evidence closes every frozen success criterion on the exact non-rejected artifact.",
+    "canonical_journey": {
+      "starting_state": "The prior Plan 52 dashboard artifact was explicitly rejected and still violates the requested top-to-bottom company-work topology.",
+      "input": "The frozen Plan 52 success criteria, exact candidate artifact digest, and independent browser evidence.",
+      "action": "Attempt review with partial evidence and the rejected digest, then verify a corrected artifact against every criterion.",
+      "observable_result": "Partial, self-verified, cross-revision, and rejected artifacts are denied; only the fully evidenced corrected artifact becomes review-ready.",
+      "failure_signal": "Supporting work or producer prose substitutes for a criterion, evidence crosses revisions, or a rejected digest returns for review."
+    },
+    "baseline_revision": "642c65bc8372a40a52ced1d489419fd18dff75ef",
+    "allowed_scope": [
+      "docs/evidence/plan136_criterion_bound_outcome_scenario.json",
+      "docs/evidence/plan136_criterion_bound_outcome_allocation.json",
+      "docs/plans/136_criterion_bound_outcome_gate.md",
+      "docs/plans/136_criterion_bound_outcome_gate_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md",
+      "enforced_planning/outcome_continuation.py",
+      "enforced_planning/outcome_portfolio.py",
+      "tests/test_criterion_bound_outcomes.py",
+      "tests/test_outcome_portfolio.py"
+    ],
+    "progress_dimensions": [
+      "criterion-bound source contract",
+      "plan-52 authentic browser consumer"
+    ],
+    "success_criteria": [
+      {
+        "criterion_id": "criterion-completeness",
+        "description": "Every frozen success criterion has passing evidence on the exact candidate artifact."
+      },
+      {
+        "criterion_id": "independent-verification",
+        "description": "The producer cannot count its own assertion as independent acceptance evidence."
+      },
+      {
+        "criterion_id": "artifact-revision-binding",
+        "description": "Evidence cannot transfer between artifact revisions or revive a rejected digest."
+      },
+      {
+        "criterion_id": "plan-52-browser-adoption",
+        "description": "The real Plan 52 browser journey discriminates the rejected and corrected dashboard artifacts."
+      }
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/outcome_continuation.py",
+    "ordinary_approval": true,
+    "approval_text": "Brian approved the criterion-binding design and said proceed on 2026-09-12."
+  }
+}

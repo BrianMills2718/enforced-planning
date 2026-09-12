@@ -1,0 +1,139 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "cbog-01-contract-and-plan52-consumer",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "criterion-bound-outcome-enforcement",
+      "design_revision": "73c751501fc419a57b1c665fb9bedfbe2d82766d1046e7584cf8242978481334",
+      "spec_revision": "plan-136-work-graph-v1",
+      "title": "Bind review readiness to exact outcome criteria",
+      "class": "implementation",
+      "objective": "Make review readiness fail closed unless independent evidence closes every frozen criterion on the exact non-rejected artifact, then prove the contract on the Plan 52 dashboard journey.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "not_applicable",
+      "scope": {
+        "included": [
+          "Versioned criterion-bearing outcome contracts",
+          "Artifact-bound independent criterion evidence",
+          "Durable rejected-artifact ineligibility",
+          "Deterministic review-readiness decision",
+          "Plan 52 browser consumer negative and positive proof"
+        ],
+        "excluded": [
+          "Semantic correction detection",
+          "Model calls on lifecycle hot paths",
+          "Fleet installation or activation",
+          "Push, merge, publication, or deployment"
+        ]
+      },
+      "inputs": [
+        {
+          "kind": "approved_design",
+          "id": "criterion-binding-design",
+          "revision": "73c751501fc419a57b1c665fb9bedfbe2d82766d1046e7584cf8242978481334"
+        }
+      ],
+      "outputs": [
+        "Criterion-bound OutcomeContractV1 revision",
+        "Deterministic review-readiness gate",
+        "Both-sign source tests",
+        "Authentic Plan 52 browser consumer evidence"
+      ],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_continuation.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "enforced_planning/outcome_portfolio.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_criterion_bound_outcomes.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "tests/test_outcome_portfolio.py",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/136_criterion_bound_outcome_gate.md",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "repository_path",
+          "target": "docs/plans/136_criterion_bound_outcome_gate_work_graph.json",
+          "repository": "enforced-planning",
+          "access": "exclusive"
+        },
+        {
+          "kind": "contract",
+          "target": "OutcomeContractV1@1.2.0",
+          "access": "exclusive",
+          "coordination_key": "criterion-bound-outcome-contract"
+        },
+        {
+          "kind": "route",
+          "target": "Plan 52 local browser entrypoint",
+          "access": "write",
+          "coordination_key": "plan52-authentic-consumer"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "CBOG01-A1",
+          "criterion": "Review readiness requires every frozen criterion to carry discriminating independent evidence on the exact candidate artifact digest.",
+          "evidence_required": [
+            "Focused both-sign source tests",
+            "Missing-criterion and producer-self-verification negative controls"
+          ],
+          "negative_control": "A partial result, self-verification, or evidence from a different artifact cannot become review-ready."
+        },
+        {
+          "id": "CBOG01-A2",
+          "criterion": "A rejected artifact digest remains ineligible throughout the outcome lineage.",
+          "evidence_required": [
+            "Reject-after-pass transition test",
+            "Attempted rejected-artifact revival test"
+          ],
+          "negative_control": "Attaching new passing prose or evidence cannot revive an exact rejected digest."
+        },
+        {
+          "id": "CBOG01-A3",
+          "criterion": "The real Plan 52 browser journey first rejects the known wrong artifact and admits only a corrected artifact satisfying both separate-map and top-to-bottom graph criteria.",
+          "evidence_required": [
+            "Exact local browser commands and artifact digests",
+            "Independent criterion receipt",
+            "Deterministic review-readiness decision"
+          ],
+          "negative_control": "Repository inventory, page labels, or unit-test presence cannot substitute for the rendered graph topology."
+        }
+      ],
+      "readiness": {
+        "status": "ready",
+        "required_approval_types": [],
+        "approvals": [],
+        "failed_guards": []
+      },
+      "authorization_mode": "registry_claim",
+      "status": "accepted",
+      "record_version": 1,
+      "created_at": "2026-09-12T08:39:17Z",
+      "updated_at": "2026-09-12T09:19:00Z"
+    }
+  ]
+}

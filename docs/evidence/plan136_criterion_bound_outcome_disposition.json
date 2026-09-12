@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-136-criterion-bound-outcome-completed",
+  "requested_at": "2026-09-12T09:27:49Z",
+  "allocation_id": "plan-136-criterion-bound-outcome-maintenance",
+  "allocation_sha256": "fdcde8da2cbd9fe0612df9b0fd3a0c340f3fabe836761673ed80cbcbd8f2acb4",
+  "disposition": "complete",
+  "decision_ref": "enforced-planning#136@1bfd533a",
+  "reason": "The local criterion gate and its exact Plan 52 browser negative and positive controls are retained and verified. Integration and fleet activation remain explicitly excluded."
+}

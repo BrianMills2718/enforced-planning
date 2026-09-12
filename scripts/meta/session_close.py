@@ -163,7 +163,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 
-def _resolve_canonical_lock_module() -> Path | None:
+def _resolve_canonical_lock_module(
+    *,
+    repo_root: Path = REPO_ROOT,
+    script_path: Path | None = None,
+) -> Path | None:
     """Locate canonical_lock.py from either shipped script depth.
 
     The two copies of this script sit at different depths (``scripts/`` and
@@ -173,8 +177,32 @@ def _resolve_canonical_lock_module() -> Path | None:
     nothing reports it. Returns None only when the optional module is genuinely
     absent.
     """
-    here = Path(__file__).resolve().parent
-    for base in (here, here.parent):
+    resolved_script = (script_path or Path(__file__)).resolve()
+    here = resolved_script.parent
+    bases: list[Path] = []
+    common_dir = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if common_dir.returncode == 0:
+        canonical_root = Path(common_dir.stdout.strip()).resolve().parent
+        try:
+            script_directory = here.relative_to(repo_root.resolve())
+        except ValueError:
+            pass
+        else:
+            bases.append(canonical_root / script_directory)
+    bases.extend((here, here.parent))
+    for base in dict.fromkeys(bases):
         candidate = base / "worktree-coordination" / "canonical_lock.py"
         if candidate.exists():
             return candidate

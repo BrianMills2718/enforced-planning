@@ -1,12 +1,12 @@
 {
   "active_slice": {
     "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
-    "next_action": "Obtain a fresh adversarial signoff on the valid-fail replay and the retain-manual-off decision.",
+    "next_action": "After new unseen native correction traffic exists, freeze a schema 1.1 complete corpus and obtain fresh independent signoff.",
     "requires_external_action": false,
     "requires_spend": false,
     "slice_id": "native-corpus-and-signoff",
     "status": "verifying",
-    "target_revision": "85095b1"
+    "target_revision": "f5680f7"
   },
   "authority": {
     "external_action_authorized": false,
@@ -24,15 +24,15 @@
   "completion": {
     "evidence_revision": null,
     "receipt_ref": null,
-    "remaining_ready_work": 1,
+    "remaining_ready_work": 0,
     "requested": false,
-    "verifier_outcome": null
+    "verifier_outcome": "fail"
   },
   "cursor_id": "plan-135-native-corpus-signoff-v3",
-  "cursor_revision": 3,
+  "cursor_revision": 4,
   "failure_state": {
-    "boundary": "native-classifier-generalization",
-    "last_failure_ref": "prompts/correction_learning/native_result_v1.json@85095b1",
+    "boundary": "native-corpus-integrity",
+    "last_failure_ref": "docs/evidence/plan135_native_corpus_signoff.md@b6303b3",
     "same_boundary_failures": 1
   },
   "goal_ref": "correction-aware-agent-learning",
@@ -58,6 +58,20 @@
       "kind": "verification_failure",
       "observation_id": "native-corpus-classifier-failed",
       "outcome": "fail"
+    },
+    {
+      "boundary": "native-corpus-integrity",
+      "evidence_ref": "docs/evidence/plan135_native_corpus_signoff.md@b6303b3",
+      "kind": "verification_failure",
+      "observation_id": "native-corpus-signoff-rejected",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "native-corpus-integrity",
+      "evidence_ref": "enforced_planning/correction_learning.py@f5680f7",
+      "kind": "supporting_work",
+      "observation_id": "native-evidence-boundaries-repaired",
+      "outcome": "pass"
     }
   ],
   "plan_revision": "01c5a6cc61f853b8440b6792945badd64929ce6d",

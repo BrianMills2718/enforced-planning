@@ -113,7 +113,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 133 | Shared-surface change disclosure at closeout (`133_shared-surface-change-disclosure.md`) | Medium | 📋 Planned | closes the mechanism gap under pending policy `shared-surface-state-claims` (project-meta `0cda1bc2f0`) |
 | 134 | Resume-First Owner-Loss Recovery (`134_owner_loss_recovery.md`) | Critical | ✅ Complete — source accepted; host and three real consumers activated | low-friction recovery from stale or dead claim owners |
 | 135 | Correction-Aware Learning Gate (`135_correction_learning_gate.md`) | High | 🚧 In Progress — Prompt 1.2/Sonnet route rejected; classifier manual/off | materially different detection design and new evidence before observe wiring |
-| 136 | Criterion-Bound Outcome Gate (`136_criterion_bound_outcome_gate.md`) | Critical | 🚧 In Progress — source contract passes; Plan 52 consumer proof remains | prevents review-ready substitution after explicit rejection |
+| 136 | Criterion-Bound Outcome Gate (`136_criterion_bound_outcome_gate.md`) | Critical | ✅ Complete — local gate and exact Plan 52 browser consumer evidenced; activation excluded | prevents review-ready substitution after explicit rejection |
 
 ## Status Key
 

@@ -41,6 +41,7 @@
       ],
       "dependencies": [],
       "conflict_surfaces": [
+        {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "enforced_planning/outcome_continuation.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "tests/test_cross_client_execution_tracking.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
@@ -105,6 +106,7 @@
         }
       ],
       "conflict_surfaces": [
+        {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "agentic-engineering-system", "access": "exclusive"},
         {"kind": "repository_path", "target": "src/aes/orchestration/native_codex.py", "repository": "agentic-engineering-system", "access": "exclusive"},
         {"kind": "repository_path", "target": "src/aes/orchestration/contracts.py", "repository": "agentic-engineering-system", "access": "exclusive"},
         {"kind": "repository_path", "target": "tests/test_native_codex_adapter.py", "repository": "agentic-engineering-system", "access": "exclusive"}
@@ -153,6 +155,7 @@
         }
       ],
       "conflict_surfaces": [
+        {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "enforced_planning/client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "tests/test_client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
@@ -213,6 +216,7 @@
         }
       ],
       "conflict_surfaces": [
+        {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "tests/test_cross_client_execution_journey.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "docs/evidence/plan137_cross_client_execution_tracking.json", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},

@@ -203,6 +203,9 @@ transcript boundary is separately demonstrated.
 
 ## Files Affected
 
+- `.gitignore` (allow the execution-loop cursor to remain durable)
+- `docs/evidence/plan135_native_corpus_outcome.json`
+- `docs/evidence/plan135_native_corpus_allocation.json`
 - `docs/plans/135_correction_learning_gate.md`
 - `docs/plans/135_correction_learning_gate_work_graph.json`
 - `enforced_planning/correction_learning.py` (create)
@@ -375,3 +378,17 @@ representativeness or generalization. Therefore the classifier remains
 manual/off; native launching, Stop blocking, and host wiring are not authorized
 by this pilot. The next valid evidence is a frozen authentically sampled native
 corpus with replayable per-case verdicts and another independent sign-off.
+
+### Native corpus pre-registration
+
+The labels in `prompts/correction_learning/native_corpus_v1.json` were frozen at
+commit `2434017` before any classifier replay. The scored population is every
+post-pilot exchange from three already-active substantive Codex sessions: nine
+cases across three sessions, with two corrections, six non-corrections, and one
+ambiguous boundary. Five additional post-pilot one-exchange Claude Code sessions
+are native-format negative controls only; they exercise current extraction but
+are not represented as human-conversation evidence. The manifest retains home-
+relative source locators, timestamps, event IDs, and content-derived hashes, but
+no assistant or user prose. Replay must resolve the exact local event hashes and
+emit only classifications plus rationale hashes. A passing run advances only to
+fresh independent sign-off; it cannot authorize block mode by itself.

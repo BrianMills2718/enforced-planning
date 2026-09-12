@@ -11,9 +11,11 @@ import pytest
 from enforced_planning.correction_learning import (
     CorrectionClassification,
     CorrectionVerdict,
+    NativeCorrectionCorpusV1,
     TranscriptExchange,
     audit_exchanges,
     extract_transcript_exchanges,
+    load_native_corpus_exchanges,
 )
 from scripts import correction_learning_audit
 
@@ -320,6 +322,99 @@ def test_pilot_case_set_has_preregistered_held_out_counts() -> None:
     assert len({case["case_id"] for case in payload["cases"]}) == len(payload["cases"])
     assert sum(case["expected"] == "correction" for case in held_out) == 10
     assert sum(case["expected"] == "not_correction" for case in held_out) == 20
+
+
+def test_native_corpus_is_post_pilot_privacy_reduced_and_multiclient() -> None:
+    path = Path("prompts/correction_learning/native_corpus_v1.json")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    corpus = NativeCorrectionCorpusV1.model_validate(raw)
+
+    assert len(corpus.cases) == 14
+    assert len({(case.agent, case.session_id) for case in corpus.cases}) == 8
+    assert sum(case.role == "scored" for case in corpus.cases) == 9
+    assert sum(case.expected == "correction" for case in corpus.cases) == 2
+    assert all("assistant" not in case and "user" not in case for case in raw["cases"])
+
+
+def test_native_corpus_replay_requires_exact_event_provenance(tmp_path: Path) -> None:
+    cases = []
+    for index, agent in enumerate(["codex", "codex", "codex", "codex", "claude-code"]):
+        source = Path(f"native/session-{index}.jsonl")
+        target = tmp_path / source
+        target.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = f"2026-09-12T02:00:0{index}Z"
+        if agent == "codex":
+            rows = [
+                {
+                    "timestamp": timestamp,
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": "Claim"}],
+                    },
+                },
+                {
+                    "timestamp": timestamp,
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "Question"}],
+                    },
+                },
+            ]
+        else:
+            rows = [
+                {
+                    "timestamp": timestamp,
+                    "type": "assistant",
+                    "message": {"role": "assistant", "content": "Claim"},
+                },
+                {
+                    "timestamp": timestamp,
+                    "type": "user",
+                    "message": {"role": "user", "content": "Question"},
+                },
+            ]
+        target.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+        exchange = extract_transcript_exchanges(target, agent=agent)[0]
+        cases.append(
+            {
+                "case_id": f"case-{index}",
+                "role": "scored" if agent == "codex" else "native_format_control",
+                "agent": agent,
+                "session_id": f"session-{index}",
+                "source_path": str(source),
+                "event_id": exchange.event_id,
+                "event_hash": exchange.event_hash,
+                "occurred_at": exchange.occurred_at.isoformat(),
+                "expected": "not_correction",
+            }
+        )
+    payload = {
+        "schema_version": "1.0",
+        "corpus_id": "test-native-corpus",
+        "frozen_at": "2026-09-12T03:00:00Z",
+        "pilot_cutoff": "2026-09-12T01:00:00Z",
+        "selection": {
+            "scored_population": "Synthetic loader test cases.",
+            "native_format_controls": "One Claude transcript-shape control.",
+            "label_basis": "Fixed test labels.",
+            "privacy": "No source prose in the manifest.",
+        },
+        "cases": cases,
+    }
+    corpus_path = tmp_path / "corpus.json"
+    corpus_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    corpus, exchanges = load_native_corpus_exchanges(corpus_path, home=tmp_path)
+    assert len(corpus.cases) == len(exchanges) == 5
+
+    payload["cases"][0]["event_hash"] = "corr_" + "0" * 32
+    corpus_path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="event provenance changed"):
+        load_native_corpus_exchanges(corpus_path, home=tmp_path)
 
 
 @pytest.mark.skipif(

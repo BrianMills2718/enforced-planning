@@ -114,6 +114,93 @@ class LearningCandidate(StrictModel):
     learning: str = Field(min_length=1)
 
 
+class NativeCorpusSelectionV1(StrictModel):
+    """Human-readable sampling and privacy contract fixed before replay."""
+
+    scored_population: str = Field(min_length=1)
+    native_format_controls: str = Field(min_length=1)
+    label_basis: str = Field(min_length=1)
+    privacy: str = Field(min_length=1)
+
+
+class NativeCorpusCaseV1(StrictModel):
+    """One labeled native event without retained conversation prose."""
+
+    case_id: str = Field(min_length=1)
+    role: Literal["scored", "native_format_control"]
+    agent: Literal["codex", "claude-code"]
+    session_id: str = Field(min_length=1)
+    source_path: str = Field(min_length=1)
+    event_id: str = Field(min_length=1)
+    event_hash: str = Field(pattern=r"^corr_[0-9a-f]{32}$")
+    occurred_at: AwareDatetime
+    expected: Literal["correction", "not_correction", "ambiguous"]
+
+    @model_validator(mode="after")
+    def portable_source(self) -> NativeCorpusCaseV1:
+        source = Path(self.source_path)
+        if source.is_absolute() or ".." in source.parts:
+            raise ValueError("native corpus source_path must be home-relative and cannot escape")
+        return self
+
+
+class NativeCorrectionCorpusV1(StrictModel):
+    """Frozen native cases selected and labeled before classifier replay."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    corpus_id: str = Field(min_length=1)
+    frozen_at: AwareDatetime
+    pilot_cutoff: AwareDatetime
+    selection: NativeCorpusSelectionV1
+    cases: list[NativeCorpusCaseV1] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def coherent_population(self) -> NativeCorrectionCorpusV1:
+        case_ids = [case.case_id for case in self.cases]
+        event_ids = [case.event_id for case in self.cases]
+        if len(case_ids) != len(set(case_ids)):
+            raise ValueError("native corpus case IDs must be unique")
+        if len(event_ids) != len(set(event_ids)):
+            raise ValueError("native corpus event IDs must be unique")
+        if any(case.occurred_at < self.pilot_cutoff for case in self.cases):
+            raise ValueError("native corpus cases must occur after the frozen pilot cutoff")
+        if {case.agent for case in self.cases} != {"codex", "claude-code"}:
+            raise ValueError("native corpus must cover Codex and Claude Code")
+        if len({(case.agent, case.session_id) for case in self.cases}) < 5:
+            raise ValueError("native corpus must cover at least five native sessions")
+        return self
+
+
+def load_native_corpus_exchanges(
+    corpus_path: Path,
+    *,
+    home: Path | None = None,
+) -> tuple[NativeCorrectionCorpusV1, list[TranscriptExchange]]:
+    """Resolve frozen event hashes to local native prose without retaining it."""
+
+    corpus = NativeCorrectionCorpusV1.model_validate_json(
+        corpus_path.read_text(encoding="utf-8")
+    )
+    resolved_home = (home or Path.home()).expanduser().resolve()
+    cache: dict[tuple[str, str], dict[str, TranscriptExchange]] = {}
+    exchanges: list[TranscriptExchange] = []
+    for case in corpus.cases:
+        key = (case.agent, case.source_path)
+        if key not in cache:
+            source = (resolved_home / case.source_path).resolve()
+            if not source.is_relative_to(resolved_home):
+                raise ValueError("native corpus source escapes the configured home")
+            extracted = extract_transcript_exchanges(source, agent=case.agent)
+            cache[key] = {exchange.event_id: exchange for exchange in extracted}
+        exchange = cache[key].get(case.event_id)
+        if exchange is None:
+            raise ValueError(f"native corpus event missing: {case.case_id}")
+        if exchange.event_hash != case.event_hash or exchange.occurred_at != case.occurred_at:
+            raise ValueError(f"native corpus event provenance changed: {case.case_id}")
+        exchanges.append(exchange)
+    return corpus, exchanges
+
+
 Classifier = Callable[
     [list[TranscriptExchange], list[LearningCandidate]], CorrectionClassification
 ]

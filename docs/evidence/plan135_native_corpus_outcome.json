@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-135-native-corpus-signoff",
+  "contract": {
+    "schema_version": "1.1.0",
+    "outcome_id": "correction-aware-agent-learning",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-135-correction-learning-gate",
+    "portfolio_class": "product",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "Brian and coding agents using the shared correction-learning gate",
+    "outcome": "A representative privacy-reduced native corpus establishes whether the correction classifier generalizes well enough for observe-mode adoption and independent signoff.",
+    "canonical_journey": {
+      "starting_state": "The frozen synthetic pilot passed its thresholds but independent signoff rejected promotion because no representative native held-out corpus exists.",
+      "input": "Authentically sampled Codex and Claude Code adjacent assistant-user exchanges with provenance and privacy reduction.",
+      "action": "Freeze labels before replay, run the existing structured classifier within its budget, inspect exact verdicts and traces, and obtain independent signoff.",
+      "observable_result": "Every sampled case has replayable provenance and a verdict; the decision either authorizes observe-only wiring or retains manual-off with exact failing evidence.",
+      "failure_signal": "Cases are hand-authored, selected after seeing verdicts, lack native provenance, exceed the authorized budget, or are promoted without independent signoff."
+    },
+    "baseline_revision": "01c5a6cc61f853b8440b6792945badd64929ce6d",
+    "allowed_scope": [
+      ".gitignore",
+      ".company-planning/active-execution.json",
+      ".company-planning/history/",
+      "docs/evidence/",
+      "docs/plans/135_correction_learning_gate.md",
+      "docs/plans/135_correction_learning_gate_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "prompts/correction_learning/",
+      "enforced_planning/correction_learning.py",
+      "scripts/correction_learning_audit.py",
+      "scripts/learning_capture_hook.py",
+      "scripts/session_end.py",
+      "enforced_planning/hook_wiring.py",
+      "tests/test_correction_learning.py",
+      "tests/test_learning_capture_hook.py",
+      "tests/test_generate_hook_wiring.py",
+      "tests/test_session_cli.py",
+      "docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md"
+    ],
+    "progress_dimensions": [
+      "representative native corpus",
+      "classifier generalization",
+      "independent promotion signoff"
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": ".gitignore",
+    "ordinary_approval": true,
+    "approval_text": "Brian said proceed and continue",
+    "cost_telemetry_usd": "0.05",
+    "elapsed_telemetry_seconds": 0
+  }
+}

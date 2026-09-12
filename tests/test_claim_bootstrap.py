@@ -1165,7 +1165,11 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
         assert receipt["result"]["bootstrap_requires_narrowing"] is False
     assert claims[0].claim_type == "program"
     assert claims[0].write_paths == (write_paths or ["."])
-    assert len(list(trackers_dir.rglob("*.yaml"))) == 1
+    assert claims[0].start_revision == receipt["result"]["start_revision"]
+    tracker_files = list(trackers_dir.rglob("*.yaml"))
+    assert len(tracker_files) == 1
+    tracker = yaml.safe_load(tracker_files[0].read_text(encoding="utf-8"))
+    assert tracker["claim"]["start_revision"] == receipt["result"]["start_revision"]
     projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
     assert prewrite_claim_projection.projection_is_current(
         claims_dir=claims_dir,

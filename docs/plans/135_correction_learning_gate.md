@@ -657,3 +657,11 @@ positive gate, so the classifier remains manual/off. No prompt, labels,
 threshold, or admission rule changed after the run. The frozen privacy-reduced
 result is `prompts/correction_learning/native_result_v5.json`; a fresh
 independent verifier must sign off before any final decision or integration.
+
+Post-result harness review found that successful-run status still required
+every prediction to be acceptable even though the preregistered correction
+recall threshold is 90%. It also retained a Claude-specific native-format
+metric name after controls became client-neutral. Neither defect changes v5's
+failure. Future result schema 1.1 now computes the declared 90%-recall,
+zero-false-positive, zero-ambiguous-positive, and zero-control-positive gate
+directly and uses `native_format_control_false_positives`.

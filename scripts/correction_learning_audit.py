@@ -206,6 +206,25 @@ def verified_frozen_revision(revision: str, *paths: Path) -> str:
     return full_revision
 
 
+def native_promotion_gate_passes(predictions: list[dict[str, object]]) -> bool:
+    """Apply the preregistered native promotion thresholds to scored cases."""
+
+    scored = [row for row in predictions if row["role"] == "scored"]
+    corrections = [row for row in scored if row["expected"] == "correction"]
+    negatives = [row for row in scored if row["expected"] == "not_correction"]
+    ambiguous = [row for row in scored if row["expected"] == "ambiguous"]
+    controls = [row for row in predictions if row["role"] == "native_format_control"]
+    if not corrections:
+        return False
+    recall = sum(row["actual"] == "correction" for row in corrections) / len(corrections)
+    return (
+        recall >= 0.9
+        and not any(row["actual"] == "correction" for row in negatives)
+        and not any(row["actual"] == "correction" for row in ambiguous)
+        and not any(row["actual"] == "correction" for row in controls)
+    )
+
+
 def evaluate_native_corpus(args: argparse.Namespace) -> int:
     """Replay frozen native cases and retain only privacy-reduced verdicts."""
 
@@ -293,9 +312,9 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
     negatives = [row for row in scored if row["expected"] == "not_correction"]
     ambiguous = [row for row in scored if row["expected"] == "ambiguous"]
     controls = [row for row in predictions if row["role"] == "native_format_control"]
-    valid = all(row["acceptable"] for row in predictions)
+    valid = native_promotion_gate_passes(predictions)
     payload = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "record_type": "correction_native_corpus_result",
         "corpus_id": corpus.corpus_id,
         "evaluated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -316,7 +335,7 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
             "scored_ambiguous_enforcement_positives": sum(
                 row["actual"] == "correction" for row in ambiguous
             ),
-            "claude_native_format_false_positives": sum(
+            "native_format_control_false_positives": sum(
                 row["actual"] == "correction" for row in controls
             ),
             "session_count": len({(row["agent"], row["session_id"]) for row in predictions}),
@@ -327,7 +346,7 @@ def evaluate_native_corpus(args: argparse.Namespace) -> int:
             "continue_to_independent_signoff" if valid else "retain_manual_off"
         ),
         "non_claims": [
-            "Claude Code native-format controls are not human-conversation evidence.",
+            "Native-format controls are not human-conversation evidence.",
             "This result cannot authorize blocking mode without independent signoff and both native observe receipts.",
             "No assistant text, user text, or model rationale is retained in this artifact.",
         ],

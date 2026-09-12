@@ -445,6 +445,36 @@ def test_native_replay_writes_privacy_reduced_invalid_result(
     assert "provider details" not in result_path.read_text(encoding="utf-8")
 
 
+def test_native_promotion_gate_uses_preregistered_thresholds() -> None:
+    corrections = [
+        {
+            "role": "scored",
+            "expected": "correction",
+            "actual": "correction" if index < 9 else "not_correction",
+        }
+        for index in range(10)
+    ]
+    negatives = [
+        {"role": "scored", "expected": "not_correction", "actual": "not_correction"}
+    ]
+    ambiguous = [
+        {"role": "scored", "expected": "ambiguous", "actual": "ambiguous"}
+    ]
+
+    assert correction_learning_audit.native_promotion_gate_passes(
+        corrections + negatives + ambiguous
+    )
+    corrections[8]["actual"] = "not_correction"
+    assert not correction_learning_audit.native_promotion_gate_passes(
+        corrections + negatives + ambiguous
+    )
+    corrections[8]["actual"] = "correction"
+    negatives[0]["actual"] = "correction"
+    assert not correction_learning_audit.native_promotion_gate_passes(
+        corrections + negatives + ambiguous
+    )
+
+
 def test_native_replay_rejects_nonexistent_source_revision() -> None:
     with pytest.raises(ValueError, match="resolvable Git commit"):
         correction_learning_audit.verified_frozen_revision(

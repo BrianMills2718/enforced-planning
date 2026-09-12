@@ -200,7 +200,10 @@ def _resolve_canonical_lock_module(
         except ValueError:
             pass
         else:
-            bases.append(canonical_root / script_directory)
+            canonical_script_directory = canonical_root / script_directory
+            bases.extend(
+                (canonical_script_directory, canonical_script_directory.parent)
+            )
     bases.extend((here, here.parent))
     for base in dict.fromkeys(bases):
         candidate = base / "worktree-coordination" / "canonical_lock.py"

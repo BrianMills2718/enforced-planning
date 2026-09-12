@@ -4846,7 +4846,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if any(claim_enforcement_issues(claim) for claim in claims) else 0
 
     if args.list:
-        claims = check_claims()
+        claims = check_claims(args.project)
         if args.json:
             print(json.dumps(_render_check_output(claims=claims, project=args.project, candidate=None), indent=2))
             return 0

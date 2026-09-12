@@ -5138,6 +5138,37 @@ def test_listing_expired_claim_is_read_only(
     assert (claims_dir / "expired-active.yaml").exists()
 
 
+def test_list_project_selector_filters_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    for project in ("project-meta", "other-project"):
+        _write_claim(
+            claims_dir,
+            f"{project}.yaml",
+            {
+                "agent": "codex",
+                "claimed_at": "2026-04-05T12:00:00+00:00",
+                "expires_at": "2099-04-05T13:00:00+00:00",
+                "projects": [project],
+                "scope": f"{project}-scope",
+                "intent": f"Work in {project}",
+                "claim_type": "program",
+                "status": "active",
+            },
+        )
+
+    exit_code = module.main(["--list", "--project", "project-meta", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert [claim["project"] for claim in payload["claims"]] == ["project-meta"]
+
+
 def test_check_json_outputs_claims_and_candidate_conflict_classification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

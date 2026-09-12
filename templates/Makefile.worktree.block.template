@@ -15,8 +15,8 @@ WORKTREE_RAISE_CONCERN_SCRIPT := __WORKTREE_SCRIPT_ROOT__/raise_concern.py
 WORKTREE_PLAN_READINESS_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../check_plan_readiness.py
 WORKTREE_FINISH_SCRIPT := __WORKTREE_SCRIPT_ROOT__/finish_pr.py
 SURFACE_RUNTIME_SCRIPT := __WORKTREE_SCRIPT_ROOT__/../surface_runtime.py
-WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-default-worktree-dir)
 WORKTREE_REPO_ROOT ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$$||')
+WORKTREE_DIR ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root "$(WORKTREE_REPO_ROOT)" --print-default-worktree-dir)
 WORKTREE_START_POINT ?= HEAD
 WORKTREE_START_REVISION := $(shell git -C "$(WORKTREE_REPO_ROOT)" rev-parse --verify "$(WORKTREE_START_POINT)^{commit}" 2>/dev/null)
 WORKTREE_PROJECT ?= $(shell $(PYTHON) "$(WORKTREE_CREATE_SCRIPT)" --repo-root . --print-canonical-project)

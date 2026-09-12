@@ -78,6 +78,32 @@ def test_consumer_template_exposes_the_same_finish_contract() -> None:
     assert '--review-spec "$(REVIEW_SPEC)"' in recipe
 
 
+def test_cross_repository_close_derives_worktree_from_overridden_repo_root(
+    tmp_path: Path,
+) -> None:
+    """A central Make invocation must close the target repo's actual worktree.
+
+    Deriving ``WORKTREE_DIR`` from ``.`` made creation target the supplied
+    consumer repository while closeout looked under enforced-planning itself.
+    It then saw the intended worktree as absent and tried to delete a branch
+    that the real worktree still had checked out.
+    """
+    target = tmp_path / "consumer"
+    _init_temp_repo(target)
+    expected = target / "worktrees" / "cross-repo-probe"
+    output = _dry_run_make(
+        "session-close",
+        "BRANCH=cross-repo-probe",
+        f"WORKTREE_REPO_ROOT={target}",
+        "WORKTREE_PROJECT=consumer",
+        "WORKTREE_AGENT=codex",
+        "WORKTREE_DISPOSITION=merged",
+        f"WORKTREE_MERGE_COMMIT={'a' * 40}",
+    )
+
+    assert f'--worktree-path "{expected}"' in output
+
+
 def _maintenance_request(make_output: str) -> dict[str, object]:
     lines = [
         line

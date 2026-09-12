@@ -471,6 +471,15 @@ def resolve_project_graph_authority(
 
 
 def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecord]:
+    """Load authority-relevant claims while isolating explicit terminal debris.
+
+    Completed claims cannot authorize an allocation or conflict with a live
+    claim. Older tooling sometimes left incomplete completed records in the
+    live registry, so requiring those terminal records to normalize makes an
+    unrelated historical file a global allocator outage. Missing, unknown, and
+    live statuses still fail closed below.
+    """
+
     records: list[coordination_claims.ClaimRecord] = []
     if not claims_dir.is_dir():
         return records
@@ -487,6 +496,12 @@ def _load_claim_records(claims_dir: Path) -> list[coordination_claims.ClaimRecor
                 "claim_registry_invalid",
                 f"canonical claim {path} must be a YAML mapping",
             )
+        raw_status = payload.get("status")
+        if (
+            isinstance(raw_status, str)
+            and raw_status.strip().lower() in coordination_claims.COMPLETED_STATUSES
+        ):
+            continue
         record = coordination_claims.normalize_claim(
             payload,
             source_file=str(path.resolve()),

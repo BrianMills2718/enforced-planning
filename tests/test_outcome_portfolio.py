@@ -316,6 +316,97 @@ def test_underscore_project_id_allocates_and_resolves_through_portfolio(
     assert resolved.allocation_sha256 == allocated.allocation_sha256
 
 
+@pytest.mark.parametrize("terminal_status", ["complete", "completed", "COMPLETED"])
+def test_allocation_ignores_malformed_completed_claim_debris(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    terminal_status: str,
+) -> None:
+    """A historical terminal record cannot deny an unrelated live allocation."""
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "portfolio-test")
+    project_id = "enforced-planning"
+    graph_repo, revision = _graph_repo(tmp_path, [_graph_record(project_id)])
+    claims_dir = tmp_path / "claims"
+    ledger_path = tmp_path / "portfolio-ledger.json"
+    scenario = _scenario(project_id)
+    _, scenario_path, request_path = _claimed_inputs(
+        tmp_path,
+        project_id=project_id,
+        scenario=scenario,
+        claims_dir=claims_dir,
+    )
+    (claims_dir / "legacy-completed.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "status": terminal_status,
+                "claim_type": "write",
+                "branch": "historical-branch",
+                "write_paths": ["historical.py"],
+                "notes": "Merged before strict claim identity was required.",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    allocated = _allocate(
+        project_id=project_id,
+        scenario_path=scenario_path,
+        request_path=request_path,
+        graph_repo=graph_repo,
+        graph_revision=revision,
+        claims_dir=claims_dir,
+        ledger_path=ledger_path,
+    )
+
+    assert allocated.status == "allocated"
+
+
+@pytest.mark.parametrize("unsafe_status", [None, "active", "archived"])
+def test_allocation_fails_closed_on_malformed_noncompleted_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unsafe_status: str | None,
+) -> None:
+    """Only the two canonical completed statuses may bypass normalization."""
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "portfolio-test")
+    project_id = "enforced-planning"
+    graph_repo, revision = _graph_repo(tmp_path, [_graph_record(project_id)])
+    claims_dir = tmp_path / "claims"
+    ledger_path = tmp_path / "portfolio-ledger.json"
+    scenario = _scenario(project_id)
+    _, scenario_path, request_path = _claimed_inputs(
+        tmp_path,
+        project_id=project_id,
+        scenario=scenario,
+        claims_dir=claims_dir,
+    )
+    malformed: dict[str, Any] = {"schema_version": 3, "claim_type": "write"}
+    if unsafe_status is not None:
+        malformed["status"] = unsafe_status
+    (claims_dir / "malformed.yaml").write_text(
+        yaml.safe_dump(malformed, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(OutcomePortfolioError) as exc_info:
+        _allocate(
+            project_id=project_id,
+            scenario_path=scenario_path,
+            request_path=request_path,
+            graph_repo=graph_repo,
+            graph_revision=revision,
+            claims_dir=claims_dir,
+            ledger_path=ledger_path,
+        )
+
+    assert exc_info.value.code == "claim_registry_invalid"
+    assert not ledger_path.exists()
+
+
 def test_allocation_and_disposition_are_append_only_and_byte_idempotent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

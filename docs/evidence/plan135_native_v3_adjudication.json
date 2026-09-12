@@ -1,0 +1,47 @@
+{
+  "annotator": "adjudicator",
+  "labels": [
+    {
+      "event_id": "fef48f5a2e229e21ff8596b4",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "98c2133290c645c079af1d7a",
+      "label": "correction"
+    },
+    {
+      "event_id": "688ba18f0f216d8547903871",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "db75ea3f4af75ef0c2f1ef30",
+      "label": "correction"
+    },
+    {
+      "event_id": "950eb93fdfb473b432b627d2",
+      "label": "correction"
+    },
+    {
+      "event_id": "7b403d8d3f98afad85638162",
+      "label": "correction"
+    },
+    {
+      "event_id": "b019882dbcd12895098d15db",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "d0af5bda24b35cefa53ef54f",
+      "label": "correction"
+    },
+    {
+      "event_id": "e0310150f3b02de455c2beea",
+      "label": "not_correction"
+    }
+  ],
+  "non_claims": [
+    "Annotation rationales and conversation prose are intentionally omitted."
+  ],
+  "original_sha256": "ed6b075a45d9d38c051e816dc3550d59546f44f40589632589a994a14d7e4eeb",
+  "record_type": "privacy_reduced_native_annotation",
+  "schema_version": "1.0"
+}

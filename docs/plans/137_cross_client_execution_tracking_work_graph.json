@@ -43,6 +43,10 @@
       "conflict_surfaces": [
         {"kind": "repository_path", "target": "enforced_planning/outcome_continuation.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "tests/test_cross_client_execution_tracking.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking_work_graph.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/CLAUDE.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "ROADMAP.md", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "contract", "target": "CrossClientExecutionProjectionV1", "access": "exclusive", "coordination_key": "cross-client-execution-projection"}
       ],
       "acceptance": [
@@ -139,7 +143,7 @@
         "excluded": ["Global hook activation", "Always-on review", "Automatic continuation", "Canonical state ownership"]
       },
       "inputs": [{"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"}],
-      "outputs": ["Claude task projection adapter", "Native event correlations", "Capability/limitation evidence"],
+      "outputs": ["Claude task projection adapter", "Native event correlations", "Capability/limitation evidence", "Independently verified joint adapter acceptance transition"],
       "dependencies": [
         {
           "unit_id": "xcet-01-neutral-contract",
@@ -150,7 +154,11 @@
       ],
       "conflict_surfaces": [
         {"kind": "repository_path", "target": "enforced_planning/client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
-        {"kind": "repository_path", "target": "tests/test_client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"}
+        {"kind": "repository_path", "target": "tests/test_client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking_work_graph.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/CLAUDE.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "ROADMAP.md", "repository": "enforced-planning", "access": "exclusive"}
       ],
       "acceptance": [
         {

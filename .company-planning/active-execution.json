@@ -1,0 +1,58 @@
+{
+  "active_slice": {
+    "description": "Freeze a representative privacy-reduced native correction corpus, replay the classifier, and obtain independent decision signoff",
+    "next_action": "Inspect the existing native transcript extraction and pilot harness, then define the smallest provenance-preserving corpus builder.",
+    "requires_external_action": false,
+    "requires_spend": true,
+    "slice_id": "native-corpus-and-signoff",
+    "status": "executing",
+    "target_revision": "plan-135-native-corpus-v1"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0.05,
+    "spend_used_usd": 0.0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 1,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "plan-135-native-corpus-signoff-v3",
+  "cursor_revision": 1,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "correction-aware-agent-learning",
+  "lifecycle_state": "active",
+  "observations": [
+    {
+      "boundary": "promotion-evidence",
+      "evidence_ref": "docs/plans/135_correction_learning_gate.md#classifier-pilot-pre-registration",
+      "kind": "verification_failure",
+      "observation_id": "synthetic-pilot-rejected",
+      "outcome": "fail"
+    }
+  ],
+  "plan_revision": "01c5a6cc61f853b8440b6792945badd64929ce6d",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan-135-native-corpus-signoff-v3",
+    "repository": "enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/plan-135-native-corpus-signoff-v3"
+  }
+}

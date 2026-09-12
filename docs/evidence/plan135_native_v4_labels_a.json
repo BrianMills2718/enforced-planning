@@ -1,0 +1,517 @@
+{
+  "annotator": "A",
+  "labels": [
+    {
+      "event_id": "229504e217382b88a56b5b82",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "b8e8f9e4c38396e5b7bd5092",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e00e4a23eb2581ff46be2c59",
+      "label": "correction"
+    },
+    {
+      "event_id": "9e9afb87d7274d45aedc007b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "88e607bdd56ac0fece581662",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "68d468f0a3bda9c888779023",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "57061e0cadd39d404352d27a",
+      "label": "correction"
+    },
+    {
+      "event_id": "e6eeb4a3479e3e31983b74e2",
+      "label": "correction"
+    },
+    {
+      "event_id": "7cd589dddaba91df8536e5a1",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f22db800a008ea835e8bbe2d",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "819935b0a6aca46d907a732b",
+      "label": "correction"
+    },
+    {
+      "event_id": "1fb05282f930cec4cbc896c3",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "2c51d80b4cef8fc416b2940c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "029970e4f3a6ccec07e9c358",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "460b5de9fe92694475ccaaba",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7b6eaf67d75a23c95daa3296",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "368a68da530df3627d524da6",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "9980c07db13b2488a32e7f80",
+      "label": "correction"
+    },
+    {
+      "event_id": "26039c0392ac1318fce60322",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "899f6f073579203fde82c37c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "0b04849204301c0456524506",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "cb0ab2852b6bda6c4a075c3f",
+      "label": "correction"
+    },
+    {
+      "event_id": "132cfb3294f7051e61f86fa8",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f7d24e2aebd3d4bbecc8e9bd",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "75479ba07ef5c408a012ef73",
+      "label": "correction"
+    },
+    {
+      "event_id": "e9842aabade1b6124c4ad17f",
+      "label": "correction"
+    },
+    {
+      "event_id": "df28726817a4c75b30497f0d",
+      "label": "ambiguous"
+    },
+    {
+      "event_id": "86fdf5b0fd8b91996ed47e09",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "5f2521b7e194dcf49ba2c822",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "c155451f8f44b496e8275dbd",
+      "label": "correction"
+    },
+    {
+      "event_id": "3e21376a883321d6b396178e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "1f6dd34f63ae5b8d52968d5d",
+      "label": "correction"
+    },
+    {
+      "event_id": "8a5c5d232a61772cf9d21b3d",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "be4974b36d36539f7bcc81f5",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "a8d0967d184520fe6a8ebff5",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "29215a63d1172ed4b03e66d5",
+      "label": "correction"
+    },
+    {
+      "event_id": "850ee5e49f139e3a1f5a3773",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "36dc8535d52198765c3be74e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "b7c212737d1b9a0786a76a00",
+      "label": "correction"
+    },
+    {
+      "event_id": "4a2e0c19d28cabbc1613667e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8a2907b7dda6dae67a21c5ce",
+      "label": "ambiguous"
+    },
+    {
+      "event_id": "70e760a0a73aa6a7d51abb08",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "fc0b43e4717176125ff67a6b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "2d4a36506357b5c041696252",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "02b196ef7aa0ae95ccac08cc",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "25bbfdb6d174f4b72f76105b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "9727fb1fa0539291f6a30552",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "83fd88b0bb11e41dde41c332",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "d14c1f4339d4ad3b7546582f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f585e60180440d8da061257c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "75496eb1b6a7788a37a3d0c9",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f63db34501a2c7802891774b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e266255844432d8d0031332e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8152b30ab83f8397e9cb21d3",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "6e6815609332cf8d4c0da356",
+      "label": "correction"
+    },
+    {
+      "event_id": "02d5e5bd108146e2eedcf941",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "955000d89d8940a8e687b98f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "c4787ee05880f6db52e2f2e5",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "94488c016e3af37b7c7485a2",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "6e0eb44993f722a9d7859a65",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "eb90aa4853a4d6e2c130371f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "b1e2483b7c8f565fb90b3c2c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "b8105e69e7ddaec750fcd262",
+      "label": "ambiguous"
+    },
+    {
+      "event_id": "000e00ddeb5c0f3ae37d4d10",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "e1f9ea548b08d96500614f43",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "87ffee603c28d8b6ed026506",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f964391faa46dbc35c0893e8",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "76b36c22a46e800f115685ea",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "29836c8583e8f12ea148c304",
+      "label": "correction"
+    },
+    {
+      "event_id": "1a019bbf7c1cc1da797a9dea",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "295ef5b9ac6b4991cbfbe56b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "cf7362ef3945f3efff2a972e",
+      "label": "correction"
+    },
+    {
+      "event_id": "ce1d0a9f666182dc244e8372",
+      "label": "correction"
+    },
+    {
+      "event_id": "3b45f69a74ac98fe3be3b0c0",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "59a1ca54b8dc46e880586728",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "34288b9f44b8f56482d924fc",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "74ea8b35ea4a663e278efcd1",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "153c9ff43a2d980ca2fec025",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "0d0f54e21fc01bb0c74b00a0",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "bfee9f41253e2de2b32daf1d",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "3ac90e36e80f6b324d336ae5",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "1a55b58115b6695c7a2de821",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "4d894222268de67a4159b42c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "53336bb7a03a8997518e658c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "764d193002f07b51857a297a",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "4ab51a2efe4780eb0b1ab631",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "96957cb82fe92c13b6d19cd9",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "3b46b95527739ad4d3ca5e33",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "6cf96742d170b901daac54cb",
+      "label": "correction"
+    },
+    {
+      "event_id": "48309da822eff3a39a29e000",
+      "label": "correction"
+    },
+    {
+      "event_id": "42db69161bb667282a4e7761",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "3e803031a59b5d22f79ef812",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "5be82fb400a7b7fd928233e5",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "d0076eb0ec7fae1e233604f3",
+      "label": "correction"
+    },
+    {
+      "event_id": "1b6325ee7bd254ee8a139a71",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "728afe5d916d0f81201c4317",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "bada2d87f5eb2258e636af5c",
+      "label": "correction"
+    },
+    {
+      "event_id": "1cb1f4d8c296ef8ab00fb4e0",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "ad7f1ceca60a41df80062287",
+      "label": "correction"
+    },
+    {
+      "event_id": "c7a413dfb32034481a60d6b0",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "16dd75fc399a022e214ebfbf",
+      "label": "correction"
+    },
+    {
+      "event_id": "6072c6bedaa29ec32dce5df0",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "17b4ad13c826b422c41e39f3",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "d984b1b088a1a86f9c020e15",
+      "label": "correction"
+    },
+    {
+      "event_id": "0fd7931493ea9be76bbb1295",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f2e38cd85d27eff544998573",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "d3c97b8704d48f36d9c4c146",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "b2658907af038f0b8c0bd1f8",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "a8d73761a46818f9e688ebd6",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "c2717be8fb70eda2912101b6",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "40e68071cb2947aba505107f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "7a61f352e50fb603c1b823ad",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "505e494f0685989bddc01f42",
+      "label": "ambiguous"
+    },
+    {
+      "event_id": "94cd0a00bbd5c368e51e1898",
+      "label": "correction"
+    },
+    {
+      "event_id": "f1bc50528901c91157726753",
+      "label": "correction"
+    },
+    {
+      "event_id": "fa5e89c01628ed025fb8715c",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8b4e33fc3df8a1041df46530",
+      "label": "correction"
+    },
+    {
+      "event_id": "d7bd691c11d6f263dd97a6a9",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "324b0f9f9153425c56239fbc",
+      "label": "correction"
+    },
+    {
+      "event_id": "8766d35403c6134c483ad49f",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "6092f7b935d23ccd98bf4f4e",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "c31187e771dc9d0f6198c1ef",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "f1d7c388295a95c8e1bbc5a7",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "5a44db1caddaef0814a21215",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "8a09fe8d5c54fbc7869cdceb",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "a0b29fa811d64fc4027a376b",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "99a9c28a7f57f7a1982171d9",
+      "label": "not_correction"
+    },
+    {
+      "event_id": "37b0edc586dcfbf9b682be79",
+      "label": "not_correction"
+    }
+  ]
+}

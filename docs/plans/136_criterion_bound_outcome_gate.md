@@ -1,13 +1,13 @@
 # Plan #136: Criterion-Bound Outcome Gate
 
-**Status:** In Progress — typed contract and both-sign source tests implemented; authentic dashboard consumer binding remains
+**Status:** Complete — local criterion gate and exact Plan 52 browser consumer evidenced; integration and fleet activation remain excluded
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
 **goal_ref:** "criterion-bound-outcome-enforcement"
 **Landscape disposition:** linked
 **Blocked By:** None
-**Blocks:** Resuming Plan 52 dashboard work under the prior self-verifying success model
+**Blocks:** None within this local implementation slice
 
 ## Authority and correction
 
@@ -118,6 +118,9 @@ but not adoption.
   ineligible set and clears its current criterion evidence.
 - `evaluate_review_readiness` returns true only when every frozen criterion has
   passing evidence for the exact non-rejected candidate digest.
+- The selected outcome lease remains `working` until that condition is true;
+  only the same transition that records the last missing receipt can move it to
+  `review_ready`.
 
 ## Critical Path Classification
 
@@ -147,8 +150,28 @@ authentic consumer before any rollout.
 - [x] Evidence does not carry between artifact revisions.
 - [x] A rejected artifact remains review-ineligible and cannot receive new passing evidence.
 - [x] Legacy contracts remain loadable and cannot claim criterion-bound review readiness.
-- [ ] The Plan 52 dashboard uses the contract through its real browser entrypoint and the known rejected artifact fails.
-- [ ] A corrected Plan 52 artifact receives independent criterion evidence and becomes review-ready.
+- [x] The Plan 52 dashboard uses the contract through its real browser entrypoint and the known rejected artifact fails.
+- [x] A corrected Plan 52 artifact receives independent criterion evidence and becomes review-ready.
+
+## Verification
+
+- Enforced Planning focused suite: 63 tests pass across criterion transitions,
+  portfolio admission, selection, and retained consumer replay.
+- Dashboard `make ui-check`: 67 tests pass, including Chromium probes for
+  downward dependency geometry and separate Company Work / Purpose Map panels.
+- Rejected dashboard revision `8d663c75b15136bd389a06171c7fea167b2ab749`
+  remains ineligible at artifact digest
+  `24bfc04474af5fe9a29e318c1fe4cf557d0cf9828004aca699bb6ad823035a6c`.
+- Corrected local dashboard revision
+  `bf30ef9a32459af12e5cbe3c885a99c13859ef82` becomes `review_ready`
+  only after all four criteria pass on HTML digest
+  `9218935126818d90d219c5345308ea9a3813a862a95534049d69631aadf7ab8f`.
+- Exact receipts, the partial denial, final decision, and rejected-revival
+  negative control are retained in
+  `docs/evidence/plan136_criterion_bound_outcome_verification.json`.
+
+This is local implementation and consumer evidence. It does not claim that the
+branch is merged, installed, or active across ordinary Codex sessions.
 
 ## Reassessment Contract
 
@@ -174,6 +197,7 @@ journey both discriminate.
 - `enforced_planning/outcome_portfolio.py`
 - `tests/test_criterion_bound_outcomes.py`
 - `tests/test_outcome_portfolio.py`
+- `docs/evidence/plan136_criterion_bound_outcome_verification.json`
 - `docs/plans/136_criterion_bound_outcome_gate.md`
 - `docs/plans/136_criterion_bound_outcome_gate_work_graph.json`
 - `docs/plans/CLAUDE.md`

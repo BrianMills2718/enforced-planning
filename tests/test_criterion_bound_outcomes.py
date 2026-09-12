@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -15,12 +17,14 @@ from enforced_planning.outcome_continuation import (
     canonical_sha256,
     evaluate_review_readiness,
     issue_initial_lease,
+    load_scenario,
     transition_lease,
 )
 
 NOW = datetime(2026, 9, 12, tzinfo=UTC)
 ARTIFACT_A = "a" * 64
 ARTIFACT_B = "b" * 64
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def contract() -> OutcomeContractV1:
@@ -113,6 +117,7 @@ def test_review_ready_requires_every_criterion_on_exact_artifact() -> None:
         criteria=["company-work-top-to-bottom"],
     )
     lease = transition_lease(selected, lease, first).lease
+    assert lease.review_status == "working"
 
     denied = evaluate_review_readiness(selected, lease, artifact_sha256=ARTIFACT_A)
     assert denied.review_ready is False
@@ -126,6 +131,7 @@ def test_review_ready_requires_every_criterion_on_exact_artifact() -> None:
         criteria=["purpose-map-separate"],
     )
     lease = transition_lease(selected, lease, second).lease
+    assert lease.review_status == "review_ready"
     allowed = evaluate_review_readiness(selected, lease, artifact_sha256=ARTIFACT_A)
     assert allowed.review_ready is True
     assert allowed.reason_code == "all_criteria_evidenced"
@@ -203,6 +209,7 @@ def test_rejected_artifact_remains_ineligible() -> None:
         artifact_disposition="rejected",
     )
     lease = transition_lease(selected, lease, rejection).lease
+    assert lease.review_status == "working"
 
     decision = evaluate_review_readiness(selected, lease, artifact_sha256=ARTIFACT_A)
     assert decision.review_ready is False
@@ -232,3 +239,42 @@ def test_legacy_contract_does_not_gain_implicit_review_authority() -> None:
     )
     assert decision.review_ready is False
     assert decision.reason_code == "criterion_contract_not_configured"
+
+
+def test_retained_plan52_consumer_evidence_replays() -> None:
+    payload = json.loads(
+        (ROOT / "docs/evidence/plan136_criterion_bound_outcome_verification.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    selected = load_scenario(
+        ROOT / "docs/evidence/plan136_criterion_bound_outcome_scenario.json"
+    ).contract
+    assert payload["contract_sha256"] == canonical_sha256(selected)
+    receipts = [OutcomeProgressReceiptV1.model_validate(item) for item in payload["receipts"]]
+    lease = issue_initial_lease(selected)
+    lease = transition_lease(selected, lease, receipts[0]).lease
+    with pytest.raises(ContinuationError, match="rejected artifact"):
+        transition_lease(
+            selected,
+            lease,
+            receipts[1].model_copy(
+                update={
+                    "receipt_id": "retained-revival-negative-control",
+                    "artifact_sha256": payload["rejected_artifact"]["artifact_sha256"],
+                }
+            ),
+        )
+    lease = transition_lease(selected, lease, receipts[1]).lease
+    assert evaluate_review_readiness(
+        selected,
+        lease,
+        artifact_sha256=payload["corrected_artifact"]["artifact_sha256"],
+    ).model_dump(mode="json") == payload["partial_decision"]
+    lease = transition_lease(selected, lease, receipts[2]).lease
+    assert lease.review_status == payload["final_review_status"]
+    assert evaluate_review_readiness(
+        selected,
+        lease,
+        artifact_sha256=payload["corrected_artifact"]["artifact_sha256"],
+    ).model_dump(mode="json") == payload["final_decision"]

@@ -37,6 +37,7 @@ VerificationRole = Literal["producer", "independent"]
 ArtifactDisposition = Literal["evidenced", "rejected"]
 PortfolioClass = Literal["product", "maintenance", "external_obligation"]
 LeaseState = Literal["active", "recovery_required", "stalled", "complete", "parked"]
+ReviewStatus = Literal["working", "review_ready"]
 OperationKind = Literal[
     "product_write",
     "claim_create",
@@ -325,6 +326,7 @@ class OutcomeLeaseV1(StrictModel):
     current_artifact_sha256: str | None = Field(default=None, pattern=HEX_SHA256_PATTERN)
     passed_criterion_ids: list[str] = Field(default_factory=list)
     rejected_artifact_sha256s: list[str] = Field(default_factory=list)
+    review_status: ReviewStatus = "working"
 
     @model_validator(mode="after")
     def _validate_state_counters(self) -> OutcomeLeaseV1:
@@ -347,6 +349,8 @@ class OutcomeLeaseV1(StrictModel):
             raise ValueError("rejected_artifact_sha256s must be unique")
         if self.current_artifact_sha256 in self.rejected_artifact_sha256s:
             raise ValueError("a rejected artifact cannot remain current")
+        if self.review_status == "review_ready" and self.current_artifact_sha256 is None:
+            raise ValueError("review_ready requires a current artifact")
         return self
 
 
@@ -663,6 +667,29 @@ def transition_lease(
             same_boundary_failures=same_boundary_failures,
         )
 
+    if contract.schema_version == "1.2.0":
+        current_artifact = update.get(
+            "current_artifact_sha256", lease.current_artifact_sha256
+        )
+        passed_criteria = set(
+            update.get("passed_criterion_ids", lease.passed_criterion_ids)
+        )
+        rejected_artifacts = set(
+            update.get(
+                "rejected_artifact_sha256s", lease.rejected_artifact_sha256s
+            )
+        )
+        required_criteria = {
+            criterion.criterion_id for criterion in contract.success_criteria
+        }
+        update["review_status"] = (
+            "review_ready"
+            if current_artifact is not None
+            and current_artifact not in rejected_artifacts
+            and required_criteria.issubset(passed_criteria)
+            else "working"
+        )
+
     transitioned = OutcomeLeaseV1.model_validate({**lease.model_dump(mode="json"), **update})
     return LeaseTransitionV1(
         receipt_sha256=receipt_sha256,
@@ -702,6 +729,12 @@ def evaluate_review_readiness(
             reason_code="criterion_evidence_missing",
             artifact_sha256=artifact_sha256,
             missing_criterion_ids=missing,
+        )
+    if lease.review_status != "review_ready":
+        return ReviewReadinessDecisionV1(
+            review_ready=False,
+            reason_code="review_transition_not_recorded",
+            artifact_sha256=artifact_sha256,
         )
     return ReviewReadinessDecisionV1(
         review_ready=True,

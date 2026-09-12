@@ -521,6 +521,39 @@ def assess_continuity(
             observed_at=observed_at,
             last_client_activity_at=activity.observed_at if activity else None,
         )
+    if claim.status == "handoff":
+        return ContinuityAssessmentV1(
+            session_id=claim.session_id,
+            activity_state="idle_owner",
+            continuity_disposition="human_required",
+            action="none",
+            reason_code="explicit_handoff_requires_successor",
+            observed_at=observed_at,
+            last_client_activity_at=activity.observed_at if activity else None,
+            resume_condition="an explicit successor accepts the handed-off custody",
+        )
+    if claim.status == "blocked":
+        return ContinuityAssessmentV1(
+            session_id=claim.session_id,
+            activity_state="idle_owner",
+            continuity_disposition="human_required",
+            action="none",
+            reason_code="blocked_claim_requires_explicit_progress",
+            observed_at=observed_at,
+            last_client_activity_at=activity.observed_at if activity else None,
+            resume_condition="the blocker is resolved and the claim returns to active",
+        )
+    if claim.status != "active":
+        return ContinuityAssessmentV1(
+            session_id=claim.session_id,
+            activity_state="unknown",
+            continuity_disposition="circuit_breaker",
+            action="fail_visible",
+            reason_code="unsupported_auto_resume_claim_status",
+            observed_at=observed_at,
+            last_client_activity_at=activity.observed_at if activity else None,
+            resume_condition="record an active claim before automatic owner resume",
+        )
 
     quiet_until = _aware_timestamp(claim.expected_quiet_until)
     if (claim.expected_quiet_until is None) != (claim.quiet_reason is None) or (

@@ -354,6 +354,35 @@ def build_observe_sweep(*, notify_minutes: int) -> dict[str, Any]:
         if claim.agent == "codex" and claim.is_live()
     ]
     items = [_assess_claim(claim, notify_minutes=notify_minutes) for claim in claims]
+    actionable_by_session: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        assessment = item.get("assessment")
+        session_id = item.get("session_id")
+        if (
+            isinstance(session_id, str)
+            and isinstance(assessment, dict)
+            and assessment.get("action") == "notify_owner"
+        ):
+            actionable_by_session.setdefault(session_id, []).append(item)
+    for session_items in actionable_by_session.values():
+        if len(session_items) <= 1:
+            continue
+        competing_claims = sorted(
+            f"{item.get('project')}:{item.get('scope')}" for item in session_items
+        )
+        for item in session_items:
+            assessment = item["assessment"]
+            assessment.update(
+                {
+                    "continuity_disposition": "circuit_breaker",
+                    "action": "fail_visible",
+                    "reason_code": "multiple_auto_resume_claims_for_session",
+                    "resume_condition": (
+                        "narrow automatic resume custody to one active claim for this session"
+                    ),
+                }
+            )
+            item["competing_auto_resume_claims"] = competing_claims
     actionable = sum(
         item["assessment"] is not None and item["assessment"]["action"] == "notify_owner"
         for item in items

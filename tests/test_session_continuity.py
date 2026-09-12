@@ -135,6 +135,28 @@ def test_thirty_minutes_is_observe_only_not_transfer_authority() -> None:
     assert result.continuity_disposition == "active_continuing"
 
 
+@pytest.mark.parametrize(
+    ("status", "reason_code"),
+    [
+        ("handoff", "explicit_handoff_requires_successor"),
+        ("blocked", "blocked_claim_requires_explicit_progress"),
+    ],
+)
+def test_non_active_live_claim_never_queues_automatic_owner_resume(
+    status: str,
+    reason_code: str,
+) -> None:
+    result = assess_continuity(
+        claim=Claim(status=status),
+        activity=activity("between_turns", 120),
+        now=NOW,
+    )
+
+    assert result.action == "none"
+    assert result.continuity_disposition == "human_required"
+    assert result.reason_code == reason_code
+
+
 def test_idle_assessment_builds_exact_idempotent_resume_offer() -> None:
     assessment = assess_continuity(
         claim=Claim(),
@@ -2013,6 +2035,77 @@ def test_shared_sweep_observes_all_codex_claims_without_transfer_authority(
     assert result["transfer_eligible"] is False
     assert result["successor_launch_allowed"] is False
     assert {item["scope"] for item in result["items"]} == {"recent", "idle"}
+
+
+def test_shared_sweep_refuses_multiple_auto_resumes_for_one_thread(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transcript = tmp_path / "idle.jsonl"
+    now = datetime.now(UTC)
+    write_transcript(
+        transcript,
+        [((now - timedelta(minutes=30)).isoformat(), "task_complete")],
+    )
+    claims = [
+        SweepClaim(session_id="codex:shared", project="alpha", scope="first"),
+        SweepClaim(session_id="codex:shared", project="beta", scope="second"),
+    ]
+    monkeypatch.setattr(continuity_cli.coordination_claims, "check_claims", lambda: claims)
+    monkeypatch.setattr(
+        continuity_cli.coordination_claims,
+        "session_transcript_path",
+        lambda _session_id: transcript,
+    )
+
+    result = continuity_cli.build_observe_sweep(notify_minutes=15)
+
+    assert result["notify_owner_count"] == 0
+    assert result["fail_visible_count"] == 2
+    for item in result["items"]:
+        assert item["assessment"]["action"] == "fail_visible"
+        assert item["assessment"]["reason_code"] == (
+            "multiple_auto_resume_claims_for_session"
+        )
+        assert item["competing_auto_resume_claims"] == ["alpha:first", "beta:second"]
+
+
+def test_shared_sweep_queues_active_claim_and_silences_same_thread_handoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transcript = tmp_path / "idle.jsonl"
+    now = datetime.now(UTC)
+    write_transcript(
+        transcript,
+        [((now - timedelta(minutes=30)).isoformat(), "task_complete")],
+    )
+    claims = [
+        SweepClaim(session_id="codex:shared", project="current", scope="active"),
+        SweepClaim(
+            session_id="codex:shared",
+            project="legacy",
+            scope="preserved",
+            status="handoff",
+        ),
+    ]
+    monkeypatch.setattr(continuity_cli.coordination_claims, "check_claims", lambda: claims)
+    monkeypatch.setattr(
+        continuity_cli.coordination_claims,
+        "session_transcript_path",
+        lambda _session_id: transcript,
+    )
+
+    result = continuity_cli.build_observe_sweep(notify_minutes=15)
+
+    assert result["notify_owner_count"] == 1
+    assert result["fail_visible_count"] == 0
+    assessments = {item["scope"]: item["assessment"] for item in result["items"]}
+    assert assessments["active"]["action"] == "notify_owner"
+    assert assessments["preserved"]["action"] == "none"
+    assert assessments["preserved"]["reason_code"] == (
+        "explicit_handoff_requires_successor"
+    )
 
 
 def test_shared_sweep_keeps_malformed_transcript_visible(

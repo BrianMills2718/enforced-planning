@@ -72,7 +72,7 @@ reported as enforcement; or adapter failure mutates canonical state.
 | Selected outcome, progress, recovery, and custody | Enforced Planning Plans #114–#125 | Link; do not duplicate |
 | Cross-client messages and acknowledgement | Enforced Planning Plans #67 and #100 | Reuse unchanged; `persisted`, `runtime_accepted`, `observed`, and `acknowledged` retain their existing meanings |
 | Project/work-unit DAG | Company Planning | Reference stable work-unit IDs; do not copy project authority into the session ledger |
-| Codex App Server process and pushed events | AES Plan #13 native adapter | Add a thin projection/observation adapter behind the neutral contract |
+| Codex App Server process and pushed events | AES Plan #13 native adapter and AES-owned Plan #137 target graph | Add a thin projection/observation adapter behind the neutral contract |
 | Claude Task and hook events | Enforced Planning client adapter surface | Add a thin projection/observation adapter; no host-wide activation |
 | Semantic judgment | Approved light LLM or independent verifier | Off the transition hot path; result is evidence input, never the state-transition authority |
 
@@ -188,7 +188,9 @@ the single `vertical` unit. No enabler or hardening unit may delay that fixture.
    Planning. Reuse Plan #136 and Plan #67 directly.
 2. **XCET-02 — Codex adapter.** In AES, translate the neutral projection to the
    installed App Server surface and retain pushed native observations. Report
-   unsupported capabilities rather than manufacturing parity.
+   unsupported capabilities rather than manufacturing parity. AES owns a
+   target-repository Plan #137 work graph containing this unit; the external
+   Enforced Planning plan revision remains the plan authority.
 3. **XCET-03 — Claude adapter.** Translate the same neutral projection to an
    isolated Claude Task surface and retain typed tool/hook observations. Keep
    host configuration unchanged.
@@ -197,14 +199,15 @@ the single `vertical` unit. No enabler or hardening unit may delay that fixture.
    false-pass, false-block, divergence, replay, friction, version, and latency
    observations suitable for a later promotion decision.
 
-XCET-01 owns its own acceptance update across the graph and three human-facing
-status surfaces. XCET-02 and XCET-03 become ready after XCET-01 and can execute
-in parallel in disjoint repositories. Because the AES lane cannot write the
-Enforced Planning graph, XCET-03 owns the joint adapter acceptance transition:
-it may mark XCET-02 and XCET-03 accepted only after independently verifying the
-exact merged AES evidence and its own Claude evidence. XCET-04 requires both
-accepted adapters and owns the final synchronized closeout across the plan,
-graph, roadmap, and plan index.
+XCET-01 owns its own acceptance update across the Enforced Planning graph and
+three human-facing status surfaces. XCET-02 and XCET-03 become ready after
+XCET-01 and can implement in parallel in disjoint repositories. Plan #130
+requires the AES mutation repository to own XCET-02's target work graph; the
+Enforced Planning graph therefore does not duplicate that unit. XCET-03 owns
+the joint adapter acceptance transition and may become accepted only after it
+independently verifies the exact merged AES target-graph evidence plus its own
+Claude evidence. XCET-04 depends on that joint acceptance and owns the final
+synchronized closeout across the plan, graph, roadmap, and plan index.
 
 ## Epistemic Planning Frontier
 
@@ -311,5 +314,7 @@ cross-client behavior and the status surfaces truthfully record the result.
 
 - Enforced Planning: neutral contracts, focused tests, isolated Claude adapter,
   fixture/evidence, and the four canonical Plan #137 status surfaces.
-- AES: existing orchestration contract/adapter extensions and focused tests.
+- AES: an AES-owned Plan #137 target work graph, existing orchestration
+  contract/adapter extensions, and focused tests. This graph owns only XCET-02;
+  it does not copy the external plan or Enforced Planning units.
 - No other repository is an implementation target.

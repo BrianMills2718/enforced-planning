@@ -114,11 +114,18 @@ runs inside the Stop hook.
 
 ## Research Basis For This Slice
 
-Official OpenAI documentation was searched on 2026-09-11 for Codex
-`UserPromptSubmit` hook payload and asynchronous behavior, but no page defining
-that schema was found. Therefore this plan does not assume asynchronous Codex
-prompt hooks. It uses the repository's existing transcript resolver and requires
-an authentic native payload/transcript canary before host activation.
+Official OpenAI hook documentation was rechecked on 2026-09-11 after the
+refresh trigger below fired. It now defines Codex `UserPromptSubmit` payloads
+with `prompt` and `turn_id`, and permits a hook to return
+`hookSpecificOutput.additionalContext`. It also documents asynchronous command
+hooks, while warning that they cannot steer the event that launched them, and
+describes `transcript_path` as an unstable convenience interface. The current
+authority is <https://learn.chatgpt.com/docs/hooks>.
+
+The revised thin slice therefore uses the stable prompt event only to inject an
+immediate learning checkpoint and retain a privacy-reduced attention receipt. It
+does not classify the prompt, depend on transcript bytes, or claim that an
+asynchronous classifier completed before Stop. Semantic blocking remains off.
 
 ## Landscape And Prior Art
 
@@ -675,3 +682,24 @@ retains correction learning as manual/off, and stops further holdout spend or
 retuning on this route. This is a negative promotion decision, not activation or
 proof that the broader correction-learning objective is complete. The signed
 artifact is `docs/evidence/plan135_native_v5_signoff.md`.
+
+### Prompt-time attention vertical
+
+The published Codex prompt contract enables a materially earlier intervention
+without reviving the rejected classifier. The shared learning hook now accepts
+`UserPromptSubmit`, injects a direct instruction to assess the immediately
+preceding turn for a correction, and writes a privacy-reduced receipt containing
+only hashed session/event identity and timing. The existing Stop disposition
+receipt counts those checkpoints so the control can be audited end to end.
+
+This is a compliance aid, not a semantic detector: it proves the agent received
+the checkpoint, not that the agent classified the user's meaning correctly.
+The Prompt 1.2/Sonnet route remains rejected and block mode remains off. Host
+promotion requires generated client wiring plus native Codex and Claude
+`UserPromptSubmit` canaries; a later semantic route still needs fresh evidence
+against the existing threshold before it can block.
+
+Source evidence at this revision: 40 focused learning/prose-safety tests and
+the framework self-test pass. A native-shaped Codex prompt replay emitted the
+additional context and a privacy-reduced receipt with no retained prompt prose.
+This proves the adapter boundary only; installed-host adoption remains pending.

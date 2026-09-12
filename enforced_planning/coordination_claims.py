@@ -1490,8 +1490,16 @@ def claim_liveness_issues(
     heartbeat = _parse_iso_datetime(claim.heartbeat_at)
     if heartbeat is None:
         return ["invalid_heartbeat_at"]
-    reference_now = now or datetime.now(timezone.utc)
+    reference_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     if reference_now - heartbeat > _heartbeat_stale_after():
+        quiet_until = _parse_aware_iso_datetime(claim.expected_quiet_until)
+        if (
+            quiet_until is not None
+            and isinstance(claim.quiet_reason, str)
+            and claim.quiet_reason.strip()
+            and reference_now < quiet_until
+        ):
+            return []
         return ["stale_session_heartbeat"]
     return []
 

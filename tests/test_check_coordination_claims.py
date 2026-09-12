@@ -2588,6 +2588,77 @@ def test_claim_liveness_issues_detect_stale_session_heartbeat(
     assert module.claim_runtime_status(claim) == "stale"
 
 
+def test_expected_quiet_interval_defers_heartbeat_staleness_only_until_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A declared long tool run is live until its bound, then stale normally."""
+
+    module = _load_module()
+    monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
+    claim = module.build_candidate_claim(
+        agent="codex",
+        project="project-meta",
+        scope="bounded-evaluation",
+        intent="Run a long native evaluation",
+        plan_ref="project-meta#135",
+        claim_type="write",
+        write_paths=["evidence"],
+        worktree_path=str(tmp_path / "project-meta_worktrees" / "bounded-evaluation"),
+        session_id="codex:thread-eval",
+        heartbeat_at="2026-04-05T09:00:00+00:00",
+        status="active",
+        progress_at="2026-04-05T09:00:00+00:00",
+        progress_kind="new_diagnostic",
+        evidence_ref="evaluation:start",
+        next_action="wait for the bounded evaluation",
+        expected_quiet_until="2026-04-05T11:00:00+00:00",
+        quiet_reason="bounded native evaluation",
+    )
+
+    during = datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc)
+    deadline = datetime(2026, 4, 5, 11, 0, tzinfo=timezone.utc)
+    assert module.claim_liveness_issues(claim, now=during) == []
+    assert module.claim_liveness_issues(claim, now=deadline) == [
+        "stale_session_heartbeat"
+    ]
+
+
+def test_invalid_or_unpaired_quiet_interval_never_hides_stale_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+    monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
+    base = module.build_candidate_claim(
+        agent="codex",
+        project="project-meta",
+        scope="broken-quiet",
+        intent="Run a long native evaluation",
+        plan_ref="project-meta#135",
+        claim_type="write",
+        write_paths=["evidence"],
+        worktree_path=str(tmp_path / "project-meta_worktrees" / "broken-quiet"),
+        session_id="codex:thread-eval",
+        heartbeat_at="2026-04-05T09:00:00+00:00",
+        status="active",
+        expected_quiet_until="2026-04-05T11:00:00+00:00",
+    )
+    now = datetime(2026, 4, 5, 10, 0, tzinfo=timezone.utc)
+
+    assert module.claim_liveness_issues(base, now=now) == [
+        "stale_session_heartbeat"
+    ]
+    malformed = replace(
+        base,
+        expected_quiet_until="not-a-time",
+        quiet_reason="bounded native evaluation",
+    )
+    assert module.claim_liveness_issues(malformed, now=now) == [
+        "stale_session_heartbeat"
+    ]
+
+
 def test_claim_without_heartbeat_is_weak_and_explicitly_uninstrumented(tmp_path: Path) -> None:
     """Missing liveness evidence must not be promoted into a healthy-session claim."""
 

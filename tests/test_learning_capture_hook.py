@@ -326,6 +326,46 @@ def test_recorded_learning_is_accepted_and_receipted(tmp_path: Path) -> None:
     assert "last_assistant_message" not in receipt
 
 
+def test_simple_recorded_field_accepts_an_entry_id(tmp_path: Path) -> None:
+    """The compact semantic form needs no Markdown decoration or register path."""
+    result = run_hook(
+        tmp_path,
+        "Done: Implemented the hook repair.\n"
+        "Learnings: recorded lrn-20260913T120000000000Z-a1b2c3d4e5",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert receipts(tmp_path)[0]["decision"] == "recorded"
+
+
+def test_simple_none_field_accepts_a_concrete_reason(tmp_path: Path) -> None:
+    """The compact semantic form supports the no-learning disposition too."""
+    result = run_hook(
+        tmp_path,
+        "Done: Re-ran an existing deterministic check.\n"
+        "Learnings: none — the run only reconfirmed an already tested behavior.",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert receipts(tmp_path)[0]["decision"] == "none"
+
+
+def test_markdown_and_simple_fields_can_be_mixed(tmp_path: Path) -> None:
+    """Adoption is backward compatible while agents move one field at a time."""
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented the repair.\n"
+        "Learnings: recorded lrn-20260913T120000000000Z-a1b2c3d4e5\n"
+        "- **Policy** — Followed.",
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert receipts(tmp_path)[0]["decision"] == "recorded"
+
+
 def test_already_recorded_reuses_an_exact_session_receipt(tmp_path: Path) -> None:
     first = run_hook(
         tmp_path,
@@ -398,6 +438,22 @@ def test_none_requires_a_concrete_reason(tmp_path: Path) -> None:
     )
     assert accepted.stdout == ""
     assert {receipt["decision"] for receipt in receipts(tmp_path)} == {"block_empty_none", "none"}
+
+
+def test_blocking_error_has_stable_code_copyable_next_step_and_verifier(tmp_path: Path) -> None:
+    result = run_hook(
+        tmp_path,
+        "Done: Implemented the repair.\nLearnings: worth capturing later.",
+    )
+
+    reason = json.loads(result.stdout)["reason"]
+    assert "[learning_capture.block_invalid]" in reason
+    assert "Why:" in reason
+    assert "Next:" in reason
+    assert "Learnings: recorded <lrn-entry-id>" in reason
+    assert "Learnings: none — <concrete reason of at least 20 characters>" in reason
+    assert "Verify:" in reason
+    assert "Receipt:" in reason
 
 
 def test_malformed_stop_payload_fails_closed(tmp_path: Path) -> None:

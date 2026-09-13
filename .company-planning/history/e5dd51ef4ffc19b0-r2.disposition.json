@@ -1,0 +1,15 @@
+{
+  "archived_cursor_path": ".company-planning/history/e5dd51ef4ffc19b0-r2.json",
+  "archived_cursor_sha256": "2ad74f5e84d6912546e1e96fda0d01bd2b926dee85aeeac55528b9eccbcb57f4",
+  "cursor_id": "plan-137-xcet03r-observation-repair",
+  "cursor_revision": 2,
+  "cursor_sha256": "2ad74f5e84d6912546e1e96fda0d01bd2b926dee85aeeac55528b9eccbcb57f4",
+  "disposition": "retired",
+  "management_worktree": "/home/brian/code/enforced-planning/worktrees/plan137-xcet03r-observation-repair",
+  "operation": "retire",
+  "operator_session_id": "codex:01a09b0f-e0d6-7351-8f23-72d81c7f40ec",
+  "reason": "XCET-03R is accepted with exact local evidence; Plan 137 remains in progress and its next Claude Task probe requires separate external/spend authority, so transient execution state must not enter integration.",
+  "record_type": "plan_execution_disposition_receipt",
+  "schema_version": "1.0",
+  "successor_ref": null
+}

@@ -231,8 +231,6 @@ def test_markdown_fence_character_and_length_are_matched() -> None:
             )
         }
     )
-
-
 def test_explicit_completion_marker_without_event_identity_fails_closed(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
@@ -358,8 +356,6 @@ def test_unconfigured_completion_stop_does_not_fail_closed_on_mailbox_error(
     rendered = json.loads(capsys.readouterr().out)
     assert "decision" not in rendered
     assert "mailbox unavailable" in rendered["systemMessage"]
-
-
 def test_native_stop_emits_no_denial_after_canonical_completion(monkeypatch, tmp_path: Path, capsys) -> None:
     decision = OutcomeCompletionStopDecisionV1(
         applicable=True,

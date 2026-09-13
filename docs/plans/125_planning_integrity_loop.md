@@ -841,6 +841,11 @@ revision-bound human-readable planning state through installed AES.
 24. Every coordinated work unit assigns an explicit claimable owner for the
     plan, graph, and status surfaces needed to record acceptance and unblock
     its successor.
+25. Later claim-runtime extensions may add installed lifecycle entrypoints only
+    through the same source-to-consumer manifest closure. Plan 110's blocker
+    application command follows that rule: its wrapper, provider-free policy,
+    session lifecycle, and canonical claim writer are installed together, and
+    application revalidates the exact graph/claim snapshot before mutation.
 
 ## Required Tests
 

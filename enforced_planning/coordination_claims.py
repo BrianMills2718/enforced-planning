@@ -347,6 +347,45 @@ def _replace_claim_and_refresh_projection_fail_atomic(
         raise
 
 
+def replace_claim_payloads_and_refresh_projection_fail_atomic(
+    *,
+    replacements: dict[Path, dict[str, Any]],
+    claims_dir: Path,
+) -> tuple[str, str]:
+    """Replace a bounded claim set or restore every claim and the projection.
+
+    The caller must hold ``claim_registry_lock``.  This is the multi-claim
+    counterpart of the single-claim lifecycle primitive above; it exists for
+    root-plus-descendant transitions and never selects the affected claims.
+    """
+
+    if not replacements:
+        raise ValueError("claim replacement transaction requires at least one claim")
+    resolved_claims_dir = claims_dir.expanduser().resolve()
+    resolved_replacements = {
+        path.expanduser().resolve(): payload for path, payload in replacements.items()
+    }
+    if any(path.parent != resolved_claims_dir for path in resolved_replacements):
+        raise ValueError("claim replacement transaction cannot cross registries")
+
+    from enforced_planning.prewrite_claim_fast import projection_path_for
+
+    projection_path = projection_path_for(resolved_claims_dir)
+    prior_claims = {
+        path: path.read_bytes() if path.exists() else None for path in resolved_replacements
+    }
+    prior_projection = projection_path.read_bytes() if projection_path.exists() else None
+    try:
+        for path in sorted(resolved_replacements):
+            _atomic_write_claim(path, resolved_replacements[path])
+        return refresh_prewrite_authority_projection(resolved_claims_dir)
+    except Exception:
+        for path, content in prior_claims.items():
+            _atomic_restore_file(path, content)
+        _atomic_restore_file(projection_path, prior_projection)
+        raise
+
+
 def refresh_prewrite_authority_projection(
     claims_dir: Path | None = None,
 ) -> tuple[str, str]:

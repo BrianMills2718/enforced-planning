@@ -1837,6 +1837,11 @@ Canonical lifecycle commands:
   deliberately bounded broad claim retains its fixed expiry
 - `session-narrow`: atomically replace a claim's write paths with a strict
   owner/session-bound subset without renewing its heartbeat or expiry
+- `apply_blocker_disposition.py`: consume an accepted blocker decision only
+  after atomically reloading and re-evaluating the canonical claims and graph;
+  ready work records a no-mutation receipt, while handoff/session-end affects
+  only the selected goal root and its descendants and preserves unrelated roots
+  and dirty worktrees
 - `session-status`: show live sessions derived from claims plus trackers;
   missing Codex display-index metadata is reported separately and never
   overrides independent heartbeat, progress, hook, or runtime evidence
@@ -1857,7 +1862,8 @@ Canonical lifecycle commands:
   leaving it stale forever
 
 Every terminal mutation (`session-finish`, `session-close`, `session-handoff`,
-and `session-abandon`) is bound to the exact claim-owning native session. A
+`session-abandon`, and blocker-disposition application) is bound to the exact
+claim-owning native session. A
 foreign runtime must first use `session-resume`; supplying the predecessor's ID
 does not impersonate it when the client exposes a different native identity.
 

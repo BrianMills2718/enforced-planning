@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-110-npw03-safe-lifecycle-maintenance",
+  "requested_at": "2026-09-13T21:50:00Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-110-npw03-safe-lifecycle",
+  "outcome_contract_sha256": "d98234bed3abedb5c181d19993ff99458cf114936359ad965887649fb3f406f8",
+  "outcome_id": "no-passive-waiting-safe-lifecycle",
+  "outcome_lineage_id": "plan-110-no-passive-waiting",
+  "portfolio_class": "maintenance",
+  "decision_ref": "user:2026-09-13-outcome-ownership-action-scoped-blocker-goal",
+  "purpose": "Apply deterministic blocker dispositions through existing lifecycle writers without stopping unrelated dependency-ready work or changing unrelated custody.",
+  "stopping_condition": "Complete or park the allocation after NPW-03 is accepted with installed entrypoint parity and both-sign lifecycle evidence."
+}

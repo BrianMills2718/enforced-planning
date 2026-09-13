@@ -63,6 +63,8 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/meta/coordination_operator_status.py",
     "scripts/meta/session_heartbeat.py",
     "scripts/meta/session_narrow.py",
+    "scripts/meta/apply_blocker_disposition.py",
+    "scripts/meta/outcome_completion_hook.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_continuity.py",
     "scripts/meta/session_resume.py",
@@ -73,12 +75,14 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
 
 MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/blocker_policy.py",
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/concurrent_writers.py",
     "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_completion.py",
     "enforced_planning/outcome_continuation.py",
     "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py",
@@ -101,6 +105,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
 }
 
 CLAIM_PROJECTION_REFRESH_PATHS = {
+    "enforced_planning/blocker_policy.py",
     "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
@@ -136,6 +141,7 @@ CLAIM_PROJECTION_REFRESH_PATHS = {
     "scripts/meta/session_finish.py",
     "scripts/meta/session_heartbeat.py",
     "scripts/meta/session_narrow.py",
+    "scripts/meta/apply_blocker_disposition.py",
     "scripts/meta/session_resume.py",
     "scripts/meta/session_start.py",
 }
@@ -156,6 +162,7 @@ def test_source_repo_narrowing_facades_match_canonical_sources() -> None:
     pairs = {
         "scripts/meta/session_start.py": "scripts/session_start.py",
         "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+        "scripts/meta/apply_blocker_disposition.py": "scripts/apply_blocker_disposition.py",
         "scripts/meta/session_close.py": "scripts/session_close.py",
         "scripts/meta/worktree-coordination/create_worktree.py": (
             "scripts/worktree-coordination/create_worktree.py"
@@ -2195,7 +2202,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             [
                 "install:contracts/pr-review-signoff.schema.json",
                 "install:enforced_planning/__init__.py",
-            "install:enforced_planning/artifact_creation.py",
+                "install:enforced_planning/artifact_creation.py",
+                "install:enforced_planning/blocker_policy.py",
             "install:enforced_planning/concern_routing.py",
             "install:enforced_planning/claim_mutation_receipts.py",
             "install:enforced_planning/claim_bootstrap.py",
@@ -2244,7 +2252,8 @@ def test_install_governed_repo_worktree_only_mode_stays_bounded(tmp_path: Path) 
             "install:scripts/meta/session_end.py",
             "install:scripts/meta/session_finish.py",
             "install:scripts/meta/session_heartbeat.py",
-            "install:scripts/meta/session_narrow.py",
+                "install:scripts/meta/session_narrow.py",
+                "install:scripts/meta/apply_blocker_disposition.py",
             "install:scripts/meta/session_start.py",
             "install:scripts/meta/session_status.py",
             "install:scripts/meta/project_status.py",
@@ -2952,6 +2961,28 @@ def test_every_claim_runtime_installer_profile_carries_session_narrow() -> None:
         install_governed_repo.CLAIM_PROJECTION_SHARED_FILES,
     ):
         assert manifest["scripts/meta/session_narrow.py"] == "scripts/session_narrow.py"
+        assert manifest["scripts/meta/apply_blocker_disposition.py"] == (
+            "scripts/apply_blocker_disposition.py"
+        )
+
+
+def test_outcome_completion_installs_only_with_stop_capable_profiles() -> None:
+    """Selected-completion enforcement must not enter projection-only runtimes."""
+
+    from scripts import install_governed_repo
+
+    module = "enforced_planning/outcome_completion.py"
+    wrapper = "scripts/meta/outcome_completion_hook.py"
+    assert install_governed_repo.SYNC_SUPPORT_FILES[module] == module
+    assert install_governed_repo.SYNC_SUPPORT_FILES[wrapper] == "scripts/outcome_completion_hook.py"
+    assert install_governed_repo.COORDINATION_MESSAGES_SHARED_FILES[wrapper] == (
+        "scripts/outcome_completion_hook.py"
+    )
+    assert install_governed_repo.COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES[module] == module
+    assert module not in install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES
+    assert wrapper not in install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES
+    assert module not in install_governed_repo.CLAIM_PROJECTION_LOCAL_PACKAGE_FILES
+    assert wrapper not in install_governed_repo.CLAIM_PROJECTION_SHARED_FILES
 
 
 def test_every_claim_runtime_installer_profile_carries_session_continuity() -> None:

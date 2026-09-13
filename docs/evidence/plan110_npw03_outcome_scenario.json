@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-110-npw03-safe-lifecycle",
+  "contract": {
+    "schema_version": "1.2.0",
+    "outcome_id": "no-passive-waiting-safe-lifecycle",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-110-no-passive-waiting",
+    "portfolio_class": "maintenance",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "A coding-agent coordinator deciding whether one blocked action prevents progress on an authorized outcome",
+    "outcome": "A blocked action cannot become a whole-goal stop while useful authorized work remains, and a genuine terminal wait is applied only through the existing safe scoped lifecycle.",
+    "canonical_journey": {
+      "starting_state": "One graph-backed goal has a blocked unit, an independent ready unit, and an unrelated live claim root.",
+      "input": "A deterministic blocker disposition bound to the exact graph and current claim snapshot.",
+      "action": "Apply the disposition through the sanctioned session lifecycle command.",
+      "observable_result": "Ready work continues; only a verified terminal wait can narrow, hand off, or retire the selected goal scope; unrelated roots and dirty work remain untouched.",
+      "failure_signal": "The goal stops while a unit is ready, an unverified blocker changes custody, or an unrelated claim/worktree is changed."
+    },
+    "baseline_revision": "dab6decf5673675cccec1029fd55803ee9023d9f",
+    "allowed_scope": [
+      ".company-planning/active-execution.json",
+      "docs/evidence/plan110_npw03_outcome_scenario.json",
+      "docs/evidence/plan110_npw03_allocation.json",
+      "docs/plans/110_no_passive_waiting_enforcement.md",
+      "docs/plans/110_no_passive_waiting_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md",
+      "enforced_planning/session_lifecycle.py",
+      "enforced_planning/coordination_claims.py",
+      "scripts/apply_blocker_disposition.py",
+      "scripts/install_governed_repo.py",
+      "scripts/meta/apply_blocker_disposition.py",
+      "tests/test_session_cli.py",
+      "tests/test_blocker_policy.py",
+      "tests/test_install_governed_repo.py"
+    ],
+    "progress_dimensions": [
+      "action-scoped continuation",
+      "safe blocker disposition application",
+      "installed entrypoint parity"
+    ],
+    "success_criteria": [
+      {"criterion_id": "continue-ready-work", "description": "A whole-goal block is denied while any dependency-ready authorized unit remains."},
+      {"criterion_id": "verified-terminal-wait", "description": "Only a deterministic verified blocker disposition can change the selected goal scope through existing lifecycle writers."},
+      {"criterion_id": "unrelated-custody-preserved", "description": "Unrelated claim roots, worktrees, branches, trackers, and dirty work remain unchanged."},
+      {"criterion_id": "installed-command-parity", "description": "The source and installed command paths invoke the same canonical lifecycle behavior."}
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/session_lifecycle.py",
+    "ordinary_approval": true,
+    "approval_text": "Brian activated the outcome-ownership and action-scoped-blocker implementation goal on 2026-09-13."
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "archived_cursor_path": ".company-planning/history/303615e14f6dd6cc-r2.json",
+  "archived_cursor_sha256": "475d197d15397932e9d4aefdda751ef63421b6a797c9c407228325ec493cd909",
+  "cursor_id": "enforced-planning-plan110-npw03-20260913",
+  "cursor_revision": 2,
+  "cursor_sha256": "475d197d15397932e9d4aefdda751ef63421b6a797c9c407228325ec493cd909",
+  "disposition": "superseded",
+  "management_worktree": "/home/brian/code/enforced-planning/worktrees/plan110-npw03-safe-lifecycle",
+  "operation": "retire",
+  "operator_session_id": "codex:01a09b0f-e0d6-7351-8f23-72d81c7f40ec",
+  "reason": "NPW-03 is accepted and integrated locally; the fixed-target cursor cannot transfer the next owner-local unit into Project Meta, so the retained Plan 279 coordinator cursor resumes outcome ownership.",
+  "record_type": "plan_execution_disposition_receipt",
+  "schema_version": "1.0",
+  "successor_ref": "project-meta-plan279-owner-reconciliation-20260913@revision-2"
+}

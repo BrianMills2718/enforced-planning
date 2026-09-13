@@ -1,0 +1,79 @@
+{
+  "active_slice": {
+    "description": "Make Claude native observation evidence content-derived and feedback categories stable",
+    "next_action": null,
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "xcet-03r-observation-repair",
+    "status": "accepted",
+    "target_revision": "d1a30cfaeeb5dce432ab5e99861aff8b16c60283"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": "Authorize the external/spend-bearing authentic Claude Task create/update/list/hook probe after quota availability is confirmed.",
+    "human_decision_required": true,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 0,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "plan-137-xcet03r-observation-repair",
+  "cursor_revision": 2,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "plan137-cross-client-execution-tracking",
+  "lifecycle_state": "human_required",
+  "observations": [
+    {
+      "boundary": "plugin runtime integrity",
+      "evidence_ref": "historical loaded root 0.2.0+codex.20260910183557 disappeared; fresh session loaded coherent root 0.2.0+codex.20260913133238",
+      "kind": "blocker",
+      "observation_id": "historical-plugin-root-discontinuity",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "claim custody transfer",
+      "evidence_ref": "/home/brian/.claude/coordination/session-custody-transfers-v1/ff9978196e9625819969ba81bcf426fd.json#sha256=ff9978196e9625819969ba81bcf426fdf9700a8840922d9be48224149d1eb9bc",
+      "kind": "supporting_work",
+      "observation_id": "session-ended-custody-transfer",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "XCET03R-A1 and XCET03R-A2",
+      "evidence_ref": "enforced-planning@d1a30cfaeeb5dce432ab5e99861aff8b16c60283; 22 focused tests; affected Ruff/mypy; scripts/self_test.py; git diff --check",
+      "kind": "authentic_result",
+      "observation_id": "xcet03r-repair-verification",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "authoritative GitHub ref freshness",
+      "evidence_ref": "2026-09-13T07:13:10-07:00 git ls-remote origin main plan137-xcet03r-observation-repair timed out without refs",
+      "kind": "blocker",
+      "observation_id": "github-ref-freshness-unavailable",
+      "outcome": "inconclusive"
+    }
+  ],
+  "plan_revision": "9636f798eb056c4dd62ed82d483d897078583b42",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan137-xcet03r-observation-repair",
+    "repository": "enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/plan137-xcet03r-observation-repair"
+  }
+}

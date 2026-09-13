@@ -15,14 +15,21 @@ from typing import Any, Literal
 import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from enforced_planning import coordination_claims, outcome_selection, session_contracts
+from enforced_planning import (
+    coordination_claims,
+    outcome_portfolio,
+    outcome_selection,
+    session_contracts,
+)
 from enforced_planning.outcome_continuation import (
     ExecutionProjectionV1,
     GoalCompletionDecisionV1,
     GoalCompletionProposalV1,
+    OutcomeContinuationScenarioV1,
     OutcomeContractV1,
     OutcomeLeaseV1,
     canonical_sha256,
+    evaluate_scenario,
     propose_goal_completion,
 )
 
@@ -199,6 +206,112 @@ def _completion_history(tracker: dict[str, Any]) -> list[OutcomeCompletionTransi
         raise OutcomeCompletionError(
             "completion_history_invalid", f"existing outcome completion is invalid: {exc}"
         ) from exc
+
+
+def _validate_completed_portfolio_scenario(
+    binding: outcome_selection.OutcomeSelectionBindingV1,
+    *,
+    claim: coordination_claims.ClaimRecord,
+) -> OutcomeContinuationScenarioV1:
+    """Reopen a classed scenario after its exact allocation completed.
+
+    Selection and pre-write still require an active allocation.  Stop replay is
+    later in the lifecycle: once canonical completion is retained, the exact
+    allocation's append-only ``complete`` disposition is success evidence, not
+    grounds to invalidate that completion.
+    """
+
+    scenario_path = Path(binding.worktree_path) / binding.scenario_ref
+    scenario, file_sha256, scenario_ref = outcome_selection._load_scenario_for_claim(
+        scenario_path,
+        claim=claim,
+    )
+    result = evaluate_scenario(scenario)
+    checks = {
+        "scenario_ref": (scenario_ref, binding.scenario_ref),
+        "scenario_file_sha256": (file_sha256, binding.scenario_file_sha256),
+        "scenario_sha256": (result.scenario_sha256, binding.scenario_sha256),
+        "outcome_contract_sha256": (
+            result.outcome_contract_sha256,
+            binding.outcome_contract_sha256,
+        ),
+        "outcome_id": (scenario.contract.outcome_id, binding.outcome_id),
+        "outcome_lineage_id": (
+            scenario.contract.lineage_id,
+            binding.outcome_lineage_id,
+        ),
+    }
+    mismatches = [name for name, (actual, expected) in checks.items() if actual != expected]
+    if mismatches:
+        raise OutcomeCompletionError(
+            "portfolio_completion_invalid",
+            "completed allocation scenario changed: " + ", ".join(mismatches),
+        )
+    if (
+        binding.schema_version != "1.1.0"
+        or binding.portfolio_ledger_path is None
+        or binding.portfolio_allocation_id is None
+        or binding.portfolio_allocation_sha256 is None
+    ):
+        raise OutcomeCompletionError(
+            "portfolio_completion_invalid",
+            "completed classed outcome requires an exact allocation binding",
+        )
+    ledger = outcome_portfolio.load_outcome_portfolio_ledger(
+        Path(binding.portfolio_ledger_path)
+    )
+    allocations = [
+        record
+        for record in ledger.records
+        if isinstance(record, outcome_portfolio.OutcomePortfolioAllocationV1)
+        and record.allocation_id == binding.portfolio_allocation_id
+    ]
+    dispositions = [
+        record
+        for record in ledger.records
+        if isinstance(record, outcome_portfolio.OutcomePortfolioDispositionV1)
+        and record.allocation_id == binding.portfolio_allocation_id
+    ]
+    if len(allocations) != 1 or len(dispositions) != 1:
+        raise OutcomeCompletionError(
+            "portfolio_completion_invalid",
+            "completed outcome requires one exact allocation and one disposition",
+        )
+    allocation = allocations[0]
+    disposition = dispositions[0]
+    allocation_sha256 = canonical_sha256(allocation)
+    allocation_checks = {
+        "allocation_sha256": (
+            allocation_sha256,
+            binding.portfolio_allocation_sha256,
+        ),
+        "disposition_allocation_sha256": (
+            disposition.allocation_sha256,
+            binding.portfolio_allocation_sha256,
+        ),
+        "allocation_contract": (
+            allocation.outcome_contract_sha256,
+            binding.outcome_contract_sha256,
+        ),
+        "allocation_scenario": (allocation.scenario_sha256, binding.scenario_sha256),
+        "allocation_outcome": (allocation.outcome_id, binding.outcome_id),
+        "allocation_lineage": (
+            allocation.outcome_lineage_id,
+            binding.outcome_lineage_id,
+        ),
+        "disposition": (disposition.disposition, "complete"),
+    }
+    allocation_mismatches = [
+        name
+        for name, (actual, expected) in allocation_checks.items()
+        if actual != expected
+    ]
+    if allocation_mismatches:
+        raise OutcomeCompletionError(
+            "portfolio_completion_invalid",
+            "completed allocation binding changed: " + ", ".join(allocation_mismatches),
+        )
+    return scenario
 
 
 def record_selected_outcome_completion_for_session(
@@ -399,7 +512,7 @@ def evaluate_stop_for_session(
             summary="Outcome completion enforcement is not configured for this repository.",
         )
     root = repo_root.expanduser().resolve()
-    matches = [
+    claim_matches = [
         claim
         for claim in active_claims
         if claim.agent == agent
@@ -409,17 +522,17 @@ def evaluate_stop_for_session(
         and claim.worktree_path
         and Path(claim.worktree_path).expanduser().resolve() == root
     ]
-    if len(matches) != 1:
+    if len(claim_matches) != 1:
         return _decision(
             applicable=True,
             allow_stop=False,
             reason_code="exact_claim_unavailable",
             summary=(
                 "Outcome completion blocked: the activated repository requires exactly one "
-                f"live claim for this native session; found {len(matches)}."
+                f"live claim for this native session; found {len(claim_matches)}."
             ),
         )
-    projected_claim = matches[0]
+    projected_claim = claim_matches[0]
     try:
         claim_path = Path(projected_claim.source_file).expanduser().resolve()
         if hasattr(projected_claim, "source_sha256") and (
@@ -456,15 +569,31 @@ def evaluate_stop_for_session(
             claim=claim,
             tracker_path=Path(claim.tracker_path or "").expanduser().resolve(),
         )
-        scenario = outcome_selection._validate_binding_scenario(binding, claim=claim)
+        history = _completion_history(tracker_body)
+        try:
+            scenario = outcome_selection._validate_binding_scenario(binding, claim=claim)
+        except outcome_selection.OutcomeSelectionError as exc:
+            completion_bound_to_allocation = any(
+                item.outcome_contract_sha256 == binding.outcome_contract_sha256
+                and item.selection_binding.portfolio_allocation_id
+                == binding.portfolio_allocation_id
+                and item.selection_binding.portfolio_allocation_sha256
+                == binding.portfolio_allocation_sha256
+                for item in history
+            )
+            if exc.code != "portfolio_allocation_inactive" or not completion_bound_to_allocation:
+                raise
+            scenario = _validate_completed_portfolio_scenario(binding, claim=claim)
         head = outcome_selection._resolve_progress_head(
             tracker_body,
             binding=binding,
             scenario=scenario,
         )
         aliases = outcome_selection._binding_transfer_aliases(tracker_body, binding=binding)
-        matches = [item for item in _completion_history(tracker_body) if item.selection_binding_sha256 in aliases]
-        if len(matches) != 1:
+        completion_matches = [
+            item for item in history if item.selection_binding_sha256 in aliases
+        ]
+        if len(completion_matches) != 1:
             return _decision(
                 applicable=True,
                 allow_stop=False,
@@ -477,7 +606,7 @@ def evaluate_stop_for_session(
                 outcome_id=binding.outcome_id,
                 current_lease_sha256=head.result.lease_sha256,
             )
-        completion = matches[0]
+        completion = completion_matches[0]
         if completion.prior_lease_sha256 != head.result.lease_sha256:
             return _decision(
                 applicable=True,

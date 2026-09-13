@@ -191,6 +191,90 @@ def test_structured_complete_report_is_completion_shaped() -> None:
     )
 
 
+def test_completion_field_variants_and_prefix_are_classified_structurally() -> None:
+    assert coordination_hook._is_completion_shaped_stop(
+        {
+            "last_assistant_message": (
+                "Recommended next steps are listed below.\n\n"
+                "**Recommended next:** Complete."
+            )
+        }
+    )
+    assert coordination_hook._is_completion_shaped_stop(
+        {"last_assistant_message": "**Recommended next** — **Complete.**"}
+    )
+
+
+def test_fenced_completion_example_is_not_a_completion_attempt() -> None:
+    assert not coordination_hook._is_completion_shaped_stop(
+        {
+            "last_assistant_message": (
+                "I have not finished. Is this the closing-report format you want?\n\n"
+                "```markdown\nRecommended next: Complete.\n```"
+            )
+        }
+    )
+
+
+def test_explicit_completion_marker_without_event_identity_fails_closed(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    payload = {
+        "session_id": "native-session",
+        "cwd": str(tmp_path),
+        "hook_event_name": "Stop",
+        "completion_attempt": True,
+    }
+    monkeypatch.setattr(coordination_hook, "_read_hook_input", lambda **_kwargs: payload)
+    result = coordination_hook.main(
+        [
+            "--claims-dir",
+            str(tmp_path / "claims"),
+            "--root",
+            str(tmp_path / "messages"),
+            "--hook-receipt-dir",
+            str(tmp_path / "receipts"),
+        ]
+    )
+    assert result == 0
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["decision"] == "block"
+    assert "unavailable" in rendered["reason"]
+
+
+def test_completion_attempt_fails_closed_when_mailbox_is_unavailable(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    payload = {
+        "session_id": "native-session",
+        "cwd": str(tmp_path),
+        "hook_event_name": "Stop",
+        "last_assistant_message": "done",
+    }
+    monkeypatch.setattr(coordination_hook, "_read_hook_input", lambda **_kwargs: payload)
+    monkeypatch.setattr(coordination_hook, "_active_claims", lambda *_args, **_kwargs: ())
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "dashboard")
+    monkeypatch.setattr(
+        coordination_hook.coordination_messages,
+        "poll_session_inbox",
+        lambda **_kwargs: (_ for _ in ()).throw(OSError("mailbox unavailable")),
+    )
+    result = coordination_hook.main(
+        [
+            "--claims-dir",
+            str(tmp_path / "claims"),
+            "--root",
+            str(tmp_path / "messages"),
+            "--hook-receipt-dir",
+            str(tmp_path / "receipts"),
+        ]
+    )
+    assert result == 0
+    rendered = json.loads(capsys.readouterr().out)
+    assert rendered["decision"] == "block"
+    assert "mailbox unavailable" in rendered["reason"]
+
+
 def test_native_stop_emits_no_denial_after_canonical_completion(monkeypatch, tmp_path: Path, capsys) -> None:
     decision = OutcomeCompletionStopDecisionV1(
         applicable=True,

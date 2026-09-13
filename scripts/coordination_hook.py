@@ -985,23 +985,48 @@ def _is_completion_shaped_stop(payload: dict[str, Any]) -> bool:
     normalized_message = " ".join(message.casefold().split()).rstrip(".!:")
     if normalized_message in {"done", "complete", "completed"}:
         return True
-    field_names = ("**recommended next**", "recommended next")
+    in_fence = False
     for raw_line in message.splitlines():
         line = raw_line.strip()
+        if line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
         if line.startswith(("- ", "* ")):
             line = line[2:].lstrip()
-        folded = line.casefold()
-        for field_name in field_names:
-            if not folded.startswith(field_name):
-                continue
-            value = line[len(field_name) :].lstrip(" \t:—-")
-            normalized_value = " ".join(value.casefold().split()).rstrip(".!:")
-            return normalized_value in {
-                "complete",
-                "completed",
-                "clear this goal",
-                "goal complete",
-            }
+        value: str | None = None
+        if line.startswith("**"):
+            closing = line.find("**", 2)
+            if closing != -1:
+                raw_label = line[2:closing].strip()
+                label = raw_label.rstrip(":").strip().casefold()
+                remainder = line[closing + 2 :]
+                if label == "recommended next" and (
+                    raw_label.endswith(":")
+                    or remainder.startswith((" ", "\t", ":", "—", "-"))
+                ):
+                    value = remainder.lstrip(" \t:—-")
+        else:
+            for delimiter in (":", "—", " - "):
+                if delimiter not in line:
+                    continue
+                label, candidate = line.split(delimiter, 1)
+                if label.strip().casefold() == "recommended next":
+                    value = candidate.strip()
+                break
+        if value is None:
+            continue
+        stripped_value = value.strip()
+        if stripped_value.startswith("**") and stripped_value.endswith("**"):
+            stripped_value = stripped_value[2:-2].strip()
+        normalized_value = " ".join(stripped_value.casefold().split()).rstrip(".!:")
+        return normalized_value in {
+            "complete",
+            "completed",
+            "clear this goal",
+            "goal complete",
+        }
     return False
 
 
@@ -1283,10 +1308,15 @@ def main(argv: list[str] | None = None) -> int:
         # was filed as a block. 164 of the 171 blocks across three runs read on
         # 2026-09-06 were that, and a governance record that overstates what it
         # refused is worse than none: it is the number someone quotes.
-        denies = (
-            closeout_failure
-            and "payload" in locals()
-            and payload.get("hook_event_name") == "Stop"
+        stop_failure = (
+            "payload" in locals() and payload.get("hook_event_name") == "Stop"
+        )
+        denies = bool(
+            stop_failure
+            and (
+                closeout_failure
+                or ("completion_attempt" in locals() and completion_attempt)
+            )
         )
         telemetry_decision = "block" if denies else "warn"
         if denies:

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-137-cross-client-execution-tracking",
+  "contract": {
+    "schema_version": "1.2.0",
+    "outcome_id": "cross-client-outcome-alignment",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-137-cross-client-execution-tracking",
+    "portfolio_class": "product",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "Brian monitoring one approved outcome across isolated Codex and Claude sessions",
+    "outcome": "Codex and Claude native task views reflect one canonical criterion-bound outcome without allowing native green state to close the canonical goal.",
+    "canonical_journey": {
+      "starting_state": "One disposable goal has two frozen criteria and two stable execution items projected into isolated Codex and Claude sessions.",
+      "input": "The accepted neutral projection, exact native adapter observations, and current criterion evidence.",
+      "action": "Complete both native task displays while withholding one criterion's evidence, then add valid evidence, rename and reorder items, hand off across clients, and replay one event.",
+      "observable_result": "The incomplete proposal is denied, the fully evidenced proposal succeeds once, and identity survives rename, reorder, handoff, and replay.",
+      "failure_signal": "Native green state closes the goal, adapter failure mutates canonical state, or replay duplicates a transition."
+    },
+    "baseline_revision": "12de32f34be8a9e777dec051ae1e1dc72f6273ab",
+    "allowed_scope": [
+      ".company-planning/active-execution.json",
+      "docs/evidence/plan137_cross_client_execution_tracking_scenario.json",
+      "docs/evidence/plan137_cross_client_execution_tracking_allocation.json",
+      "docs/plans/137_cross_client_execution_tracking.md",
+      "docs/plans/137_cross_client_execution_tracking_work_graph.json",
+      "docs/plans/CLAUDE.md",
+      "ROADMAP.md",
+      "enforced_planning/client_execution_adapters.py",
+      "tests/test_client_execution_adapters.py"
+    ],
+    "progress_dimensions": [
+      "neutral execution contract",
+      "Codex native projection",
+      "Claude native projection",
+      "integrated completion guard"
+    ],
+    "success_criteria": [
+      {
+        "criterion_id": "neutral-contract-accepted",
+        "description": "The neutral execution projection and canonical completion proposal are accepted with both-sign evidence."
+      },
+      {
+        "criterion_id": "codex-projection-evidenced",
+        "description": "An isolated Codex session emits correlated native plan observations without canonical mutation authority."
+      },
+      {
+        "criterion_id": "claude-projection-evidenced",
+        "description": "An isolated Claude session emits correlated Task or hook observations without canonical mutation authority."
+      },
+      {
+        "criterion_id": "integrated-completion-guard",
+        "description": "The public cross-client fixture denies native-green incomplete closure and accepts fully evidenced closure exactly once."
+      }
+    ]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/client_execution_adapters.py",
+    "ordinary_approval": true,
+    "approval_text": "Brian approved implementation of Plan 137 on 2026-09-12."
+  }
+}

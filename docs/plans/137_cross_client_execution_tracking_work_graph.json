@@ -160,9 +160,9 @@
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "authorization_mode": "registry_claim",
       "status": "ready",
-      "record_version": 2,
+      "record_version": 3,
       "created_at": "2026-09-13T21:58:00Z",
-      "updated_at": "2026-09-13T23:10:27Z"
+      "updated_at": "2026-09-13T23:28:13Z"
     },
     {
       "schema_version": "1.0",

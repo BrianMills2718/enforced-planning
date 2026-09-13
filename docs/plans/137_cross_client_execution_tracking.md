@@ -39,6 +39,17 @@ criterion-bound, structurally exempts status/question turns, and adds a real
 installed-command blocker lifecycle fixture. This is local candidate evidence,
 not XCET05-A3 consumer adoption or Plan 137 completion.
 
+The first corrective candidate was also rejected by independent review for
+Markdown/fenced-example classifier gaps and fail-open ancillary error paths.
+The authentic dashboard then supplied transition
+`52d5b7c88681b5d6c673c2f566c412cd3363645d94d4754e95f4c42d5d36eebe`,
+which proved a separate post-completion lifecycle defect: the exact portfolio
+allocation's required `complete` disposition made the next Stop forget the
+already-retained canonical completion. The current candidate at
+`cb0e1ba8e22fc043ab280416e95d3a9cb68e6ba3` closes those paths while preserving
+active-allocation requirements for selection and pre-write. The dashboard must
+still rerun this exact revision before XCET05-A3 can be credited.
+
 ## Gap
 
 **Current:** Enforced Planning can retain selected outcomes, criterion-bound

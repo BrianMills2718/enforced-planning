@@ -2,48 +2,85 @@
   "schema_version": "1.0.0",
   "plan": 137,
   "work_unit_id": "xcet-05-codex-stop-enforcer",
-  "recorded_at": "2026-09-13T22:28:00Z",
-  "phase": "source_candidate_dependency_pending",
-  "consumer_adoption": "pending",
-  "installer_propagation": "delegated_to_plan110_shared_manifest_owner",
+  "recorded_at": "2026-09-13T23:28:13Z",
+  "phase": "corrected_local_candidate_dependency_pending",
+  "consumer_adoption": "pending_authentic_dashboard_observation",
+  "installer_propagation": "source_and_profiles_merged_at_7896446d6a58b6d8e5b7e222537750189a4fbefb; corrective_runtime_pending",
+  "revisions": {
+    "initial_source": "1a05e46bb57cd7390b4f79ed3ee261a9cba69619",
+    "initial_integration": "03130af5682416dcf908cc43e8bba72a71a9e978",
+    "merged_main": "7896446d6a58b6d8e5b7e222537750189a4fbefb",
+    "first_corrective_source": "20265334a45e90595791bb26bc9a4e104fe3ff0e",
+    "current_corrective_source": "cb0e1ba8e22fc043ab280416e95d3a9cb68e6ba3"
+  },
+  "independent_review": {
+    "receipts": [
+      "/home/brian/.local/state/enforced-planning/pr-reviews/BrianMills2718__enforced-planning/pr-501/receipt-c7ef51ad29694711e307e79985ceee91c4db1d2942c48ffe9376a1dfaa414b55.json",
+      "/home/brian/.local/state/enforced-planning/pr-reviews/BrianMills2718__enforced-planning/pr-502/receipt-b223628743ee5dc6cc444d03634df9423d245b5d5173d00bd04c105de805d2ec.json"
+    ],
+    "verdict": "two_rejected_candidates_with_distinct_reproduced_findings",
+    "reproduced_findings": [
+      "A repeated completion-shaped Stop bypassed outcome evaluation when stop_hook_active was true.",
+      "A non-completion status or question was evaluated as an attempted completion.",
+      "The read-only review boundary exposed test lock paths that ignored the fixture's writable runtime location.",
+      "Markdown variants, prefix lines, and fenced examples exposed incomplete structured Stop classification.",
+      "Missing event identity or mailbox availability could fail open before completion evaluation."
+    ],
+    "corrective_disposition": "The current corrective source parses only explicit unfenced closing fields, handles supported Markdown variants, fails completion attempts closed across ancillary errors, keeps every retry criterion-bound, and binds fixture locks to writable temporary state."
+  },
+  "authentic_dashboard_observation": {
+    "transition_sha256": "52d5b7c88681b5d6c673c2f566c412cd3363645d94d4754e95f4c42d5d36eebe",
+    "observed_defect": "After canonical completion was accepted and Stop allowed, disposition=complete released the exact portfolio allocation and the next Stop incorrectly required it to remain active.",
+    "corrective_behavior": "A retained accepted completion remains Stop-valid only when the bound allocation has one exact append-only complete disposition; parked, missing, duplicated, or changed allocation evidence remains non-success.",
+    "rerun_status": "pending_corrective_merge_and_install"
+  },
   "claims": {
     "canonical_completion_persisted": true,
-    "native_stop_adapter_integrated": true,
-    "unconfigured_repositories_unaffected": true,
+    "completion_retry_remains_bound": true,
+    "non_completion_turn_unaffected": true,
+    "completion_survives_exact_allocation_completion": true,
+    "installed_blocker_dispositions_executed": true,
     "dashboard_native_stop_replay_proven": false
   },
   "both_sign_evidence": {
     "negative": [
-      "An activated selected outcome with no accepted completion returns canonical_outcome_incomplete.",
+      "An activated selected outcome with no accepted completion returns canonical_outcome_incomplete on the initial and repeated completion-shaped Stop.",
       "An all-green execution projection without current criterion evidence cannot be recorded as complete.",
       "An activated repository without the exact native claim returns exact_claim_unavailable."
     ],
     "positive": [
-      "An exact criterion-evidenced proposal is recorded once, replays idempotently, and permits Stop.",
-      "A repository without outcome_completion_mode remains non-applicable and permits Stop."
+      "An exact criterion-evidenced proposal is recorded once, replays idempotently, permits Stop, and remains valid after its exact allocation receives disposition=complete.",
+      "An unconfigured repository and a structurally non-completion Stop remain unaffected.",
+      "The installed blocker command executes continue_ready_work and goal_blocked_verified, preserves unrelated and dirty work, and replays without a second executor."
     ]
   },
   "verification": [
     {
-      "command": "pytest -q tests/test_outcome_completion.py tests/test_outcome_completion_hook.py tests/test_coordination_hook.py",
-      "result": "39 passed"
+      "command": "pytest -q tests/test_blocker_policy.py tests/test_outcome_completion.py tests/test_outcome_completion_hook.py",
+      "result": "104 passed"
     },
     {
-      "command": "pytest -q tests/test_outcome_completion.py tests/test_outcome_completion_hook.py tests/test_outcome_selection.py tests/test_cross_client_execution_tracking.py",
-      "result": "54 passed"
+      "command": "pytest -q tests/test_install_governed_repo.py",
+      "result": "59 passed"
     },
     {
-      "command": "pytest -q tests/test_criterion_bound_outcomes.py",
-      "result": "9 passed; same-producer and relabeled-self-verifier controls remain denied"
+      "command": "pytest -q tests/test_session_cli.py -k 'not outcome_bootstrap_makefile_passes_exact_start_revision_to_session_start'",
+      "result": "153 passed, 1 branch-context test deselected"
     },
     {
       "command": "python scripts/self_test.py",
-      "result": "BLOCKED AS DESIGNED: the shared installer does not yet sync outcome_completion.py; ownership is delegated to the active Plan110 installer lane"
+      "result": "all checks passed"
+    },
+    {
+      "command": "ruff check scripts/coordination_hook.py tests/test_outcome_completion.py tests/test_outcome_completion_hook.py && ruff check --select E4,E7,E9,F tests/test_install_governed_repo.py && git diff --check",
+      "result": "passed; whole-file installer lint retains unrelated baseline findings outside the changed slice"
     }
   ],
-  "broad_suite": {
-    "result": "not_a_candidate_failure_signal",
-    "detail": "The broad suite was stopped after 1243 passes because 14 failures reproduced environment/baseline defects outside XCET-05: a host closeout-disable marker, a pre-existing prose-check expectation, concurrent make output, and a pre-existing personal-path sentinel. All directly affected suites pass independently."
+  "completion_credit": {
+    "xcet05_a1_a2": "local_corrective_candidate_evidenced",
+    "xcet05_a3": "not_evidenced",
+    "xcet05": "not_accepted",
+    "plan137": "in_progress"
   },
-  "next_required_evidence": "Merge and install the exact source revision, activate only the dashboard lane, and capture a real native Stop denial before any accepted dashboard completion."
+  "next_required_evidence": "Merge and install the current corrective source revision, then rerun the already-authorized dashboard lane to retain both the historical incomplete denial and the accepted-completion Stop after exact allocation completion."
 }

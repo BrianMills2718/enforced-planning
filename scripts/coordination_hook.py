@@ -966,6 +966,70 @@ def _render_boundary_denial(event_name: str, summary: str) -> dict[str, Any]:
     }
 
 
+def _is_completion_shaped_stop(payload: dict[str, Any]) -> bool:
+    """Classify an explicit completion protocol without interpreting free prose.
+
+    New adapters may supply ``completion_attempt`` directly.  The Codex Stop
+    payload currently lacks that field, so retain two bounded compatibility
+    shapes: a whole-message completion token and the workspace closing
+    report's explicit ``Recommended next`` field.  Status updates and questions
+    have neither shape and therefore remain unaffected.
+    """
+
+    explicit = payload.get("completion_attempt")
+    if isinstance(explicit, bool):
+        return explicit
+    message = payload.get("last_assistant_message")
+    if not isinstance(message, str):
+        return False
+    normalized_message = " ".join(message.casefold().split()).rstrip(".!:")
+    if normalized_message in {"done", "complete", "completed"}:
+        return True
+    in_fence = False
+    for raw_line in message.splitlines():
+        line = raw_line.strip()
+        if line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.startswith(("- ", "* ")):
+            line = line[2:].lstrip()
+        value: str | None = None
+        if line.startswith("**"):
+            closing = line.find("**", 2)
+            if closing != -1:
+                raw_label = line[2:closing].strip()
+                label = raw_label.rstrip(":").strip().casefold()
+                remainder = line[closing + 2 :]
+                if label == "recommended next" and (
+                    raw_label.endswith(":")
+                    or remainder.startswith((" ", "\t", ":", "—", "-"))
+                ):
+                    value = remainder.lstrip(" \t:—-")
+        else:
+            for delimiter in (":", "—", " - "):
+                if delimiter not in line:
+                    continue
+                label, candidate = line.split(delimiter, 1)
+                if label.strip().casefold() == "recommended next":
+                    value = candidate.strip()
+                break
+        if value is None:
+            continue
+        stripped_value = value.strip()
+        if stripped_value.startswith("**") and stripped_value.endswith("**"):
+            stripped_value = stripped_value[2:-2].strip()
+        normalized_value = " ".join(stripped_value.casefold().split()).rstrip(".!:")
+        return normalized_value in {
+            "complete",
+            "completed",
+            "clear this goal",
+            "goal complete",
+        }
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     """Refresh matching claim state and expose requests to the native session."""
 
@@ -981,10 +1045,16 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
-        if payload["hook_event_name"] == "Stop" and payload.get("stop_hook_active"):
-            # A re-fired Stop must be infallibly allowed. Run this before
-            # receipts, projections, mailbox access, or repository closeout so
-            # no stale or unavailable state can recreate the refusal loop.
+        completion_attempt = _is_completion_shaped_stop(payload)
+        if (
+            payload["hook_event_name"] == "Stop"
+            and payload.get("stop_hook_active")
+            and not completion_attempt
+        ):
+            # A non-completion re-fire must be infallibly allowed. Run this
+            # before receipts, projections, mailbox access, or repository
+            # closeout so stale state cannot recreate the refusal loop. An
+            # explicit completion attempt remains criterion-bound below.
             print("{}")
             return 0
         hook_receipt_dir = args.hook_receipt_dir or (
@@ -1123,7 +1193,7 @@ def main(argv: list[str] | None = None) -> int:
                 ledger_dir=closeout_ledger_dir,
                 active_claims=active_claims,
             )
-        if primary_execution and event_name == "Stop":
+        if primary_execution and event_name == "Stop" and completion_attempt:
             outcome_stop_decisions = _outcome_stop_decisions(
                 payload=payload,
                 agent=args.agent,
@@ -1142,13 +1212,13 @@ def main(argv: list[str] | None = None) -> int:
                 or outcome_stop_denials
             )
             and payload["hook_event_name"] == "Stop"
-            and not payload.get("stop_hook_active")
+            and (not payload.get("stop_hook_active") or outcome_stop_denials)
         ):
-            # The harness re-fires Stop after a block. Refusing again cannot
-            # change the condition, so a second refusal only deadlocks the
-            # session: on 2026-08-28 this gate blocked one session ~20
-            # consecutive times on 11 files written by sessions that had
-            # already ended. Block once; the bookkeeping above still runs.
+            # Mailbox and closeout denials retain the one-block safeguard: the
+            # harness re-fires Stop after a block, and refusing those unchanged
+            # bookkeeping states only deadlocks the session. Criterion-bound
+            # completion is different: every explicit completion attempt must
+            # remain unavailable until the accepted transition exists.
             boundary_event = "Stop"
         elif (
             notice.active_count
@@ -1238,10 +1308,15 @@ def main(argv: list[str] | None = None) -> int:
         # was filed as a block. 164 of the 171 blocks across three runs read on
         # 2026-09-06 were that, and a governance record that overstates what it
         # refused is worse than none: it is the number someone quotes.
-        denies = (
-            closeout_failure
-            and "payload" in locals()
-            and payload.get("hook_event_name") == "Stop"
+        stop_failure = (
+            "payload" in locals() and payload.get("hook_event_name") == "Stop"
+        )
+        denies = bool(
+            stop_failure
+            and (
+                closeout_failure
+                or ("completion_attempt" in locals() and completion_attempt)
+            )
         )
         telemetry_decision = "block" if denies else "warn"
         if denies:

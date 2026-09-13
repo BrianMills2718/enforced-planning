@@ -1,6 +1,6 @@
 # Plan #137: Cross-Client Execution Tracking And Bounded Completion Enforcement
 
-**Status:** In Progress — neutral/Codex and XCET-03R repair accepted; Brian authorized a first-consumer Codex Stop enforcement slice on 2026-09-13; Claude adapter remains quota-blocked and fleet activation remains excluded
+**Status:** In Progress — neutral/Codex and XCET-03R repair accepted; XCET-05 local enforcement was independently rejected after its first merge and now has a verified corrective candidate, while authentic dashboard observation and the Claude adapter remain pending; fleet activation remains excluded
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -28,6 +28,27 @@ mailbox acknowledgement protocol or a second outcome store. Enforced Planning
 owns the neutral lifecycle and completion decision. Company Planning continues
 to own project and work-unit meaning. AES and client integrations translate
 native events without gaining authority to close the outcome.
+
+The first XCET-05 source integration reached `main` at
+`7896446d6a58b6d8e5b7e222537750189a4fbefb`, but the required independent
+review subsequently reproduced two blocking hook-wiring defects: repeated
+completion attempts could bypass evaluation, and non-completion turns could be
+overblocked. The corrective candidate at
+`20265334a45e90595791bb26bc9a4e104fe3ff0e` keeps explicit completion retries
+criterion-bound, structurally exempts status/question turns, and adds a real
+installed-command blocker lifecycle fixture. This is local candidate evidence,
+not XCET05-A3 consumer adoption or Plan 137 completion.
+
+The first corrective candidate was also rejected by independent review for
+Markdown/fenced-example classifier gaps and fail-open ancillary error paths.
+The authentic dashboard then supplied transition
+`52d5b7c88681b5d6c673c2f566c412cd3363645d94d4754e95f4c42d5d36eebe`,
+which proved a separate post-completion lifecycle defect: the exact portfolio
+allocation's required `complete` disposition made the next Stop forget the
+already-retained canonical completion. The current candidate at
+`cb0e1ba8e22fc043ab280416e95d3a9cb68e6ba3` closes those paths while preserving
+active-allocation requirements for selection and pre-write. The dashboard must
+still rerun this exact revision before XCET05-A3 can be credited.
 
 ## Gap
 

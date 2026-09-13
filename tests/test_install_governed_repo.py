@@ -1390,6 +1390,9 @@ def _installed_planning_make_fixture(tmp_path: Path) -> tuple[dict[str, str], st
     environment["PYTHON"] = sys.executable
     environment["PYTHONPATH"] = os.pathsep.join(path for path in sys.path if path and "site-packages" in path)
     environment["CODEX_THREAD_ID"] = f"installed-{tmp_path.name}"
+    environment["ENFORCED_PLANNING_LOCK_DIR"] = str(
+        tmp_path.parent / f"{tmp_path.name}-tracker-locks"
+    )
     environment["GIT_SSH_COMMAND"] = str(fake_ssh)
     environment.pop("CLAUDE_SESSION_ID", None)
     environment.pop("OPENCLAW_SESSION_ID", None)
@@ -3039,6 +3042,161 @@ def test_installed_coordination_runtime_exposes_session_continuity_cli(tmp_path:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "--send-resume-offer" in result.stdout
     assert "--resume-offer-message-id" in result.stdout
+
+
+def test_installed_blocker_command_applies_both_dispositions_without_duplicate_executor(
+    tmp_path: Path,
+) -> None:
+    """The installed command, not only its source function, executes NPW-03 A/B."""
+
+    from enforced_planning.blocker_policy import BlockerDecisionInputV1
+    from tests.test_blocker_policy import (
+        GRAPH_REF,
+        SESSION_ID,
+        _application_expected,
+        _request,
+        _unit,
+        _write_application_claim,
+        _write_graph,
+    )
+
+    _prepare_mailbox_target(tmp_path)
+    installed = _run(
+        "--repo-root",
+        str(tmp_path),
+        "--write",
+        "--coordination-messages-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+
+    isolated_home = tmp_path.parent / f"{tmp_path.name}-operator-home"
+    claims_dir = isolated_home / ".claude/coordination/claims"
+    dirty_worktree = tmp_path / "dirty-worktree"
+    dirty_worktree.mkdir()
+    dirty_file = dirty_worktree / "pending.txt"
+    dirty_file.write_text("preserve installed contribution\n", encoding="utf-8")
+    graph_path, digest = _write_graph(
+        tmp_path,
+        [_unit("A", "blocked"), _unit("B", "ready")],
+    )
+    root = _write_application_claim(
+        claims_dir,
+        scope="goal-root",
+        graph_path=GRAPH_REF,
+        graph_sha256=digest,
+        work_unit_id="B",
+    )
+    child = _write_application_claim(
+        claims_dir,
+        scope="goal-child",
+        parent_scope="goal-root",
+        graph_path=GRAPH_REF,
+        graph_sha256=digest,
+        work_unit_id="B",
+    )
+    unrelated = _write_application_claim(
+        claims_dir,
+        scope="unrelated-root",
+        graph_path=None,
+        graph_sha256=None,
+        plan_ref="UNPLANNED",
+        work_unit_id=None,
+    )
+    for claim_path in (root, child, unrelated):
+        claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        claim["repo_root"] = str(tmp_path)
+        claim["worktree_path"] = str(dirty_worktree)
+        claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+
+    environment = os.environ.copy()
+    environment["HOME"] = str(isolated_home)
+    environment["PYTHONPATH"] = os.pathsep.join(
+        path for path in sys.path if path and "site-packages" in path
+    )
+    environment["CODEX_THREAD_ID"] = SESSION_ID.removeprefix("codex:")
+    environment["ENFORCED_PLANNING_LOCK_DIR"] = str(isolated_home / "tracker-locks")
+    command = [
+        sys.executable,
+        str(tmp_path / "scripts/meta/apply_blocker_disposition.py"),
+        "--agent",
+        "codex",
+        "--project",
+        "enforced-planning",
+        "--root-scope",
+        "goal-root",
+        "--session-id",
+        SESSION_ID,
+    ]
+
+    input_path = tmp_path / "blocker-input.json"
+    decision_path = tmp_path / "blocker-decision.json"
+
+    def run_current_files() -> dict[str, object]:
+        result = subprocess.run(
+            [
+                *command,
+                "--input-json",
+                str(input_path),
+                "--decision-json",
+                str(decision_path),
+            ],
+            cwd=tmp_path,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        return json.loads(result.stdout)
+
+    def invoke(decision_input: BlockerDecisionInputV1) -> dict[str, object]:
+        expected = _application_expected(
+            decision_input=decision_input,
+            repository_root=tmp_path,
+            claims_dir=claims_dir,
+        )
+        input_path.write_text(decision_input.model_dump_json(indent=2), encoding="utf-8")
+        decision_path.write_text(expected.model_dump_json(indent=2), encoding="utf-8")
+        return run_current_files()
+
+    continued = invoke(
+        BlockerDecisionInputV1(
+            request_ref="installed-continue",
+            request=_request(blocked_items=("A",)),
+            work_graph_ref_path=GRAPH_REF,
+            expected_work_graph_sha256=digest,
+        )
+    )
+    assert continued["decision"] == "continue_ready_work"
+    assert continued["result"] == "recorded_no_mutation"
+    assert dirty_file.read_text(encoding="utf-8") == "preserve installed contribution\n"
+
+    graph_path, blocked_digest = _write_graph(tmp_path, [_unit("A", "blocked")])
+    assert graph_path.is_file()
+    for claim_path in (root, child):
+        claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        claim["work_graph_sha256"] = blocked_digest
+        claim["work_unit_id"] = "A"
+        claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    retired = invoke(
+        BlockerDecisionInputV1(
+            request_ref="installed-terminal",
+            request=_request(),
+            work_graph_ref_path=GRAPH_REF,
+            expected_work_graph_sha256=blocked_digest,
+        )
+    )
+    assert retired["result"] == "applied"
+    assert retired["affected_scopes"] == ["goal-child", "goal-root"]
+    assert yaml.safe_load(root.read_text(encoding="utf-8"))["status"] == "session_ended"
+    assert yaml.safe_load(child.read_text(encoding="utf-8"))["status"] == "session_ended"
+    assert yaml.safe_load(unrelated.read_text(encoding="utf-8"))["status"] == "active"
+    assert dirty_file.read_text(encoding="utf-8") == "preserve installed contribution\n"
+    replay = run_current_files()
+    assert replay["idempotent_replay"] is True
+    assert replay["application_id"] == retired["application_id"]
 
 
 def test_pr_auto_default_resolves_canonical_repo_from_linked_worktree(tmp_path: Path) -> None:

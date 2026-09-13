@@ -322,6 +322,83 @@ def _exact_tracker_candidates(claim: coordination_claims.ClaimRecord) -> list[Pa
     return matches
 
 
+def _session_ended_reconciliation_tracker(
+    claim: coordination_claims.ClaimRecord,
+) -> tuple[Path, dict[str, dict[str, str | None]]]:
+    """Resolve a tracker while preserving evidence of stale mutable identity.
+
+    A historical session-start bug could reuse a tracker for a later lane in the
+    same native session, leaving the claim's tracker path valid and digest-bound
+    but its scope, worktree, and branch fields stale. Requiring those mutable
+    fields to match makes the only sanctioned terminal recovery impossible.
+
+    The session-ended reconciliation path already requires exact claim and
+    tracker digests plus a different native actor. Under those guards, accept
+    the claim-named tracker only when its stable owner identity still matches,
+    and carry every mutable mismatch into the closeout receipt.
+    """
+
+    trackers = _exact_tracker_candidates(claim)
+    if len(trackers) == 1:
+        tracker = trackers[0]
+        if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
+            raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
+        return tracker, {}
+    if len(trackers) > 1:
+        rendered = ", ".join(str(path) for path in trackers)
+        raise ValueError(
+            "Session-ended closeout reconciliation found ambiguous exact session trackers: "
+            + rendered
+        )
+
+    if not claim.tracker_path:
+        raise ValueError(
+            "Session-ended closeout reconciliation requires one exact session tracker; "
+            "the claim does not name a fallback tracker path."
+        )
+    tracker = Path(claim.tracker_path).expanduser()
+    if not tracker.is_file():
+        raise ValueError(
+            "Session-ended closeout reconciliation requires one exact session tracker; "
+            f"the claim-named fallback does not exist: {tracker}"
+        )
+    payload = session_contracts.read_session_tracker(tracker)
+    contract = payload.get("claim")
+    if not isinstance(contract, dict):
+        raise ValueError(f"Session tracker at {tracker} is missing claim metadata")
+
+    project = claim.primary_project()
+    stable_expected = {
+        "agent": claim.agent,
+        "project": project,
+        "session_id": claim.session_id,
+    }
+    stable_mismatches = {
+        field: {"claim": value, "tracker": contract.get(field)}
+        for field, value in stable_expected.items()
+        if contract.get(field) != value
+    }
+    if stable_mismatches:
+        fields = ", ".join(sorted(stable_mismatches))
+        raise ValueError(
+            "Session-ended closeout reconciliation rejected the claim-named tracker because "
+            f"stable owner identity differs in: {fields}. Preserve the lane and repair the "
+            "claim/tracker pair through an owned recovery."
+        )
+
+    mutable_expected = {
+        "scope": claim.scope,
+        "worktree_path": claim.worktree_path,
+        "branch": claim.branch,
+    }
+    mutable_mismatches = {
+        field: {"claim": value, "tracker": contract.get(field)}
+        for field, value in mutable_expected.items()
+        if contract.get(field) != value
+    }
+    return tracker, mutable_mismatches
+
+
 def _validate_missing_worktree_reconciliation(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -451,16 +528,7 @@ def _validate_session_ended_closeout_reconciliation(
         raise ValueError(
             "Session-ended closeout reconciliation requires --tracker-sha256 as a SHA-256 digest."
         )
-    trackers = _exact_tracker_candidates(claim)
-    if len(trackers) != 1:
-        rendered = ", ".join(str(path) for path in trackers)
-        raise ValueError(
-            "Session-ended closeout reconciliation requires one exact session tracker"
-            + (f": {rendered}" if rendered else "")
-        )
-    tracker = trackers[0]
-    if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
-        raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
+    tracker, tracker_identity_mismatches = _session_ended_reconciliation_tracker(claim)
     actual_tracker_digest = _tracker_sha256(tracker)
     if actual_tracker_digest != expected_tracker_digest:
         raise ValueError(
@@ -476,6 +544,7 @@ def _validate_session_ended_closeout_reconciliation(
         "claim_sha256": actual_claim_digest,
         "tracker_path": str(tracker),
         "tracker_sha256": actual_tracker_digest,
+        "tracker_identity_mismatches": tracker_identity_mismatches,
     }
 
 

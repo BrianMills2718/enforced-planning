@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -15,6 +16,79 @@ from enforced_planning import (
     coordination_messages,
     session_lifecycle,
 )
+
+
+def _claim_with_tracker(tracker: Path) -> SimpleNamespace:
+    return SimpleNamespace(
+        agent="codex",
+        scope="later-lane",
+        session_id="codex:same-session",
+        tracker_path=str(tracker),
+        worktree_path="/repo/worktrees/later-lane",
+        branch="later-lane",
+        primary_project=lambda: "demo",
+    )
+
+
+def test_session_ended_reconciliation_accepts_digest_bound_stale_mutable_tracker_identity(
+    tmp_path: Path,
+) -> None:
+    tracker = tmp_path / "codex__demo__codex-same-session__goal.yaml"
+    tracker.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 2,
+                "claim": {
+                    "agent": "codex",
+                    "project": "demo",
+                    "session_id": "codex:same-session",
+                    "scope": "earlier-lane",
+                    "worktree_path": "/repo/worktrees/earlier-lane",
+                    "branch": "earlier-lane",
+                },
+                "tracker": {"current_phase": "session ended"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolved, mismatches = session_lifecycle._session_ended_reconciliation_tracker(
+        _claim_with_tracker(tracker)
+    )
+
+    assert resolved == tracker
+    assert mismatches == {
+        "scope": {"claim": "later-lane", "tracker": "earlier-lane"},
+        "worktree_path": {
+            "claim": "/repo/worktrees/later-lane",
+            "tracker": "/repo/worktrees/earlier-lane",
+        },
+        "branch": {"claim": "later-lane", "tracker": "earlier-lane"},
+    }
+
+
+def test_session_ended_reconciliation_rejects_stale_stable_tracker_identity(
+    tmp_path: Path,
+) -> None:
+    tracker = tmp_path / "codex__demo__codex-same-session__goal.yaml"
+    tracker.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 2,
+                "claim": {
+                    "agent": "codex",
+                    "project": "other-project",
+                    "session_id": "codex:same-session",
+                    "scope": "earlier-lane",
+                },
+                "tracker": {"current_phase": "session ended"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="stable owner identity differs in: project"):
+        session_lifecycle._session_ended_reconciliation_tracker(_claim_with_tracker(tracker))
 
 
 def _git(repo: Path, *args: str) -> str:

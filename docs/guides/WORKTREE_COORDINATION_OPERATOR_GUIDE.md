@@ -524,6 +524,24 @@ contents, and submodules. It never calls worktree removal or branch deletion.
 Use ordinary `session-close` for real linked worktrees and
 `--reconcile-missing-worktree` only for an already-absent recorded worktree.
 
+### Session-ended claim with a stale tracker identity
+
+A historical session-start path could reuse one session tracker while moving
+the same native runtime to a later lane. The later claim then named a real
+tracker whose stable owner fields (`agent`, `project`, and `session_id`) were
+correct, but whose mutable lane fields (`scope`, `worktree_path`, and `branch`)
+still described the earlier lane. Ordinary resume correctly rejects that pair,
+yet the mismatch formerly made terminal reconciliation impossible too.
+
+Use the existing `session-close --reconcile-session-ended` flow with the exact
+claim and tracker SHA-256 digests. It may now use the tracker path named by the
+claim when no exact lane-identity tracker exists, but only if all stable owner
+fields still match. Every stale mutable field is copied into
+`tracker_identity_mismatches` in the completed claim archive. A stable owner
+mismatch, missing tracker, ambiguous exact trackers, or digest mismatch still
+fails before mutation. This is a terminal cleanup path; it does not transfer
+write custody or make the inconsistent tracker valid for resume.
+
 ### Orphaned session trackers with no claim left to close
 
 A tracker whose worktree is gone **and** whose claim file was already released

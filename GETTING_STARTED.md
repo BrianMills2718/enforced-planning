@@ -178,6 +178,7 @@ The installer also carries `enforced_planning/outcome_completion.py` and
 checks. Installation alone does not enable blocking: completion enforcement
 remains off unless the repository explicitly configures
 `meta_process.claims.outcome_completion_mode: enforce_selected`.
+This installer pairing was last verified on 2026-09-13.
 
 The installed hook stack blocks direct pull-request merges and routes them to
 the sanctioned finish transaction. Supply a planning-derived review spec from

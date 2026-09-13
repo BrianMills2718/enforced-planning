@@ -64,6 +64,7 @@ MAILBOX_COMMON_ROLLOUT_PATHS = {
     "scripts/meta/session_heartbeat.py",
     "scripts/meta/session_narrow.py",
     "scripts/meta/apply_blocker_disposition.py",
+    "scripts/meta/outcome_completion_hook.py",
     "scripts/meta/session_close.py",
     "scripts/meta/session_continuity.py",
     "scripts/meta/session_resume.py",
@@ -81,6 +82,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_completion.py",
     "enforced_planning/outcome_continuation.py",
     "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py",
@@ -2962,6 +2964,25 @@ def test_every_claim_runtime_installer_profile_carries_session_narrow() -> None:
         assert manifest["scripts/meta/apply_blocker_disposition.py"] == (
             "scripts/apply_blocker_disposition.py"
         )
+
+
+def test_outcome_completion_installs_only_with_stop_capable_profiles() -> None:
+    """Selected-completion enforcement must not enter projection-only runtimes."""
+
+    from scripts import install_governed_repo
+
+    module = "enforced_planning/outcome_completion.py"
+    wrapper = "scripts/meta/outcome_completion_hook.py"
+    assert install_governed_repo.SYNC_SUPPORT_FILES[module] == module
+    assert install_governed_repo.SYNC_SUPPORT_FILES[wrapper] == "scripts/outcome_completion_hook.py"
+    assert install_governed_repo.COORDINATION_MESSAGES_SHARED_FILES[wrapper] == (
+        "scripts/outcome_completion_hook.py"
+    )
+    assert install_governed_repo.COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES[module] == module
+    assert module not in install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES
+    assert wrapper not in install_governed_repo.WORKTREE_ONLY_SYNC_SUPPORT_FILES
+    assert module not in install_governed_repo.CLAIM_PROJECTION_LOCAL_PACKAGE_FILES
+    assert wrapper not in install_governed_repo.CLAIM_PROJECTION_SHARED_FILES
 
 
 def test_every_claim_runtime_installer_profile_carries_session_continuity() -> None:

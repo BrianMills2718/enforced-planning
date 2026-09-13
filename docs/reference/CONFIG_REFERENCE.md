@@ -174,7 +174,11 @@ mode. A new lane must enter through `make outcome-bootstrap`, whose complete
 claim is restricted to one uniquely identified Plan's plan, graph, allocation
 fixtures, index, and roadmap. This mode is enabled only in the Enforced
 Planning source repository as of Plan #123; the installer does not configure or
-activate it in downstream repositories.
+activate it in downstream repositories. The public bootstrap resolves the
+remote-default revision once and passes it into session activation, so the new
+claim and tracker retain exact `start_revision` custody before the claim can be
+bound to a selected work unit. Existing tracked claims without that evidence
+remain legacy records and are not backfilled.
 
 ## worktrees
 

@@ -1,6 +1,6 @@
 # Plan #137: Observe-Only Cross-Client Execution Tracking
 
-**Status:** In Progress — neutral and Codex adapters accepted; Claude adapter merged but authentic probe blocked by existing quota; no host activation or blocking enforcement
+**Status:** In Progress — neutral and Codex adapters accepted; Claude adapter merged, audit repair ready, and authentic probe blocked by existing quota; no host activation or blocking enforcement
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -176,6 +176,7 @@ accepted evidenced closure, and stable handoff/replay behavior.
 | XCET-01 | `direct_blocker` | Both adapters require the same accepted neutral contract. |
 | XCET-02 | `direct_blocker` | The integrated journey requires authentic Codex projection evidence. |
 | XCET-03 | `direct_blocker` | The integrated journey requires authentic Claude projection evidence. |
+| XCET-03R | `direct_blocker` | Audit probes showed that Claude match evidence copied the canonical digest instead of hashing the observed native projection. |
 | XCET-04 | `vertical` | This is the user-visible both-sign cross-client result. |
 
 ## Plan
@@ -194,7 +195,11 @@ the single `vertical` unit. No enabler or hardening unit may delay that fixture.
 3. **XCET-03 — Claude adapter.** Translate the same neutral projection to an
    isolated Claude Task surface and retain typed tool/hook observations. Keep
    host configuration unchanged.
-4. **XCET-04 — integrated fixture and feedback.** Run the canonical example
+4. **XCET-03R — observation repair.** Hash the normalized native Task projection,
+   require every claimed native field to be observed, and keep failure categories
+   stable with structured item-level detail. The same native snapshot must not
+   match two canonical projections that differ in criterion or provenance.
+5. **XCET-04 — integrated fixture and feedback.** Run the canonical example
    across both isolated clients through their public local entrypoints. Retain
    false-pass, false-block, divergence, replay, friction, version, and latency
    observations suitable for a later promotion decision.
@@ -270,6 +275,10 @@ synchronized closeout across the plan, graph, roadmap, and plan index.
   creating a task. It is retained as `unavailable`, not native acceptance;
   XCET-03 and the integrated fixture remain blocked until one post-reset live
   Task create/update/list/hook journey is observed.
+- A 2026-09-13 audit rejected the adapter's original match evidence: one identical
+  native snapshot returned `matched` for two canonical projections with different
+  criterion IDs, and observation-only metadata changed the alleged native digest.
+  XCET-03R must land before the authentic Claude probe can accept XCET-03.
 
 - Focused Pydantic contract tests for identity, revision, dependencies,
   idempotency, evidence freshness, completion, and divergence.

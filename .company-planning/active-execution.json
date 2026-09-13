@@ -1,0 +1,65 @@
+{
+  "active_slice": {
+    "description": "Apply deterministic blocker dispositions through existing safe scoped lifecycle writers.",
+    "next_action": "Run focused NPW-03 tests, implement the sanctioned lifecycle applier and installed wrapper, then verify the canonical A/B/C and terminal-wait journeys.",
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "npw-03-safe-lifecycle-integration",
+    "status": "executing",
+    "target_revision": "enforced-planning@dab6decf5673675cccec1029fd55803ee9023d9f"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 1,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "enforced-planning-plan110-npw03-20260913",
+  "cursor_revision": 1,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "project-meta:plan-279:outcome-ownership-action-scoped-blockers",
+  "lifecycle_state": "active",
+  "observations": [
+    {
+      "boundary": "plan110-work-graph",
+      "evidence_ref": "enforced-planning@dab6decf5673675cccec1029fd55803ee9023d9f:docs/plans/110_no_passive_waiting_work_graph.json#npw-03-safe-lifecycle-integration",
+      "kind": "supporting_work",
+      "observation_id": "npw03-owner-unit-ready",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "outcome-admission",
+      "evidence_ref": "outcome-selection-binding:8bcae5afd68cf6c1da901e00c2601fb3efe5bd3cd22475f43b68af9467897b3e",
+      "kind": "supporting_work",
+      "observation_id": "npw03-selected-outcome-active",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "enforced-planning@dab6decf5673675cccec1029fd55803ee9023d9f:plan110-npw03-v1",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan110-npw03-safe-lifecycle",
+    "repository": "enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/plan110-npw03-safe-lifecycle"
+  }
+}

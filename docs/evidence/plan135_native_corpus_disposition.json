@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_disposition_request",
+  "disposition_id": "plan-135-native-corpus-signoff-parked",
+  "requested_at": "2026-09-13T06:22:37Z",
+  "allocation_id": "plan-135-native-corpus-product-allocation",
+  "allocation_sha256": "bf63eb7b43a99410c5ca518b840c05ec22ea4610afb1fc01ce520f6facdccf59",
+  "disposition": "parked",
+  "decision_ref": "enforced-planning#135-native-v5-signoff",
+  "reason": "Plan 135 retained its valid-fail native decision and independent signoff, satisfying the allocation stopping condition; park the inactive slot without changing the plan status."
+}

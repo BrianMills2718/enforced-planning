@@ -90,12 +90,16 @@
       "objective": "Add an isolated observe-only Claude Task adapter that preserves stable neutral identity and typed tool or hook observations without changing host configuration.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "blocked_dependencies",
       "scope": {
         "included": ["Claude Task projection", "Tool/hook observation translation", "Capability diagnostics", "Isolated authentic Claude probe", "Independent validation of the exact accepted AES Codex adapter evidence"],
         "excluded": ["Global hook activation", "Always-on review", "Automatic continuation", "Canonical state ownership"]
       },
-      "inputs": [{"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"}],
+      "inputs": [
+        {"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "accepted"},
+        {"kind": "merged_implementation", "id": "xcet-03-claude-adapter", "revision": "enforced-planning@9b26b97735101720712941874a32e5ba2aa7856d"},
+        {"kind": "accepted_external_adapter", "id": "xcet-02-codex-adapter", "revision": "agentic-engineering-system@5742bfe48b7cfd252b7f546cebf5f764baee1c14"}
+      ],
       "outputs": ["Claude task projection adapter", "Native event correlations", "Capability/limitation evidence", "Independently verified joint adapter acceptance transition"],
       "dependencies": [
         {
@@ -130,12 +134,12 @@
           "negative_control": "AES worker prose, a branch-only result, or an unaccepted AES target unit cannot unblock the integrated fixture."
         }
       ],
-      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["Authentic Claude task create/update/list/hook evidence is unavailable until the existing Claude quota resets"]},
       "authorization_mode": "registry_claim",
-      "status": "ready",
-      "record_version": 1,
+      "status": "blocked",
+      "record_version": 2,
       "created_at": "2026-09-12T17:00:00Z",
-      "updated_at": "2026-09-12T22:25:00Z"
+      "updated_at": "2026-09-13T06:57:14Z"
     },
     {
       "schema_version": "1.0",

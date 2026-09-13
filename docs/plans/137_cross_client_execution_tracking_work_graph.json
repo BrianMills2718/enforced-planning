@@ -80,6 +80,67 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "xcet-03r-observation-repair",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-client-outcome-alignment",
+      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
+      "spec_revision": "plan-137-work-graph-v2",
+      "title": "Repair Claude native projection evidence and feedback categories",
+      "class": "implementation",
+      "objective": "Make Claude match and divergence evidence derive only from one normalized observed native Task projection, with stable reason categories and structured item-level detail.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready",
+      "scope": {
+        "included": ["Normalized native Task projection digest", "Observed criterion and provenance description", "Stable reason codes", "Structured divergence details", "Both-sign regression probes"],
+        "excluded": ["Authentic Claude acceptance", "Integrated fixture", "Host activation", "Canonical completion authority"]
+      },
+      "inputs": [
+        {"kind": "merged_implementation", "id": "xcet-03-claude-adapter", "revision": "enforced-planning@9b26b97735101720712941874a32e5ba2aa7856d"},
+        {"kind": "audit_observation", "id": "plan137-native-digest-audit", "revision": "codex-session-01a09110-c715-7ed0-a135-25a865bf23c8@2026-09-13"}
+      ],
+      "outputs": ["Corrected Claude observation adapter", "Stable feedback categories", "Regression evidence"],
+      "dependencies": [
+        {
+          "unit_id": "xcet-01-neutral-contract",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "The repair preserves the accepted neutral completion authority boundary."
+        }
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking_work_graph.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/CLAUDE.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "ROADMAP.md", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {
+          "id": "XCET03R-A1",
+          "criterion": "One identical observed native Task projection has one stable digest and cannot match canonical projections whose native-visible criterion or provenance description differs.",
+          "evidence_required": ["Same-snapshot changed-criterion negative control", "Metadata-invariant divergent digest control"],
+          "negative_control": "Copying the expected canonical digest into a matched native observation cannot pass."
+        },
+        {
+          "id": "XCET03R-A2",
+          "criterion": "Failure categories are finite stable codes and item-specific differences remain structured data.",
+          "evidence_required": ["Reason-code equality across different item IDs", "Structured detail assertions"],
+          "negative_control": "Item IDs or comma-joined differences cannot be embedded in reason_code."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-13T12:55:00Z",
+      "updated_at": "2026-09-13T12:55:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "xcet-03-claude-adapter",
       "initiative_id": "agentic-engineering",
       "goal_id": "cross-client-outcome-alignment",
@@ -102,6 +163,12 @@
       ],
       "outputs": ["Claude task projection adapter", "Native event correlations", "Capability/limitation evidence", "Independently verified joint adapter acceptance transition"],
       "dependencies": [
+        {
+          "unit_id": "xcet-03r-observation-repair",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "XCET-03 cannot be accepted from native parity evidence that the audit proved unsound."
+        },
         {
           "unit_id": "xcet-01-neutral-contract",
           "type": "hard",

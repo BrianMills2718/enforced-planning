@@ -243,6 +243,14 @@ worktree targets. Claim-runtime schema v6 also requires `session-narrow`; a
 generated consumer that lacks that entrypoint is not compatible with typed
 bootstrap broad claims.
 
+Claim-runtime installer profiles also carry
+`scripts/meta/apply_blocker_disposition.py` plus
+`enforced_planning/blocker_policy.py`. This is a fixed lifecycle contract, not
+a configuration switch: it re-evaluates the current canonical claim and graph
+snapshot under the registry lock, records an immutable disposition-application
+receipt, and limits any handoff/session-end mutation to the named root and its
+descendants. Unrelated roots remain live.
+
 `make maintenance-worktree` serializes its bounded inputs into the typed
 `maintenance_worktree` claim-bootstrap operation; Make does not independently
 create or roll back the claim, worktree, or tracker. Omitted

@@ -17,11 +17,12 @@ import subprocess
 import tempfile
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 import yaml  # type: ignore[import-untyped]
+from pydantic import BaseModel, ConfigDict, Field
 
 from enforced_planning import (
     claim_mutation_receipts,
@@ -35,6 +36,12 @@ from enforced_planning import (
     session_contracts,
     session_process_fencing,
     surface_runtime,
+)
+from enforced_planning.blocker_policy import (
+    BlockerDecisionInputV1,
+    BlockerDecisionResultV1,
+    ClaimQueueSnapshotV1,
+    evaluate_blocker_request,
 )
 from enforced_planning.worktree_paths import resolve_canonical_repo_root
 
@@ -55,6 +62,32 @@ class OutcomeAdmissionDeniedError(PermissionError):
 
 
 _STATUS_OBSERVATION_ATTEMPTS = 3
+DEFAULT_BLOCKER_DISPOSITION_RECEIPT_DIR = (
+    Path.home() / ".claude" / "coordination" / "blocker-dispositions-v1"
+)
+
+
+class BlockerDispositionApplicationReceiptV1(BaseModel):
+    """Immutable evidence that one accepted disposition was safely consumed."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    schema_version: Literal["1.0"] = "1.0"
+    application_id: str = Field(pattern=r"^blocker_application_[0-9a-f]{32}$")
+    disposition_id: str = Field(pattern=r"^blocker_disposition_[0-9a-f]{32}$")
+    ready_queue_evaluation_id: str = Field(pattern=r"^ready_queue_[0-9a-f]{32}$")
+    decision: str = Field(min_length=1)
+    claim_action: str = Field(min_length=1)
+    agent: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    project: str = Field(min_length=1)
+    root_scope: str = Field(min_length=1)
+    affected_scopes: tuple[str, ...]
+    registry_digest_before: str = Field(pattern=r"^[0-9a-f]{64}$")
+    registry_digest_after: str = Field(pattern=r"^[0-9a-f]{64}$")
+    work_graph_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result: Literal["recorded_no_mutation", "applied"]
+    recorded_at: datetime
 
 
 def _shared_lock_fd_if_present(lock_path: Path) -> int | None:
@@ -4072,6 +4105,308 @@ def narrow_session_claim(
             session_id=result.session_id,
         ),
     }
+
+
+def _blocker_claim_snapshots(
+    *, project: str, goal_scope: str, claims_dir: Path
+) -> tuple[ClaimQueueSnapshotV1, ...]:
+    """Project the locked canonical registry into the accepted evaluator contract."""
+
+    claims = coordination_claims.list_claims(project, claims_dir=claims_dir)
+    snapshots: list[ClaimQueueSnapshotV1] = []
+    for claim in claims:
+        if claim.session_id is None:
+            raise ValueError(f"live canonical claim {claim.scope} has no session identity")
+        issues = [
+            *coordination_claims.coordination_health_issues(claim, active_claims=claims),
+            *coordination_claims.claim_liveness_issues(claim),
+        ]
+        if issues:
+            raise ValueError(
+                f"live canonical claim {claim.scope} is not current and healthy: "
+                + ", ".join(issues)
+            )
+        snapshots.append(
+            ClaimQueueSnapshotV1(
+                session_id=claim.session_id,
+                status=claim.status,
+                goal_or_graph_scope=claim.plan_ref or claim.scope,
+                work_unit_id=claim.work_unit_id,
+                work_graph_path=claim.work_graph_path,
+                work_graph_sha256=claim.work_graph_sha256,
+                claimed_paths=tuple(claim.write_paths),
+            )
+        )
+    if "#" not in goal_scope or goal_scope.split("#", 1)[0] != project:
+        raise ValueError("blocker application requires a project-qualified goal scope")
+    return tuple(snapshots)
+
+
+def _blocker_application_id(
+    *, expected: BlockerDecisionResultV1, agent: str, project: str, root_scope: str
+) -> str:
+    payload = {
+        "disposition_id": expected.disposition.disposition_id,
+        "ready_queue_evaluation_id": expected.ready_queue.evaluation_id,
+        "agent": agent,
+        "session_id": expected.ready_queue.session_id,
+        "project": project,
+        "root_scope": root_scope,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"blocker_application_{hashlib.sha256(canonical).hexdigest()[:32]}"
+
+
+def _write_immutable_blocker_receipt(
+    receipt: BlockerDispositionApplicationReceiptV1, *, receipt_dir: Path
+) -> Path:
+    """Publish one receipt without permitting replacement or conflicting replay."""
+
+    resolved_dir = receipt_dir.expanduser().resolve()
+    resolved_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    target = resolved_dir / f"{receipt.application_id}.json"
+    canonical = (receipt.model_dump_json(indent=2) + "\n").encode("utf-8")
+    if target.exists():
+        existing = BlockerDispositionApplicationReceiptV1.model_validate_json(target.read_text())
+        if existing != receipt:
+            raise ValueError(f"blocker application receipt collision at {target}")
+        return target
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb", dir=resolved_dir, prefix=f".{target.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(canonical)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temp_path, target)
+        except FileExistsError:
+            existing = BlockerDispositionApplicationReceiptV1.model_validate_json(target.read_text())
+            if existing != receipt:
+                raise ValueError(f"blocker application receipt collision at {target}")
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+    return target
+
+
+def apply_blocker_disposition(
+    *,
+    decision_input: BlockerDecisionInputV1,
+    expected_result: BlockerDecisionResultV1,
+    repository_root: Path,
+    agent: str,
+    project: str,
+    root_scope: str,
+    actor_session_id: str | None = None,
+    claims_dir: Path | None = None,
+    receipt_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Re-evaluate and consume one disposition against current canonical custody.
+
+    Replay is idempotent.  New applications serialize graph/claim validation,
+    scoped mutation, projection refresh, and immutable receipt publication under
+    the canonical registry lock.  No branch, worktree, or dirty file is touched.
+    """
+
+    if decision_input.claim_snapshots:
+        raise ValueError("blocker application rejects caller-supplied claim snapshots")
+    if decision_input.mailbox_evidence or decision_input.request.mailbox_dependency:
+        raise ValueError("blocker application rejects caller-supplied mailbox state")
+    resolved_claims_dir = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
+    resolved_receipt_dir = receipt_dir or DEFAULT_BLOCKER_DISPOSITION_RECEIPT_DIR
+    session_id = coordination_claims.resolve_session_id(agent, actor_session_id)
+    if session_id is None:
+        raise ValueError("blocker application requires an exact native session identity")
+    coordination_claims.validate_native_session_binding(agent, session_id, require_native_marker=True)
+    if session_id != decision_input.request.session_id:
+        raise ValueError("blocker request belongs to a different runtime session")
+
+    application_id = _blocker_application_id(
+        expected=expected_result, agent=agent, project=project, root_scope=root_scope
+    )
+    receipt_path = resolved_receipt_dir.expanduser().resolve() / f"{application_id}.json"
+    with coordination_claims.claim_registry_lock(resolved_claims_dir):
+        if receipt_path.exists():
+            receipt = BlockerDispositionApplicationReceiptV1.model_validate_json(receipt_path.read_text())
+            identity = (receipt.agent, receipt.session_id, receipt.project, receipt.root_scope)
+            if identity != (agent, session_id, project, root_scope):
+                raise ValueError(f"blocker application receipt collision at {receipt_path}")
+            if (
+                receipt.disposition_id != expected_result.disposition.disposition_id
+                or receipt.ready_queue_evaluation_id != expected_result.ready_queue.evaluation_id
+            ):
+                raise ValueError("existing blocker application receipt does not match expected decision")
+            return {
+                **receipt.model_dump(mode="json"),
+                "receipt_path": str(receipt_path),
+                "receipt_sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                "idempotent_replay": True,
+            }
+
+        claims = coordination_claims.list_claims(project, claims_dir=resolved_claims_dir)
+        roots = [claim for claim in claims if claim.agent == agent and claim.scope == root_scope]
+        if len(roots) != 1:
+            raise ValueError(f"blocker application requires one live root claim for {project}:{root_scope}")
+        root = roots[0]
+        _require_claim_actor(root, actor_session_id=session_id)
+        if root.plan_ref != decision_input.request.claim_scope:
+            raise ValueError("root claim is not bound to the blocker request goal scope")
+        if (
+            root.work_graph_path != decision_input.work_graph_ref_path
+            or root.work_graph_sha256 != decision_input.expected_work_graph_sha256
+        ):
+            raise ValueError("root claim is not bound to the blocker request graph bytes")
+
+        snapshots = _blocker_claim_snapshots(
+            project=project,
+            goal_scope=decision_input.request.claim_scope,
+            claims_dir=resolved_claims_dir,
+        )
+        canonical_input = decision_input.model_copy(update={"claim_snapshots": snapshots})
+        actual = evaluate_blocker_request(canonical_input, repository_root=repository_root)
+        expected_queue = expected_result.ready_queue.model_dump(mode="json", exclude={"evaluated_at"})
+        actual_queue = actual.ready_queue.model_dump(mode="json", exclude={"evaluated_at"})
+        expected_disposition = expected_result.disposition.model_dump(
+            mode="json", exclude={"recorded_at"}
+        )
+        actual_disposition = actual.disposition.model_dump(mode="json", exclude={"recorded_at"})
+        if expected_queue != actual_queue or expected_disposition != actual_disposition:
+            raise ValueError("accepted blocker disposition is stale against current graph or claims")
+
+        affected: list[coordination_claims.ClaimRecord] = [root]
+        pending = {root.scope}
+        while pending:
+            parents = set(pending)
+            pending.clear()
+            for claim in claims:
+                if (
+                    claim not in affected
+                    and claim.agent == agent
+                    and claim.session_id == session_id
+                    and claim.parent_scope in parents
+                ):
+                    affected.append(claim)
+                    pending.add(claim.scope)
+
+        action = actual.disposition.claim_action
+        status = "handoff" if action == "handoff_scope" else coordination_claims.SESSION_ENDED_STATUS
+        replacements: dict[Path, dict[str, Any]] = {}
+        original_payloads: dict[Path, dict[str, Any]] = {}
+        original_trackers: dict[Path, bytes] = {}
+        recorded_at = datetime.now(UTC)
+        registry_before = coordination_claims._registry_digest(resolved_claims_dir)
+        projection_digest_after: str | None = None
+        if action in {"handoff_scope", "retire_goal_scope"}:
+            for claim in affected:
+                if claim.source_file is None:
+                    raise ValueError(f"claim {claim.scope} has no canonical source path")
+                path = Path(claim.source_file).expanduser().resolve()
+                raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+                if not isinstance(raw, dict):
+                    raise TypeError(f"claim {claim.scope} is not a YAML mapping")
+                coordination_claims.reject_mutation_during_session_takeover(
+                    raw, operation="blocker_disposition"
+                )
+                original_payloads[path] = dict(raw)
+                raw.update(
+                    {
+                        "status": status,
+                        "updated_at": recorded_at.isoformat(),
+                        "notes": (
+                            f"blocker disposition {actual.disposition.disposition_id}: "
+                            f"{actual.disposition.resume_event}"
+                        ),
+                    }
+                )
+                replacements[path] = raw
+            _projection_path, projection_digest_after = (
+                coordination_claims.replace_claim_payloads_and_refresh_projection_fail_atomic(
+                replacements=replacements, claims_dir=resolved_claims_dir
+                )
+            )
+            try:
+                for claim in affected:
+                    if not claim.tracker_path:
+                        continue
+                    tracker_path = Path(claim.tracker_path).expanduser().resolve()
+                    if not tracker_path.is_file():
+                        continue
+                    original_trackers[tracker_path] = tracker_path.read_bytes()
+                    session_contracts.update_session_tracker(
+                        tracker_path,
+                        current_phase=(
+                            "handoff required" if action == "handoff_scope"
+                            else "session ended; goal-scope disposition recorded"
+                        ),
+                        notes=(
+                            f"blocker disposition {actual.disposition.disposition_id}: "
+                            f"{actual.disposition.resume_event}"
+                        ),
+                        updated_at=recorded_at.isoformat(),
+                    )
+            except Exception:  # noqa: BLE001 - every tracker failure rolls back authority
+                for tracker_path, content in original_trackers.items():
+                    _atomic_restore_bytes(tracker_path, content)
+                coordination_claims.replace_claim_payloads_and_refresh_projection_fail_atomic(
+                    replacements=original_payloads, claims_dir=resolved_claims_dir
+                )
+                raise
+
+        registry_after = coordination_claims._registry_digest(resolved_claims_dir)
+        receipt = BlockerDispositionApplicationReceiptV1(
+            application_id=application_id,
+            disposition_id=actual.disposition.disposition_id,
+            ready_queue_evaluation_id=actual.ready_queue.evaluation_id,
+            decision=actual.disposition.decision,
+            claim_action=action,
+            agent=agent,
+            session_id=session_id,
+            project=project,
+            root_scope=root_scope,
+            affected_scopes=tuple(sorted(claim.scope for claim in affected)) if replacements else (),
+            registry_digest_before=registry_before,
+            registry_digest_after=registry_after,
+            work_graph_sha256=decision_input.expected_work_graph_sha256,
+            result="applied" if replacements else "recorded_no_mutation",
+            recorded_at=recorded_at,
+        )
+        try:
+            stored_path = _write_immutable_blocker_receipt(receipt, receipt_dir=resolved_receipt_dir)
+        except Exception:  # noqa: BLE001 - receipt publication failure rolls back authority
+            for tracker_path, content in original_trackers.items():
+                _atomic_restore_bytes(tracker_path, content)
+            if original_payloads:
+                coordination_claims.replace_claim_payloads_and_refresh_projection_fail_atomic(
+                    replacements=original_payloads, claims_dir=resolved_claims_dir
+                )
+            raise
+
+        if replacements:
+            assert projection_digest_after is not None
+            operation: claim_mutation_receipts.MutationOperation = (
+                "session_upsert" if action == "handoff_scope" else "session_end"
+            )
+            for claim in affected:
+                assert claim.source_file is not None
+                coordination_claims.record_claim_mutation(
+                    operation=operation,
+                    claims_dir=resolved_claims_dir,
+                    registry_digest_before=registry_before,
+                    target_project=project,
+                    target_scope=claim.scope,
+                    target_claim_path=Path(claim.source_file),
+                    session_id=session_id,
+                    projection_digest_after=projection_digest_after,
+                )
+        return {
+            **receipt.model_dump(mode="json"),
+            "receipt_path": str(stored_path),
+            "receipt_sha256": hashlib.sha256(stored_path.read_bytes()).hexdigest(),
+            "idempotent_replay": False,
+        }
 
 
 def _status_sessions_locked(

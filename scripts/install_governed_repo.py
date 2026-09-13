@@ -61,6 +61,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/claim_bootstrap.py": "enforced_planning/claim_bootstrap.py",
+    "enforced_planning/blocker_policy.py": "enforced_planning/blocker_policy.py",
     "scripts/meta/claim_bootstrap.py": "scripts/claim_bootstrap.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
@@ -69,6 +70,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
     "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_completion.py": "enforced_planning/outcome_completion.py",
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
@@ -113,6 +115,8 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_continuity.py": "scripts/session_continuity.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+    "scripts/meta/apply_blocker_disposition.py": "scripts/apply_blocker_disposition.py",
+    "scripts/meta/outcome_completion_hook.py": "scripts/outcome_completion_hook.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
@@ -174,6 +178,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/claim_bootstrap.py": "enforced_planning/claim_bootstrap.py",
+    "enforced_planning/blocker_policy.py": "enforced_planning/blocker_policy.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/concurrent_writers.py": "enforced_planning/concurrent_writers.py",
@@ -214,6 +219,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/session_continuity.py": "scripts/session_continuity.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+    "scripts/meta/apply_blocker_disposition.py": "scripts/apply_blocker_disposition.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
     "scripts/meta/session_status.py": "scripts/session_status.py",
     "scripts/meta/session_end.py": "scripts/session_end.py",
@@ -271,6 +277,8 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
     "scripts/meta/coordination_operator_status.py": "scripts/coordination_operator_status.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+    "scripts/meta/apply_blocker_disposition.py": "scripts/apply_blocker_disposition.py",
+    "scripts/meta/outcome_completion_hook.py": "scripts/outcome_completion_hook.py",
     "scripts/meta/session_close.py": "scripts/session_close.py",
     "scripts/meta/session_continuity.py": "scripts/session_continuity.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
@@ -278,6 +286,7 @@ COORDINATION_MESSAGES_SHARED_FILES: dict[str, str] = {
 }
 
 COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    "enforced_planning/blocker_policy.py": "enforced_planning/blocker_policy.py",
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
@@ -285,6 +294,7 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
+    "enforced_planning/outcome_completion.py": "enforced_planning/outcome_completion.py",
     "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
     "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
     "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
@@ -316,6 +326,7 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
     "scripts/meta/session_finish.py": "scripts/session_finish.py",
     "scripts/meta/session_heartbeat.py": "scripts/session_heartbeat.py",
     "scripts/meta/session_narrow.py": "scripts/session_narrow.py",
+    "scripts/meta/apply_blocker_disposition.py": "scripts/apply_blocker_disposition.py",
     "scripts/meta/session_resume.py": "scripts/session_resume.py",
     "scripts/meta/session_start.py": "scripts/session_start.py",
 }
@@ -323,7 +334,11 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
 # Lifecycle mutation and projection refresh are one import/runtime boundary. Keep
 # the complete local dependency closure compatible while leaving hook wiring and
 # mailbox client configuration outside this bounded installer profile.
-CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = dict(COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES)
+CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
+    target: source
+    for target, source in COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES.items()
+    if target != "enforced_planning/outcome_completion.py"
+}
 
 COORDINATION_CLAIMS_SHARED_FILES: dict[str, str] = {
     "scripts/meta/check_coordination_claims.py": "scripts/check_coordination_claims.py",

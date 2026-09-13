@@ -34,6 +34,7 @@ def _selected_fixture(
     evidenced: bool,
 ):
     monkeypatch.setenv("CODEX_THREAD_ID", SESSION.removeprefix("codex:"))
+    monkeypatch.setenv("ENFORCED_PLANNING_LOCK_DIR", str(tmp_path / "tracker-locks"))
     # Portfolio allocation is independently covered by its owner. This fixture
     # isolates the selected-completion persistence and Stop boundary.
     monkeypatch.setattr(

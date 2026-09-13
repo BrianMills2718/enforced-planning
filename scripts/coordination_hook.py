@@ -966,6 +966,45 @@ def _render_boundary_denial(event_name: str, summary: str) -> dict[str, Any]:
     }
 
 
+def _is_completion_shaped_stop(payload: dict[str, Any]) -> bool:
+    """Classify an explicit completion protocol without interpreting free prose.
+
+    New adapters may supply ``completion_attempt`` directly.  The Codex Stop
+    payload currently lacks that field, so retain two bounded compatibility
+    shapes: a whole-message completion token and the workspace closing
+    report's explicit ``Recommended next`` field.  Status updates and questions
+    have neither shape and therefore remain unaffected.
+    """
+
+    explicit = payload.get("completion_attempt")
+    if isinstance(explicit, bool):
+        return explicit
+    message = payload.get("last_assistant_message")
+    if not isinstance(message, str):
+        return False
+    normalized_message = " ".join(message.casefold().split()).rstrip(".!:")
+    if normalized_message in {"done", "complete", "completed"}:
+        return True
+    field_names = ("**recommended next**", "recommended next")
+    for raw_line in message.splitlines():
+        line = raw_line.strip()
+        if line.startswith(("- ", "* ")):
+            line = line[2:].lstrip()
+        folded = line.casefold()
+        for field_name in field_names:
+            if not folded.startswith(field_name):
+                continue
+            value = line[len(field_name) :].lstrip(" \t:—-")
+            normalized_value = " ".join(value.casefold().split()).rstrip(".!:")
+            return normalized_value in {
+                "complete",
+                "completed",
+                "clear this goal",
+                "goal complete",
+            }
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     """Refresh matching claim state and expose requests to the native session."""
 
@@ -981,10 +1020,16 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
-        if payload["hook_event_name"] == "Stop" and payload.get("stop_hook_active"):
-            # A re-fired Stop must be infallibly allowed. Run this before
-            # receipts, projections, mailbox access, or repository closeout so
-            # no stale or unavailable state can recreate the refusal loop.
+        completion_attempt = _is_completion_shaped_stop(payload)
+        if (
+            payload["hook_event_name"] == "Stop"
+            and payload.get("stop_hook_active")
+            and not completion_attempt
+        ):
+            # A non-completion re-fire must be infallibly allowed. Run this
+            # before receipts, projections, mailbox access, or repository
+            # closeout so stale state cannot recreate the refusal loop. An
+            # explicit completion attempt remains criterion-bound below.
             print("{}")
             return 0
         hook_receipt_dir = args.hook_receipt_dir or (
@@ -1123,7 +1168,7 @@ def main(argv: list[str] | None = None) -> int:
                 ledger_dir=closeout_ledger_dir,
                 active_claims=active_claims,
             )
-        if primary_execution and event_name == "Stop":
+        if primary_execution and event_name == "Stop" and completion_attempt:
             outcome_stop_decisions = _outcome_stop_decisions(
                 payload=payload,
                 agent=args.agent,
@@ -1142,13 +1187,13 @@ def main(argv: list[str] | None = None) -> int:
                 or outcome_stop_denials
             )
             and payload["hook_event_name"] == "Stop"
-            and not payload.get("stop_hook_active")
+            and (not payload.get("stop_hook_active") or outcome_stop_denials)
         ):
-            # The harness re-fires Stop after a block. Refusing again cannot
-            # change the condition, so a second refusal only deadlocks the
-            # session: on 2026-08-28 this gate blocked one session ~20
-            # consecutive times on 11 files written by sessions that had
-            # already ended. Block once; the bookkeeping above still runs.
+            # Mailbox and closeout denials retain the one-block safeguard: the
+            # harness re-fires Stop after a block, and refusing those unchanged
+            # bookkeeping states only deadlocks the session. Criterion-bound
+            # completion is different: every explicit completion attempt must
+            # remain unavailable until the accepted transition exists.
             boundary_event = "Stop"
         elif (
             notice.active_count

@@ -985,13 +985,24 @@ def _is_completion_shaped_stop(payload: dict[str, Any]) -> bool:
     normalized_message = " ".join(message.casefold().split()).rstrip(".!:")
     if normalized_message in {"done", "complete", "completed"}:
         return True
-    in_fence = False
+    fence: tuple[str, int] | None = None
     for raw_line in message.splitlines():
         line = raw_line.strip()
-        if line.startswith(("```", "~~~")):
-            in_fence = not in_fence
+        fence_character = line[0] if line.startswith(("`", "~")) else None
+        fence_length = 0
+        if fence_character is not None:
+            fence_length = len(line) - len(line.lstrip(fence_character))
+        if fence is None and fence_length >= 3:
+            fence = (fence_character, fence_length)
             continue
-        if in_fence:
+        if fence is not None:
+            opener_character, opener_length = fence
+            if (
+                fence_character == opener_character
+                and fence_length >= opener_length
+                and not line[fence_length:].strip()
+            ):
+                fence = None
             continue
         if line.startswith(("- ", "* ")):
             line = line[2:].lstrip()
@@ -1121,8 +1132,21 @@ def main(argv: list[str] | None = None) -> int:
                 ledger_dir=closeout_ledger_dir,
                 active_claims=active_claims,
             )
-        delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         project = args.project or _canonical_project(payload["cwd"])
+        outcome_stop_decisions = ()
+        if primary_execution and event_name == "Stop" and completion_attempt:
+            # Resolve activation and the canonical decision before ancillary
+            # mailbox/closeout work. If those later fail, the exception path
+            # can fail closed only for a repository where completion
+            # enforcement is actually applicable.
+            outcome_stop_decisions = _outcome_stop_decisions(
+                payload=payload,
+                agent=args.agent,
+                session_id=session_id,
+                cwd_project=project,
+                active_claims=active_claims,
+            )
+        delivery_event_id = _delivery_event_id(payload, agent=args.agent, session_id=session_id)
         startup_claim_summary = (
             _startup_claim_summary(
                 agent=args.agent,
@@ -1181,7 +1205,6 @@ def main(argv: list[str] | None = None) -> int:
                 summary="",
             )
         closeout_failure = None
-        outcome_stop_decisions = ()
         if (
             primary_execution
             and payload["hook_event_name"] == "Stop"
@@ -1191,14 +1214,6 @@ def main(argv: list[str] | None = None) -> int:
                 agent=args.agent,
                 session_id=session_id,
                 ledger_dir=closeout_ledger_dir,
-                active_claims=active_claims,
-            )
-        if primary_execution and event_name == "Stop" and completion_attempt:
-            outcome_stop_decisions = _outcome_stop_decisions(
-                payload=payload,
-                agent=args.agent,
-                session_id=session_id,
-                cwd_project=project,
                 active_claims=active_claims,
             )
         outcome_stop_denials = tuple(
@@ -1315,7 +1330,14 @@ def main(argv: list[str] | None = None) -> int:
             stop_failure
             and (
                 closeout_failure
-                or ("completion_attempt" in locals() and completion_attempt)
+                or (
+                    "completion_attempt" in locals()
+                    and completion_attempt
+                    and "outcome_stop_decisions" in locals()
+                    and any(
+                        decision.applicable for decision in outcome_stop_decisions
+                    )
+                )
             )
         )
         telemetry_decision = "block" if denies else "warn"

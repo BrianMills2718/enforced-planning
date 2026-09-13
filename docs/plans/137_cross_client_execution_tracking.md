@@ -47,8 +47,20 @@ which proved a separate post-completion lifecycle defect: the exact portfolio
 allocation's required `complete` disposition made the next Stop forget the
 already-retained canonical completion. The current candidate at
 `cb0e1ba8e22fc043ab280416e95d3a9cb68e6ba3` closes those paths while preserving
-active-allocation requirements for selection and pre-write. The dashboard must
-still rerun this exact revision before XCET05-A3 can be credited.
+active-allocation requirements for selection and pre-write. At that checkpoint,
+the dashboard still had to rerun the exact revision before XCET05-A3 could be
+credited.
+
+That correction reached `main` at
+`0ad51810a73ccadf9d68ddb0d2b3041ae2558e52`; an authentic native Stop receipt
+then verified the completed-allocation positive path against the exact installed
+hook digest. A third independent review still found that mismatched Markdown
+fence character/length could hide a real completion field or expose a fenced
+example, and that ancillary failure handling could overblock an unconfigured
+repository. Candidate `abcb0968731885f32204d4d57a1818ad48b9409c`
+matches fences exactly and scopes fault-path denial to an applicable configured
+outcome. XCET05-A3 remains unaccepted until the historical incomplete-denial
+receipt and the post-fix controls form one inspectable evidence set.
 
 ## Gap
 

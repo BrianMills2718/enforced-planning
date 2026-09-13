@@ -2,37 +2,45 @@
   "schema_version": "1.0.0",
   "plan": 137,
   "work_unit_id": "xcet-05-codex-stop-enforcer",
-  "recorded_at": "2026-09-13T23:28:13Z",
+  "recorded_at": "2026-09-13T23:41:37Z",
   "phase": "corrected_local_candidate_dependency_pending",
   "consumer_adoption": "pending_authentic_dashboard_observation",
-  "installer_propagation": "source_and_profiles_merged_at_7896446d6a58b6d8e5b7e222537750189a4fbefb; corrective_runtime_pending",
+  "installer_propagation": "completed-allocation correction installed at 0ad51810a73ccadf9d68ddb0d2b3041ae2558e52; fence correction pending",
   "revisions": {
     "initial_source": "1a05e46bb57cd7390b4f79ed3ee261a9cba69619",
     "initial_integration": "03130af5682416dcf908cc43e8bba72a71a9e978",
     "merged_main": "7896446d6a58b6d8e5b7e222537750189a4fbefb",
     "first_corrective_source": "20265334a45e90595791bb26bc9a4e104fe3ff0e",
-    "current_corrective_source": "cb0e1ba8e22fc043ab280416e95d3a9cb68e6ba3"
+    "completed_allocation_source": "cb0e1ba8e22fc043ab280416e95d3a9cb68e6ba3",
+    "completed_allocation_main": "0ad51810a73ccadf9d68ddb0d2b3041ae2558e52",
+    "current_fence_corrective_source": "abcb0968731885f32204d4d57a1818ad48b9409c"
   },
   "independent_review": {
     "receipts": [
       "/home/brian/.local/state/enforced-planning/pr-reviews/BrianMills2718__enforced-planning/pr-501/receipt-c7ef51ad29694711e307e79985ceee91c4db1d2942c48ffe9376a1dfaa414b55.json",
-      "/home/brian/.local/state/enforced-planning/pr-reviews/BrianMills2718__enforced-planning/pr-502/receipt-b223628743ee5dc6cc444d03634df9423d245b5d5173d00bd04c105de805d2ec.json"
+      "/home/brian/.local/state/enforced-planning/pr-reviews/BrianMills2718__enforced-planning/pr-502/receipt-b223628743ee5dc6cc444d03634df9423d245b5d5173d00bd04c105de805d2ec.json",
+      "/home/brian/.local/state/enforced-planning/pr-reviews/BrianMills2718__enforced-planning/pr-502/receipt-2d98de0543bc801edd30a88afdfd37a8f88f79cf5db45f835524b5b69785ef7b.json"
     ],
-    "verdict": "two_rejected_candidates_with_distinct_reproduced_findings",
+    "verdict": "three_rejected_candidates_with_new_actionable_evidence_each",
     "reproduced_findings": [
       "A repeated completion-shaped Stop bypassed outcome evaluation when stop_hook_active was true.",
       "A non-completion status or question was evaluated as an attempted completion.",
       "The read-only review boundary exposed test lock paths that ignored the fixture's writable runtime location.",
       "Markdown variants, prefix lines, and fenced examples exposed incomplete structured Stop classification.",
-      "Missing event identity or mailbox availability could fail open before completion evaluation."
+      "Missing event identity or mailbox availability could fail open before completion evaluation.",
+      "Mismatched Markdown fence character or length could hide a real completion field or expose a fenced example, and ancillary failure handling could overblock an unconfigured repository."
     ],
-    "corrective_disposition": "The current corrective source parses only explicit unfenced closing fields, handles supported Markdown variants, fails completion attempts closed across ancillary errors, keeps every retry criterion-bound, and binds fixture locks to writable temporary state."
+    "corrective_disposition": "The current corrective source matches the opening Markdown fence character and minimum length, parses only explicit unfenced closing fields, and fails ancillary errors closed only after exact repository activation is resolved."
   },
   "authentic_dashboard_observation": {
     "transition_sha256": "52d5b7c88681b5d6c673c2f566c412cd3363645d94d4754e95f4c42d5d36eebe",
     "observed_defect": "After canonical completion was accepted and Stop allowed, disposition=complete released the exact portfolio allocation and the next Stop incorrectly required it to remain active.",
     "corrective_behavior": "A retained accepted completion remains Stop-valid only when the bound allocation has one exact append-only complete disposition; parked, missing, duplicated, or changed allocation evidence remains non-success.",
-    "rerun_status": "pending_corrective_merge_and_install"
+    "positive_stop_receipt": "/home/brian/.claude/coordination/hook-invocations-v1/e8b8890cee9ff68804352d198ea3daa7/c761318b276a4420a67bad211a6a40f6/completed.json",
+    "positive_stop_hook_sha256": "67673dba1d793c7dc90dcfd2b031cefc8170e3d9af699d0e6c03d0eb31e28860",
+    "positive_stop_receipt_validation": "decision=allow, event_name=Stop, exit_status=0, and installed hook bytes match the recorded hook digest",
+    "historical_denial_receipt": "requested_via_msg_1cb5384adce047c2dc701ef7fcf0cc7e",
+    "rerun_status": "positive_completed_allocation_replay_verified; complete A3 receipt set pending"
   },
   "claims": {
     "canonical_completion_persisted": true,
@@ -78,9 +86,9 @@
   ],
   "completion_credit": {
     "xcet05_a1_a2": "local_corrective_candidate_evidenced",
-    "xcet05_a3": "not_evidenced",
+    "xcet05_a3": "positive_native_receipt_verified; historical_denial_receipt_pending",
     "xcet05": "not_accepted",
     "plan137": "in_progress"
   },
-  "next_required_evidence": "Merge and install the current corrective source revision, then rerun the already-authorized dashboard lane to retain both the historical incomplete denial and the accepted-completion Stop after exact allocation completion."
+  "next_required_evidence": "Merge and install the fence corrective source, rerun the already-authorized dashboard controls, and attach the historical incomplete-denial receipt requested in msg_1cb5384adce047c2dc701ef7fcf0cc7e."
 }

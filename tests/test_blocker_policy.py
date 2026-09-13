@@ -10,9 +10,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
-from enforced_planning import blocker_policy as blocker_policy_module
+from enforced_planning import (
+    blocker_policy as blocker_policy_module,
+)
+from enforced_planning import (
+    claim_mutation_receipts,
+    coordination_claims,
+    session_lifecycle,
+)
 from enforced_planning.blocker_policy import (
     BlockerDecisionInputV1,
     BlockerDecisionResultV1,
@@ -184,6 +192,62 @@ def _decision(
     return decide_blocker_disposition(
         envelope,
         repository_root=case.repository_root,
+        recorded_at=NOW,
+    )
+
+
+def _write_application_claim(
+    claims_dir: Path,
+    *,
+    scope: str,
+    graph_path: str | None,
+    graph_sha256: str | None,
+    parent_scope: str | None = None,
+    plan_ref: str = GRAPH_SCOPE,
+    work_unit_id: str | None = "A",
+) -> Path:
+    now = datetime.now(UTC).isoformat()
+    payload = {
+        "schema_version": 3,
+        "agent": "codex",
+        "project": "enforced-planning",
+        "projects": ["enforced-planning"],
+        "scope": scope,
+        "intent": f"exercise scoped blocker application for {scope}",
+        "claim_type": "program" if parent_scope is None and plan_ref == GRAPH_SCOPE else "write",
+        "write_paths": [f"fixtures/{scope}.txt"],
+        "read_paths": [],
+        "worktree_path": str(claims_dir.parent / "dirty-worktree"),
+        "repo_root": str(claims_dir.parent),
+        "branch": scope,
+        "session_name": "blocker-application-fixture",
+        "broader_goal": "Scoped blocker lifecycle",
+        "tracker_path": str(claims_dir.parent / f"{scope}.yaml"),
+        "session_id": SESSION_ID,
+        "heartbeat_at": now,
+        "status": "active",
+        "updated_at": now,
+        "parent_scope": parent_scope,
+        "plan_ref": plan_ref,
+        "work_unit_id": work_unit_id,
+        "work_graph_path": graph_path,
+        "work_graph_sha256": graph_sha256,
+    }
+    path = claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", scope)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def _application_expected(
+    *, decision_input: BlockerDecisionInputV1, repository_root: Path, claims_dir: Path
+) -> BlockerDecisionResultV1:
+    snapshots = session_lifecycle._blocker_claim_snapshots(
+        project="enforced-planning", goal_scope=GRAPH_SCOPE, claims_dir=claims_dir
+    )
+    return evaluate_blocker_request(
+        decision_input.model_copy(update={"claim_snapshots": snapshots}),
+        repository_root=repository_root,
         recorded_at=NOW,
     )
 
@@ -1253,3 +1317,131 @@ def test_checked_in_owner_calibration_receipts_cover_both_signs(
     assert progress["outcome_disposition"] == "would_allow"
     assert progress["ordinary_authority_preserved"] is True
     assert progress["enforcement_applied"] is False
+
+
+def test_blocker_application_records_continue_without_mutating_claims(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_root = Path(__file__).parents[1]
+    graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
+    digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
+    claims_dir = tmp_path / "claims"
+    receipt_dir = tmp_path / "receipts"
+    dirty_worktree = tmp_path / "dirty-worktree"
+    dirty_worktree.mkdir()
+    dirty_file = dirty_worktree / "pending.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+    root = _write_application_claim(
+        claims_dir, scope="goal-root", graph_path=graph_ref, graph_sha256=digest,
+        work_unit_id="npw-03-safe-lifecycle-integration",
+    )
+    child = _write_application_claim(
+        claims_dir, scope="goal-child", parent_scope="goal-root", graph_path=graph_ref,
+        graph_sha256=digest, work_unit_id="npw-03-safe-lifecycle-integration",
+    )
+    unrelated = _write_application_claim(
+        claims_dir, scope="unrelated-root", graph_path=None, graph_sha256=None,
+        plan_ref="UNPLANNED", work_unit_id=None,
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", SESSION_ID.split(":", 1)[1])
+    monkeypatch.setattr(
+        claim_mutation_receipts, "DEFAULT_EVENTS_PATH", tmp_path / "claim-mutations.jsonl"
+    )
+    decision_input = BlockerDecisionInputV1(
+        request_ref="continue-fixture",
+        request=_request(blocked_items=("npw-04-installation-and-hook-rollout",)),
+        work_graph_ref_path=graph_ref,
+        expected_work_graph_sha256=digest,
+    )
+    expected = _application_expected(
+        decision_input=decision_input, repository_root=repo_root, claims_dir=claims_dir
+    )
+    before = {path: path.read_bytes() for path in (root, child, unrelated)}
+
+    result = session_lifecycle.apply_blocker_disposition(
+        decision_input=decision_input, expected_result=expected, repository_root=repo_root,
+        agent="codex", project="enforced-planning", root_scope="goal-root",
+        actor_session_id=SESSION_ID, claims_dir=claims_dir, receipt_dir=receipt_dir,
+    )
+
+    assert result["decision"] == "continue_ready_work"
+    assert result["result"] == "recorded_no_mutation"
+    assert result["idempotent_replay"] is False
+    assert {path: path.read_bytes() for path in before} == before
+    assert dirty_file.read_text(encoding="utf-8") == "preserve me\n"
+    replay = session_lifecycle.apply_blocker_disposition(
+        decision_input=decision_input, expected_result=expected, repository_root=repo_root,
+        agent="codex", project="enforced-planning", root_scope="goal-root",
+        actor_session_id=SESSION_ID, claims_dir=claims_dir, receipt_dir=receipt_dir,
+    )
+    assert replay["idempotent_replay"] is True
+    assert replay["application_id"] == result["application_id"]
+    monkeypatch.setenv("CODEX_THREAD_ID", "stale-successor-runtime")
+    with pytest.raises(ValueError, match="does not match the current codex runtime"):
+        session_lifecycle.apply_blocker_disposition(
+            decision_input=decision_input,
+            expected_result=expected,
+            repository_root=repo_root,
+            agent="codex",
+            project="enforced-planning",
+            root_scope="goal-root",
+            actor_session_id=SESSION_ID,
+            claims_dir=claims_dir,
+            receipt_dir=receipt_dir,
+        )
+
+
+def test_blocker_application_retires_only_goal_tree_and_replays_without_second_executor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _graph_path, digest = _write_graph(tmp_path, [_unit("A", "blocked")])
+    claims_dir = tmp_path / "claims"
+    receipt_dir = tmp_path / "receipts"
+    dirty_worktree = tmp_path / "dirty-worktree"
+    dirty_worktree.mkdir()
+    dirty_file = dirty_worktree / "pending.txt"
+    dirty_file.write_text("uncommitted contribution\n", encoding="utf-8")
+    root = _write_application_claim(
+        claims_dir, scope="goal-root", graph_path=GRAPH_REF, graph_sha256=digest
+    )
+    child = _write_application_claim(
+        claims_dir, scope="goal-child", parent_scope="goal-root", graph_path=GRAPH_REF,
+        graph_sha256=digest,
+    )
+    unrelated = _write_application_claim(
+        claims_dir, scope="unrelated-root", graph_path=None, graph_sha256=None,
+        plan_ref="UNPLANNED", work_unit_id=None,
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", SESSION_ID.split(":", 1)[1])
+    monkeypatch.setattr(
+        claim_mutation_receipts, "DEFAULT_EVENTS_PATH", tmp_path / "claim-mutations.jsonl"
+    )
+    decision_input = BlockerDecisionInputV1(
+        request_ref="true-blocker-fixture", request=_request(),
+        work_graph_ref_path=GRAPH_REF, expected_work_graph_sha256=digest,
+    )
+    expected = _application_expected(
+        decision_input=decision_input, repository_root=tmp_path, claims_dir=claims_dir
+    )
+    assert expected.disposition.decision == "goal_blocked_verified"
+    assert expected.disposition.claim_action == "retire_goal_scope"
+
+    result = session_lifecycle.apply_blocker_disposition(
+        decision_input=decision_input, expected_result=expected, repository_root=tmp_path,
+        agent="codex", project="enforced-planning", root_scope="goal-root",
+        actor_session_id=SESSION_ID, claims_dir=claims_dir, receipt_dir=receipt_dir,
+    )
+
+    assert result["result"] == "applied"
+    assert result["affected_scopes"] == ["goal-child", "goal-root"]
+    assert yaml.safe_load(root.read_text())["status"] == "session_ended"
+    assert yaml.safe_load(child.read_text())["status"] == "session_ended"
+    assert yaml.safe_load(unrelated.read_text())["status"] == "active"
+    assert dirty_file.read_text(encoding="utf-8") == "uncommitted contribution\n"
+    replay = session_lifecycle.apply_blocker_disposition(
+        decision_input=decision_input, expected_result=expected, repository_root=tmp_path,
+        agent="codex", project="enforced-planning", root_scope="goal-root",
+        actor_session_id=SESSION_ID, claims_dir=claims_dir, receipt_dir=receipt_dir,
+    )
+    assert replay["idempotent_replay"] is True
+    assert len(list(receipt_dir.glob("*.json"))) == 1

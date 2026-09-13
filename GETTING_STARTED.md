@@ -165,6 +165,14 @@ consumers execute this transaction through the installer-owned
 `scripts/meta/claim_bootstrap.py` wrapper and its synchronized authority module;
 there is no fallback to a consumer-authored shell transaction.
 
+The same claim-runtime profiles install
+`scripts/meta/apply_blocker_disposition.py` and its provider-free blocker policy
+dependency. The command consumes a previously evaluated disposition only after
+reloading the canonical claims and exact work-graph bytes. Ready work records a
+no-mutation receipt; a verified terminal wait may hand off or session-end only
+the selected goal root and its descendants. It never deletes or takes over a
+worktree, and a different native runtime cannot replay the owner's action.
+
 The installed hook stack blocks direct pull-request merges and routes them to
 the sanctioned finish transaction. Supply a planning-derived review spec from
 outside the repository and all of its linked worktrees:

@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "plan": 137,
+  "work_unit_id": "xcet-05-codex-stop-enforcer",
+  "recorded_at": "2026-09-13T22:28:00Z",
+  "phase": "source_candidate_dependency_pending",
+  "consumer_adoption": "pending",
+  "installer_propagation": "delegated_to_plan110_shared_manifest_owner",
+  "claims": {
+    "canonical_completion_persisted": true,
+    "native_stop_adapter_integrated": true,
+    "unconfigured_repositories_unaffected": true,
+    "dashboard_native_stop_replay_proven": false
+  },
+  "both_sign_evidence": {
+    "negative": [
+      "An activated selected outcome with no accepted completion returns canonical_outcome_incomplete.",
+      "An all-green execution projection without current criterion evidence cannot be recorded as complete.",
+      "An activated repository without the exact native claim returns exact_claim_unavailable."
+    ],
+    "positive": [
+      "An exact criterion-evidenced proposal is recorded once, replays idempotently, and permits Stop.",
+      "A repository without outcome_completion_mode remains non-applicable and permits Stop."
+    ]
+  },
+  "verification": [
+    {
+      "command": "pytest -q tests/test_outcome_completion.py tests/test_outcome_completion_hook.py tests/test_coordination_hook.py",
+      "result": "39 passed"
+    },
+    {
+      "command": "pytest -q tests/test_outcome_completion.py tests/test_outcome_completion_hook.py tests/test_outcome_selection.py tests/test_cross_client_execution_tracking.py",
+      "result": "54 passed"
+    },
+    {
+      "command": "pytest -q tests/test_criterion_bound_outcomes.py",
+      "result": "9 passed; same-producer and relabeled-self-verifier controls remain denied"
+    },
+    {
+      "command": "python scripts/self_test.py",
+      "result": "BLOCKED AS DESIGNED: the shared installer does not yet sync outcome_completion.py; ownership is delegated to the active Plan110 installer lane"
+    }
+  ],
+  "broad_suite": {
+    "result": "not_a_candidate_failure_signal",
+    "detail": "The broad suite was stopped after 1243 passes because 14 failures reproduced environment/baseline defects outside XCET-05: a host closeout-disable marker, a pre-existing prose-check expectation, concurrent make output, and a pre-existing personal-path sentinel. All directly affected suites pass independently."
+  },
+  "next_required_evidence": "Merge and install the exact source revision, activate only the dashboard lane, and capture a real native Stop denial before any accepted dashboard completion."
+}

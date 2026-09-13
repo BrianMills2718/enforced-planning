@@ -59,6 +59,7 @@ from enforced_planning import (
     coordination_claims,
     coordination_messages,
     mailbox_execution_identity,
+    outcome_completion,
     prewrite_claim_fast,
     prewrite_claim_projection,
 )
@@ -146,6 +147,55 @@ def _canonical_project(cwd: str) -> str | None:
         top,
     )
     return Path(canonical_root).name
+
+
+def _worktree_root(cwd: str) -> Path | None:
+    """Resolve the exact checkout containing cwd, preserving worktree identity."""
+
+    result = subprocess.run(
+        ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 128:
+        return None
+    result.check_returncode()
+    return Path(result.stdout.strip()).resolve()
+
+
+def _outcome_stop_decisions(
+    *,
+    payload: dict[str, Any],
+    agent: str,
+    session_id: str,
+    cwd_project: str | None,
+    active_claims: tuple[Any, ...],
+) -> tuple[outcome_completion.OutcomeCompletionStopDecisionV1, ...]:
+    """Evaluate every exact-session claimed worktree plus the callback cwd."""
+
+    candidates: dict[Path, str] = {}
+    for claim in active_claims:
+        if (
+            claim.agent == agent
+            and claim.session_id == session_id
+            and claim.worktree_path
+            and claim.projects
+        ):
+            candidates[Path(claim.worktree_path).expanduser().resolve()] = claim.projects[0]
+    cwd_root = _worktree_root(payload["cwd"])
+    if cwd_root is not None and cwd_project is not None:
+        candidates.setdefault(cwd_root, cwd_project)
+    return tuple(
+        outcome_completion.evaluate_stop_for_session(
+            repo_root=repo_root,
+            agent=agent,
+            project=project,
+            session_id=session_id,
+            active_claims=active_claims,
+        )
+        for repo_root, project in sorted(candidates.items(), key=lambda item: str(item[0]))
+    )
 
 
 def _repository_scan_root(cwd: str) -> Path:
@@ -1061,6 +1111,7 @@ def main(argv: list[str] | None = None) -> int:
                 summary="",
             )
         closeout_failure = None
+        outcome_stop_decisions = ()
         if (
             primary_execution
             and payload["hook_event_name"] == "Stop"
@@ -1072,9 +1123,24 @@ def main(argv: list[str] | None = None) -> int:
                 ledger_dir=closeout_ledger_dir,
                 active_claims=active_claims,
             )
+        if primary_execution and event_name == "Stop":
+            outcome_stop_decisions = _outcome_stop_decisions(
+                payload=payload,
+                agent=args.agent,
+                session_id=session_id,
+                cwd_project=project,
+                active_claims=active_claims,
+            )
+        outcome_stop_denials = tuple(
+            decision for decision in outcome_stop_decisions if not decision.allow_stop
+        )
         boundary_event: Literal["PreToolUse", "Stop"] | None = None
         if (
-            (notice.active_count or closeout_failure)
+            (
+                notice.active_count
+                or closeout_failure
+                or outcome_stop_denials
+            )
             and payload["hook_event_name"] == "Stop"
             and not payload.get("stop_hook_active")
         ):
@@ -1111,9 +1177,23 @@ def main(argv: list[str] | None = None) -> int:
                 )
             telemetry_decision = "block"
             telemetry_reason = (
-                "turn_end_repository_dirty" if closeout_failure else "active_mailbox_request"
+                "turn_end_repository_dirty"
+                if closeout_failure
+                else (
+                    outcome_stop_denials[0].reason_code
+                    if outcome_stop_denials
+                    else "active_mailbox_request"
+                )
             )
-            denial_parts = [part for part in (notice.summary, closeout_failure) if part]
+            denial_parts = [
+                part
+                for part in (
+                    notice.summary,
+                    closeout_failure,
+                    *(decision.summary for decision in outcome_stop_denials),
+                )
+                if part
+            ]
             denial_parts.append(f"Hook receipt: {invocation.receipt_id}.")
             print(json.dumps(_render_boundary_denial(boundary_event, "\n\n".join(denial_parts))))
             return 0

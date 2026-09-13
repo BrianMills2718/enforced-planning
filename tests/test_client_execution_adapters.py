@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
 from enforced_planning.client_execution_adapters import (
     ClaudeAdapterError,
@@ -25,7 +26,13 @@ NOW = datetime(2026, 9, 13, tzinfo=UTC)
 CONFIGURATION = "c" * 64
 
 
-def projection(*, first_status: str = "pending", second_status: str = "pending") -> ExecutionProjectionV1:
+def projection(
+    *,
+    first_status: str = "pending",
+    second_status: str = "pending",
+    first_criterion: str = "criterion-one",
+    first_source_ref: str = "plan137:xcet-03:item-one",
+) -> ExecutionProjectionV1:
     return ExecutionProjectionV1(
         projection_id="claude-adapter-fixture",
         outcome_contract_sha256="a" * 64,
@@ -35,10 +42,10 @@ def projection(*, first_status: str = "pending", second_status: str = "pending")
                 item_id="item-one",
                 display_name="Inspect fixture",
                 status=first_status,
-                criterion_ids=["criterion-one"],
+                criterion_ids=[first_criterion],
                 owner_role="coordinator",
                 source_kind="work-unit",
-                source_ref="plan137:xcet-03:item-one",
+                source_ref=first_source_ref,
             ),
             ExecutionItemV1(
                 item_id="item-two",
@@ -61,7 +68,11 @@ def bindings() -> list[ClaudeTaskBindingV1]:
     ]
 
 
-def snapshot(*, subject_two: str = "[item-two] Verify fixture") -> ClaudeTaskSnapshotV1:
+def snapshot(
+    *,
+    subject_one: str = "[item-one] Inspect fixture",
+    subject_two: str = "[item-two] Verify fixture",
+) -> ClaudeTaskSnapshotV1:
     return ClaudeTaskSnapshotV1(
         observation_id="snapshot-1",
         client_version="2.1.269",
@@ -73,12 +84,16 @@ def snapshot(*, subject_two: str = "[item-two] Verify fixture") -> ClaudeTaskSna
         tasks=[
             ClaudeTaskRecordV1(
                 task_id="1",
-                subject="[item-one] Inspect fixture",
+                subject=subject_one,
+                description="Source: work-unit:plan137:xcet-03:item-one; criteria: criterion-one",
+                active_form="Working: Inspect fixture",
                 status="pending",
             ),
             ClaudeTaskRecordV1(
                 task_id="2",
                 subject=subject_two,
+                description="Source: work-unit:plan137:xcet-03:item-two; criteria: criterion-two",
+                active_form="Working: Verify fixture",
                 status="pending",
                 blocked_by=["1"],
             ),
@@ -111,12 +126,29 @@ def test_projection_creates_unbound_tasks_then_updates_assigned_ids() -> None:
     updates = project_claude_tasks(selected, [first_binding, bindings()[1]])
 
     assert updates.phase == "update"
+    assert updates.schema_version == "1.1.0"
     assert [(request.task_id, request.status) for request in updates.update_requests] == [
         ("1", "completed"),
         ("2", "in_progress"),
     ]
     assert updates.update_requests[1].add_blocked_by == ["1"]
     assert updates.update_requests[1].native_input()["addBlockedBy"] == ["1"]
+    assert updates.update_requests[0].native_input()["description"] == (
+        "Source: work-unit:plan137:xcet-03:item-one; criteria: criterion-one"
+    )
+    assert updates.update_requests[0].native_input()["activeForm"] == "Working: Inspect fixture"
+
+
+def test_repaired_native_records_reject_the_pre_description_schema_version() -> None:
+    with pytest.raises(ValidationError, match="1.1.0"):
+        ClaudeTaskRecordV1(
+            schema_version="1.0.0",  # type: ignore[arg-type]
+            task_id="1",
+            subject="[item-one] Inspect fixture",
+            description="Source: work-unit:one; criteria: criterion-one",
+            active_form="Working: Inspect fixture",
+            status="pending",
+        )
 
 
 def test_task_identity_comes_from_matching_create_result() -> None:
@@ -145,10 +177,74 @@ def test_snapshot_matches_by_stable_binding_and_detects_visible_drift() -> None:
     )
 
     assert matched.outcome == "matched"
-    assert matched.native_projection_sha256 == canonical_sha256(selected)
+    assert matched.native_projection_sha256 == matched.expected_projection_sha256
+    assert matched.native_projection_sha256 != canonical_sha256(selected)
     assert divergent.outcome == "divergent"
-    assert divergent.native_projection_sha256 != canonical_sha256(selected)
-    assert "different:item-two" in divergent.reason_code
+    assert divergent.native_projection_sha256 != divergent.expected_projection_sha256
+    assert divergent.reason_code == "native-projection-divergent"
+    assert divergent.difference_codes == ["different-task"]
+    assert divergent.detail_item_ids == ["item-two"]
+
+
+@pytest.mark.parametrize(
+    "changed_projection",
+    [
+        projection(first_criterion="criterion-one-revised"),
+        projection(first_source_ref="plan137:xcet-03:item-one-revised"),
+    ],
+)
+def test_same_snapshot_cannot_match_changed_native_visible_description(
+    changed_projection: ExecutionProjectionV1,
+) -> None:
+    observed = snapshot()
+    original = observe_claude_snapshot(projection(), bindings(), observed)
+    changed = observe_claude_snapshot(changed_projection, bindings(), observed)
+
+    assert original.outcome == "matched"
+    assert changed.outcome == "divergent"
+    assert changed.native_projection_sha256 == original.native_projection_sha256
+    assert changed.expected_projection_sha256 != original.expected_projection_sha256
+    assert changed.detail_item_ids == ["item-one"]
+
+
+def test_native_digest_is_invariant_to_observation_metadata() -> None:
+    first = observe_claude_snapshot(
+        projection(),
+        bindings(),
+        snapshot(subject_two="[item-two] Stale display name"),
+    )
+    changed_metadata = snapshot(subject_two="[item-two] Stale display name").model_copy(
+        update={
+            "observation_id": "snapshot-2",
+            "client_version": "2.1.270",
+            "configuration_sha256": "d" * 64,
+            "observed_at": datetime(2026, 9, 13, 1, tzinfo=UTC),
+            "event_id": "task-list-2",
+            "reason_code": "task-get-observed",
+        }
+    )
+    second = observe_claude_snapshot(projection(), bindings(), changed_metadata)
+
+    assert first.outcome == second.outcome == "divergent"
+    assert first.native_projection_sha256 == second.native_projection_sha256
+    assert first.reason_code == second.reason_code == "native-projection-divergent"
+
+
+def test_divergence_reason_is_stable_across_different_item_ids() -> None:
+    first = observe_claude_snapshot(
+        projection(),
+        bindings(),
+        snapshot(subject_one="[item-one] Stale display name"),
+    )
+    second = observe_claude_snapshot(
+        projection(),
+        bindings(),
+        snapshot(subject_two="[item-two] Stale display name"),
+    )
+
+    assert first.reason_code == second.reason_code == "native-projection-divergent"
+    assert first.detail_item_ids == ["item-one"]
+    assert second.detail_item_ids == ["item-two"]
 
 
 def test_rename_reorder_keeps_native_identity_from_bindings() -> None:
@@ -171,12 +267,16 @@ def test_rename_reorder_keeps_native_identity_from_bindings() -> None:
             ClaudeTaskRecordV1(
                 task_id="2",
                 subject="[item-two] Verify fixture",
+                description="Source: work-unit:plan137:xcet-03:item-two; criteria: criterion-two",
+                active_form="Working: Verify fixture",
                 status="pending",
                 blocked_by=["1"],
             ),
             ClaudeTaskRecordV1(
                 task_id="1",
                 subject="[item-one] Inspect renamed fixture",
+                description="Source: work-unit:plan137:xcet-03:item-one; criteria: criterion-one",
+                active_form="Working: Inspect renamed fixture",
                 status="pending",
             ),
         ],
@@ -203,7 +303,8 @@ def test_unavailable_snapshot_is_explicit_and_cannot_claim_native_digest() -> No
 
     assert observation.outcome == "unavailable"
     assert observation.native_projection_sha256 is None
-    assert observation.reason_code == "task-tools-disabled"
+    assert observation.reason_code == "native-snapshot-unavailable"
+    assert observation.source_reason_code == "task-tools-disabled"
 
 
 def test_task_completed_hook_is_correlated_but_never_authorizes_goal_completion() -> None:
@@ -223,9 +324,19 @@ def test_unsupported_canonical_status_emits_no_native_mutation() -> None:
     plan = project_claude_tasks(projection(first_status="blocked"), bindings())
 
     assert plan.phase == "unavailable"
-    assert plan.reason_code == "unsupported-canonical-status:item-one"
+    assert plan.reason_code == "unsupported-canonical-status"
+    assert plan.detail_item_ids == ["item-one"]
     assert plan.create_requests == []
     assert plan.update_requests == []
+
+
+def test_reason_categories_do_not_change_with_item_identity() -> None:
+    first = project_claude_tasks(projection(first_status="blocked"), bindings())
+    second = project_claude_tasks(projection(second_status="blocked"), bindings())
+
+    assert first.reason_code == second.reason_code == "unsupported-canonical-status"
+    assert first.detail_item_ids == ["item-one"]
+    assert second.detail_item_ids == ["item-two"]
 
 
 def test_duplicate_or_unknown_bindings_fail_before_projection() -> None:

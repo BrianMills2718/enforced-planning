@@ -1,6 +1,6 @@
-# Plan #137: Observe-Only Cross-Client Execution Tracking
+# Plan #137: Cross-Client Execution Tracking And Bounded Completion Enforcement
 
-**Status:** In Progress — neutral/Codex and XCET-03R repair accepted; Claude adapter merged but authentic probe blocked by existing quota; no host activation or blocking enforcement
+**Status:** In Progress — neutral/Codex and XCET-03R repair accepted; Brian authorized a first-consumer Codex Stop enforcement slice on 2026-09-13; Claude adapter remains quota-blocked and fleet activation remains excluded
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -14,6 +14,14 @@
 Brian authorized implementation on 2026-09-12 after reviewing the tentative
 cross-client execution-tracking design. The reviewed source has SHA-256
 `b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833`.
+
+After reviewing the repeated Plan 52 dashboard failure across the complete
+`workgraph` and successor Codex transcripts, Brian explicitly authorized repair
+of the systemic completion path on 2026-09-13. That authorization activates one
+bounded blocking promotion: a selected Codex outcome in the real dashboard
+consumer may not pass native `Stop` until Enforced Planning accepts the current
+criterion-bound completion proposal. It does not authorize fleet rollout,
+weakened criteria, deployment, or a second outcome authority.
 
 This plan incorporates the review correction: it does not create a second
 mailbox acknowledgement protocol or a second outcome store. Enforced Planning
@@ -155,15 +163,22 @@ consumer; source-only tests cannot establish adoption.
 
 ## Enforcement tier
 
-This plan is **measured/observe-only**. The canonical controller can deny its
-own `propose_goal_completion` call, but Plan 137 does not claim that every native
-Codex or Claude action is synchronously interceptable. App Server notifications
-observe changes after they happen. Client hooks may intercept only the paths
-authentically proven in the isolated fixture. Unsupported or bypassed paths are
-reported as `unavailable` or divergent and cannot certify completion.
+Cross-client projection remains **measured/observe-only**. XCET-05 adds one
+**blocking first-consumer Codex Stop pilot** for a repository that explicitly
+selects the criterion-bound outcome mode. The Stop hook derives the exact native
+session and selected outcome from canonical claim/session state, and only an
+accepted `propose_goal_completion` result permits a completion stop. Native
+checklist state, cursor lifecycle, worker prose, and differently named verifier
+labels cannot substitute for that result.
 
-No global configuration, installer default, fleet activation, TUI attachment,
-daemon, scheduler, dashboard, OpenClaw path, or blocking Stop hook is authorized.
+App Server notifications still observe changes after they happen. Claude client
+support remains observe-only until its authentic probe succeeds. Unsupported or
+bypassed paths are reported as `unavailable` or divergent and cannot certify
+completion. A repository without the explicit first-consumer activation remains
+unchanged.
+
+No fleet default, TUI attachment, daemon, scheduler, dashboard, OpenClaw path,
+or Claude blocking activation is authorized.
 
 ## Critical Path Classification
 
@@ -178,6 +193,7 @@ accepted evidenced closure, and stable handoff/replay behavior.
 | XCET-03 | `direct_blocker` | The integrated journey requires authentic Claude projection evidence. |
 | XCET-03R | `direct_blocker` | Audit probes showed that Claude match evidence copied the canonical digest instead of hashing the observed native projection. |
 | XCET-04 | `vertical` | This is the user-visible both-sign cross-client result. |
+| XCET-05 | `vertical` | This is the first ordinary Codex Stop path that can disprove proxy-complete closure in the real failing consumer. |
 
 ## Plan
 
@@ -203,6 +219,12 @@ the single `vertical` unit. No enabler or hardening unit may delay that fixture.
    across both isolated clients through their public local entrypoints. Retain
    false-pass, false-block, divergence, replay, friction, version, and latency
    observations suitable for a later promotion decision.
+6. **XCET-05 — bounded Codex Stop enforcement.** Add a canonical Stop adapter
+   over the existing selected-outcome and `propose_goal_completion` owners,
+   activate it only for the real Plan 52 dashboard consumer, and replay the
+   historical false-pass shape before accepting the evidenced case. A cursor,
+   green native items, a receipt path, or distinct producer/verifier strings
+   alone must fail.
 
 XCET-01 owns its own acceptance update across the Enforced Planning graph and
 three human-facing status surfaces. XCET-02 and XCET-03 become ready after
@@ -222,7 +244,8 @@ synchronized closeout across the plan, graph, roadmap, and plan index.
 | Codex native projection/interception | exploration_required | Existing AES App Server adapter; observation is weaker than interception | One isolated installed-version probe records supported and bypassed paths | Qualifies Codex capability claim |
 | Claude native projection/interception | exploration_required | Existing client hook identity; Task behavior must be observed | One isolated installed-version probe records supported and disabled paths | Qualifies Claude capability claim |
 | Semantic adequacy | exploration_required | Criterion-bound independent evidence, never regex prose inference | Fixture verifier finds no false pass in the frozen two-criterion case | Feeds measured promotion evidence |
-| Blocking promotion | human_decision_required | Explicitly excluded from this plan | Measured false-pass/false-block evidence is reviewed | Separate owner decision only |
+| First-consumer Codex blocking promotion | fully_specifiable_now | Brian authorized the exact Plan 52 consumer after reviewing the reproduced false completion | Historical proxy-complete shape is denied; exact criterion-complete proposal is accepted through native Stop | XCET-05 evidence and consumer activation |
+| Fleet or Claude blocking promotion | human_decision_required | Still excluded | Measured false-pass/false-block evidence is reviewed | Separate owner decision only |
 
 ## Acceptance criteria
 
@@ -244,6 +267,15 @@ synchronized closeout across the plan, graph, roadmap, and plan index.
 - [ ] The public local fixture records both the intended pass and discriminating
       negative controls, plus feedback data for false passes, false blocks,
       friction, latency, and unsupported capability incidence.
+- [ ] The real dashboard consumer's native Codex Stop denies an archived or
+      active execution cursor whose parent selected outcome is not canonically
+      complete, including the historical all-green/missing-semantic-criterion
+      shape.
+- [ ] The same Stop path permits the exact accepted completion once, while a
+      missing selection, stale evidence revision, self-certified verifier label,
+      or changed outcome contract remains non-success.
+- [ ] An unconfigured repository and a non-completion turn remain unaffected;
+      the pilot cannot become an implicit fleet default.
 
 ## Verification
 
@@ -328,9 +360,9 @@ existing host seam over new infrastructure.
 host enforcement, adding a persistence service, or broadening beyond the
 isolated fixture requires a new revision.
 
-**Human decision required:** Fleet activation, global client configuration,
-blocking native-session enforcement, or weakening a frozen criterion requires
-Brian's explicit decision.
+**Human decision required:** Fleet activation, Claude blocking enforcement, or
+weakening a frozen criterion requires Brian's explicit decision. The bounded
+Plan 52 Codex Stop pilot was authorized on 2026-09-13.
 
 **Stopping rule:** Stop this plan when the public local fixture proves both-sign
 cross-client behavior and the status surfaces truthfully record the result.
@@ -343,7 +375,8 @@ cross-client behavior and the status surfaces truthfully record the result.
   scheduler, daemon, OpenClaw integration, or second ledger.
 - Treating queue acceptance, an open TUI, a running process, native green state,
   or worker prose as completion.
-- Fleet rollout, deployment, publication, or broad policy enforcement.
+- Fleet rollout, deployment, publication, or broad policy enforcement beyond
+  the explicitly activated Plan 52 Codex Stop consumer.
 
 ## Files expected
 

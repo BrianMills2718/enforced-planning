@@ -80,6 +80,93 @@
     {
       "schema_version": "1.0",
       "record_type": "work_unit",
+      "id": "xcet-05-codex-stop-enforcer",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "cross-client-outcome-alignment",
+      "design_revision": "b95c2aa077113091b9510307c5e31011e554189d7ce9905697aa2dd9b3649833",
+      "spec_revision": "plan-137-work-graph-v3",
+      "title": "Enforce canonical outcome completion at Codex Stop for one selected consumer",
+      "class": "implementation",
+      "objective": "Make the already-installed Codex Stop path deny proxy-complete closure for an explicitly selected outcome until Enforced Planning accepts its exact criterion-bound goal-completion proposal.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {
+        "included": [
+          "Canonical selected-outcome resolution from the native session claim",
+          "Stop-hook deny and allow decisions over the accepted goal-completion state",
+          "Historical Plan 52 proxy-complete negative fixture",
+          "Missing, stale, forged-label, and unconfigured controls",
+          "First-consumer installation path"
+        ],
+        "excluded": [
+          "Fleet default activation",
+          "Claude blocking enforcement",
+          "A second outcome or cursor store",
+          "Regex or deterministic inference of semantic adequacy",
+          "Dashboard product implementation"
+        ]
+      },
+      "inputs": [
+        {"kind": "user_decision", "id": "plan-137-first-consumer-blocking-approval", "revision": "codex-session-01a09b37-679d-7971-a5fd-3f11e1532487@2026-09-13"},
+        {"kind": "work_unit_output", "id": "xcet-01-neutral-contract", "revision": "enforced-planning@56f530bf6e25bfe74db17c217e0879e6a990c59b"},
+        {"kind": "reproduced_failure", "id": "plan-52-proxy-complete-transcript", "revision": "codex-session-01a09179-ef3e-7241-9827-690d8f05aacf"}
+      ],
+      "outputs": [
+        "Codex Stop outcome-completion adapter",
+        "Provider-free both-sign and historical regression evidence",
+        "First-consumer installation contract"
+      ],
+      "dependencies": [
+        {
+          "unit_id": "xcet-01-neutral-contract",
+          "type": "hard",
+          "gate": {"type": "unit_status", "required_status": "accepted"},
+          "rationale": "The Stop adapter must consume the accepted canonical completion decision rather than inventing another authority."
+        }
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/outcome_completion.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/outcome_completion_hook.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/coordination_hook.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/install_governed_repo.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_outcome_completion.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_outcome_completion_hook.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "tests/test_install_governed_repo.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking_work_graph.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "contract", "target": "CodexOutcomeCompletionStopV1", "access": "exclusive", "coordination_key": "cross-client-outcome-completion"}
+      ],
+      "acceptance": [
+        {
+          "id": "XCET05-A1",
+          "criterion": "A completion-shaped Stop for a selected outcome is denied until the exact current outcome contract, lease, execution projection, artifact, evidence revision, and accepted goal-completion proposal agree.",
+          "evidence_required": ["Provider-free Stop-hook both-sign tests", "Historical Plan 52 proxy-complete replay"],
+          "negative_control": "An archived cursor, all-green native items, or a self-declared verifier label cannot permit Stop while a criterion remains unmet."
+        },
+        {
+          "id": "XCET05-A2",
+          "criterion": "The same exact accepted completion is allowed idempotently and an unconfigured repository or non-completion turn remains unaffected.",
+          "evidence_required": ["Accepted and replayed completion tests", "Unconfigured and non-completion controls"],
+          "negative_control": "The first-consumer activation cannot silently become a fleet default."
+        },
+        {
+          "id": "XCET05-A3",
+          "criterion": "The real dashboard consumer invokes the installed native Codex Stop path and records one denied historical-shape completion before any accepted completion.",
+          "evidence_required": ["Exact installed runtime revision", "Native Stop receipt", "Dashboard target-repository activation evidence"],
+          "negative_control": "Source tests or a direct script invocation alone cannot establish consumer adoption."
+        }
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-13T21:58:00Z",
+      "updated_at": "2026-09-13T21:58:00Z"
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
       "id": "xcet-03r-observation-repair",
       "initiative_id": "agentic-engineering",
       "goal_id": "cross-client-outcome-alignment",

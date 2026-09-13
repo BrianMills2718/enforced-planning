@@ -177,6 +177,7 @@ def test_snapshot_matches_by_stable_binding_and_detects_visible_drift() -> None:
     )
 
     assert matched.outcome == "matched"
+    assert matched.canonical_projection_sha256 == canonical_sha256(selected)
     assert matched.native_projection_sha256 == matched.expected_projection_sha256
     assert matched.native_projection_sha256 != canonical_sha256(selected)
     assert divergent.outcome == "divergent"
@@ -228,6 +229,41 @@ def test_native_digest_is_invariant_to_observation_metadata() -> None:
     assert first.outcome == second.outcome == "divergent"
     assert first.native_projection_sha256 == second.native_projection_sha256
     assert first.reason_code == second.reason_code == "native-projection-divergent"
+
+
+def test_expected_native_digest_keeps_one_meaning_across_snapshot_outcomes() -> None:
+    selected = projection()
+    observed = observe_claude_snapshot(selected, bindings(), snapshot())
+    unavailable = observe_claude_snapshot(
+        selected,
+        bindings(),
+        ClaudeTaskSnapshotV1(
+            observation_id="snapshot-unavailable",
+            client_version="2.1.269",
+            configuration_sha256=CONFIGURATION,
+            observed_at=NOW,
+            outcome="unavailable",
+            reason_code="task-tools-disabled",
+        ),
+    )
+
+    assert observed.expected_projection_sha256 == unavailable.expected_projection_sha256
+    assert observed.canonical_projection_sha256 == unavailable.canonical_projection_sha256
+    assert observed.canonical_projection_sha256 == canonical_sha256(selected)
+
+
+def test_partial_bindings_are_typed_non_success_instead_of_digest_validation_error() -> None:
+    selected = projection()
+    partial_bindings = bindings()[:1]
+    partial_snapshot = snapshot().model_copy(update={"tasks": snapshot().tasks[:1]})
+
+    observation = observe_claude_snapshot(selected, partial_bindings, partial_snapshot)
+
+    assert observation.outcome == "unavailable"
+    assert observation.reason_code == "native-snapshot-unavailable"
+    assert observation.source_reason_code == "native-task-identities-incomplete"
+    assert observation.detail_item_ids == ["item-two"]
+    assert observation.native_projection_sha256 is None
 
 
 def test_divergence_reason_is_stable_across_different_item_ids() -> None:

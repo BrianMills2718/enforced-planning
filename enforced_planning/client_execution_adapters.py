@@ -146,6 +146,7 @@ class ClaudeTaskRecordV1(StrictModel):
 class ClaudeNativeProjectionObservationV1(NativeProjectionObservationV1):
     """Native observation with stable categories and structured Claude detail."""
 
+    canonical_projection_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     reason_code: ClaudeObservationReasonCode
     source_reason_code: str | None = Field(default=None, min_length=3)
     difference_codes: list[ClaudeProjectionDifferenceCode] = Field(default_factory=list)
@@ -159,8 +160,10 @@ class ClaudeNativeProjectionObservationV1(NativeProjectionObservationV1):
             raise ValueError("detail_item_ids must be unique")
         if self.outcome == "divergent" and not self.difference_codes:
             raise ValueError("divergent Claude observation requires difference_codes")
-        if self.outcome != "divergent" and (self.difference_codes or self.detail_item_ids):
-            raise ValueError("only divergent Claude observations may include difference detail")
+        if self.outcome != "divergent" and self.difference_codes:
+            raise ValueError("only divergent Claude observations may include difference codes")
+        if self.outcome in {"matched", "malformed"} and self.detail_item_ids:
+            raise ValueError(f"{self.outcome} Claude observation cannot include item detail")
         if self.outcome in {"unavailable", "malformed"} and self.source_reason_code is None:
             raise ValueError(f"{self.outcome} Claude observation requires source_reason_code")
         if self.outcome in {"matched", "divergent"} and self.source_reason_code is not None:
@@ -355,7 +358,34 @@ def observe_claude_snapshot(
 ) -> ClaudeNativeProjectionObservationV1:
     """Compare one typed native snapshot without mutating canonical state."""
 
-    expected_sha256 = canonical_sha256(projection)
+    canonical_projection_sha256 = canonical_sha256(projection)
+    by_item = _binding_map(projection, bindings)
+    expected_tasks_by_item: dict[str, ClaudeTaskRecordV1] = {}
+    unprojectable_item_ids: set[str] = set()
+    for item in projection.items:
+        binding = by_item.get(item.item_id)
+        expected_status = _claude_status(item.status)
+        if binding is None or expected_status is None:
+            unprojectable_item_ids.add(item.item_id)
+            continue
+        expected_tasks_by_item[item.item_id] = ClaudeTaskRecordV1(
+            task_id=binding.task_id,
+            subject=_subject(item.item_id, item.display_name),
+            description=_description(
+                source_kind=item.source_kind,
+                source_ref=item.source_ref,
+                criterion_ids=item.criterion_ids,
+            ),
+            active_form=_active_form(item.display_name),
+            status=expected_status,
+            blocked_by=[
+                by_item[dependency].task_id
+                for dependency in item.dependency_ids
+                if dependency in by_item
+            ],
+        )
+    expected_tasks = list(expected_tasks_by_item.values())
+    expected_native_sha256 = _native_tasks_sha256(expected_tasks)
     if snapshot.outcome != "observed":
         unavailable_reason: ClaudeObservationReasonCode
         if snapshot.outcome == "unavailable":
@@ -367,7 +397,8 @@ def observe_claude_snapshot(
             source_client="claude",
             client_version=snapshot.client_version,
             configuration_sha256=snapshot.configuration_sha256,
-            expected_projection_sha256=expected_sha256,
+            canonical_projection_sha256=canonical_projection_sha256,
+            expected_projection_sha256=expected_native_sha256,
             native_event_id=snapshot.event_id,
             outcome=snapshot.outcome,
             reason_code=unavailable_reason,
@@ -375,36 +406,32 @@ def observe_claude_snapshot(
             observed_at=snapshot.observed_at,
         )
 
-    by_item = _binding_map(projection, bindings)
+    if unprojectable_item_ids:
+        return ClaudeNativeProjectionObservationV1(
+            observation_id=snapshot.observation_id,
+            source_client="claude",
+            client_version=snapshot.client_version,
+            configuration_sha256=snapshot.configuration_sha256,
+            canonical_projection_sha256=canonical_projection_sha256,
+            expected_projection_sha256=expected_native_sha256,
+            native_event_id=snapshot.event_id,
+            outcome="unavailable",
+            reason_code="native-snapshot-unavailable",
+            source_reason_code="native-task-identities-incomplete",
+            observed_at=snapshot.observed_at,
+            detail_item_ids=sorted(unprojectable_item_ids),
+        )
+
     by_task = {task.task_id: task for task in snapshot.tasks}
     expected_task_ids = {binding.task_id for binding in bindings}
-    expected_tasks: list[ClaudeTaskRecordV1] = []
     difference_codes: set[ClaudeProjectionDifferenceCode] = set()
     detail_item_ids: set[str] = set()
-    if set(by_task) != expected_task_ids or len(bindings) != len(projection.items):
+    if set(by_task) != expected_task_ids:
         difference_codes.add("task-set")
     for item in projection.items:
         binding = by_item.get(item.item_id)
         task = by_task.get(binding.task_id) if binding else None
-        expected_status = _claude_status(item.status)
-        expected_blockers = [by_item[dependency].task_id for dependency in item.dependency_ids if dependency in by_item]
-        if binding is None or expected_status is None:
-            difference_codes.add("missing-task" if binding is None else "different-task")
-            detail_item_ids.add(item.item_id)
-            continue
-        expected_task = ClaudeTaskRecordV1(
-            task_id=binding.task_id,
-            subject=_subject(item.item_id, item.display_name),
-            description=_description(
-                source_kind=item.source_kind,
-                source_ref=item.source_ref,
-                criterion_ids=item.criterion_ids,
-            ),
-            active_form=_active_form(item.display_name),
-            status=expected_status,
-            blocked_by=expected_blockers,
-        )
-        expected_tasks.append(expected_task)
+        expected_task = expected_tasks_by_item[item.item_id]
         if task is None:
             difference_codes.add("missing-task")
             detail_item_ids.add(item.item_id)
@@ -412,7 +439,6 @@ def observe_claude_snapshot(
             difference_codes.add("different-task")
             detail_item_ids.add(item.item_id)
 
-    expected_native_sha256 = _native_tasks_sha256(expected_tasks)
     observed_native_sha256 = _native_tasks_sha256(snapshot.tasks)
     matched = not difference_codes and observed_native_sha256 == expected_native_sha256
     return ClaudeNativeProjectionObservationV1(
@@ -420,6 +446,7 @@ def observe_claude_snapshot(
         source_client="claude",
         client_version=snapshot.client_version,
         configuration_sha256=snapshot.configuration_sha256,
+        canonical_projection_sha256=canonical_projection_sha256,
         expected_projection_sha256=expected_native_sha256,
         native_projection_sha256=observed_native_sha256,
         native_event_id=snapshot.event_id,

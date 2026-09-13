@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "record_type": "outcome_portfolio_allocation_request",
+  "allocation_id": "plan-137-cross-client-execution-tracking-product",
+  "requested_at": "2026-09-13T06:45:00Z",
+  "project_id": "enforced-planning",
+  "scenario_id": "plan-137-cross-client-execution-tracking",
+  "outcome_contract_sha256": "e0914fdfd02772c6b26dc83e5239dffb0249a8ede4804668b47a002caf56a102",
+  "outcome_id": "cross-client-outcome-alignment",
+  "outcome_lineage_id": "plan-137-cross-client-execution-tracking",
+  "portfolio_class": "product",
+  "decision_ref": "user:2026-09-12-plan137-implementation-approval",
+  "purpose": "Keep native Codex and Claude task views aligned with one canonical evidenced outcome without granting either client completion authority.",
+  "stopping_condition": "Complete or park the allocation after the integrated cross-client fixture and its native-green incomplete-closure negative control are retained."
+}

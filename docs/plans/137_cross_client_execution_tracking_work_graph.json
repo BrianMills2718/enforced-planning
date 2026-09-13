@@ -107,6 +107,8 @@
       ],
       "conflict_surfaces": [
         {"kind": "repository_path", "target": ".company-planning/active-execution.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/evidence/plan137_cross_client_execution_tracking_scenario.json", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "docs/evidence/plan137_cross_client_execution_tracking_allocation.json", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "enforced_planning/client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "tests/test_client_execution_adapters.py", "repository": "enforced-planning", "access": "exclusive"},
         {"kind": "repository_path", "target": "docs/plans/137_cross_client_execution_tracking.md", "repository": "enforced-planning", "access": "exclusive"},

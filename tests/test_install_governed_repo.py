@@ -1006,6 +1006,10 @@ def test_install_governed_repo_write_bootstraps_minimum_repo_and_passes_audit(
     assert "worktree-remove:" in makefile_text
     assert "session-start:" in makefile_text
     assert "session-heartbeat:" in makefile_text
+    assert (
+        '$(if $(or $(PLAN),$(OUTCOME_ADMISSION_BOOTSTRAP_PLAN)),--start-revision '
+        '"$(WORKTREE_START_REVISION)",)'
+    ) in makefile_text
 
 
 def test_default_off_reenable_and_wiki_freshness_journey(tmp_path: Path) -> None:

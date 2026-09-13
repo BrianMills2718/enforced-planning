@@ -1774,7 +1774,10 @@ In that configured source checkout:
 - `make outcome-bootstrap PLAN=N ...` performs the explicit bootstrap
   admission before claim, worktree, or session creation; the complete
   `SESSION_WRITE_PATHS` set must contain one unique Plan number and only that
-  Plan's plan, work graph, allocation fixtures, plan index, or roadmap;
+  Plan's plan, work graph, allocation fixtures, plan index, or roadmap. The
+  same freshly resolved worktree revision is passed to session activation and
+  retained by both claim and tracker; a later plan-bound transition therefore
+  validates existing custody instead of inventing historical evidence;
 - source `make worktree`, `make session-start`, and
   `make session-heartbeat` prefer the canonical `scripts/session_*.py`
   owners when present, with installed `scripts/meta/` files only as fallback;

@@ -411,6 +411,13 @@ does not become invalid merely because its creating claim closed; its material
 defect for PI-02D is that the immutable contract excludes both documentation
 paths.
 
+That receipt describes the implementation observed during PI-02D, not the
+current bootstrap contract. As of 2026-09-12, `make outcome-bootstrap` passes
+the freshly resolved worktree revision into session activation, which stores
+the same `start_revision` in the new claim and tracker before any later
+plan-bound transition. The historical guard remains unchanged: an older claim
+that already has a tracker but lacks revision evidence still fails closed.
+
 PI-02B therefore repairs only the circular activation boundary. An exact new
 schema-v4 reservation may attach its tracker with an explicit
 `selection_pending` result, never a selected `PASS`; heartbeat and prewrite

@@ -568,6 +568,41 @@ def test_session_start_preserves_existing_revision_custody_and_rolls_back_mismat
     assert tracker_path.read_bytes() == tracker_before
 
 
+def test_outcome_bootstrap_makefile_passes_exact_start_revision_to_session_start() -> None:
+    """The public bootstrap must bind its tracker to the worktree revision.
+
+    The pre-worktree UNPLANNED reservation intentionally has no revision yet.
+    Omitting this argument from the later session-start call left the durable
+    claim and tracker without revision custody, so the documented transition
+    to a plan-bound work unit then failed closed as a legacy migration.
+    """
+
+    repo_root = Path(__file__).resolve().parents[1]
+    revision = _git(repo_root, "rev-parse", "HEAD")
+    result = subprocess.run(
+        [
+            "make",
+            "-n",
+            "outcome-bootstrap",
+            "PLAN=137",
+            "BRANCH=plan-137-bootstrap-probe",
+            "TASK=probe bootstrap revision custody",
+            "SESSION_GOAL=prove bootstrap revision custody",
+            "SESSION_PHASE=bootstrap",
+            "SESSION_WRITE_PATHS=docs/plans/137_probe.md",
+            "WORKTREE_AGENT=codex",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f'--start-revision "{revision}"' in result.stdout
+    assert '--outcome-bootstrap-plan "137"' in result.stdout
+
+
 def _prepare_selection_pending_reservation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

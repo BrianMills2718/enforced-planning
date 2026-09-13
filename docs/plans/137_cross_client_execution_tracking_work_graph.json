@@ -90,14 +90,15 @@
       "objective": "Make Claude match and divergence evidence derive only from one normalized observed native Task projection, with stable reason categories and structured item-level detail.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready",
+      "claimability": "not_applicable",
       "scope": {
         "included": ["Normalized native Task projection digest", "Observed criterion and provenance description", "Stable reason codes", "Structured divergence details", "Both-sign regression probes"],
         "excluded": ["Authentic Claude acceptance", "Integrated fixture", "Host activation", "Canonical completion authority"]
       },
       "inputs": [
         {"kind": "merged_implementation", "id": "xcet-03-claude-adapter", "revision": "enforced-planning@9b26b97735101720712941874a32e5ba2aa7856d"},
-        {"kind": "audit_observation", "id": "plan137-native-digest-audit", "revision": "codex-session-01a09110-c715-7ed0-a135-25a865bf23c8@2026-09-13"}
+        {"kind": "audit_observation", "id": "plan137-native-digest-audit", "revision": "codex-session-01a09110-c715-7ed0-a135-25a865bf23c8@2026-09-13"},
+        {"kind": "verified_implementation", "id": "xcet-03r-observation-repair", "revision": "enforced-planning@d1a30cfaeeb5dce432ab5e99861aff8b16c60283"}
       ],
       "outputs": ["Corrected Claude observation adapter", "Stable feedback categories", "Regression evidence"],
       "dependencies": [
@@ -133,10 +134,10 @@
       ],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
       "authorization_mode": "registry_claim",
-      "status": "ready",
-      "record_version": 1,
+      "status": "accepted",
+      "record_version": 2,
       "created_at": "2026-09-13T12:55:00Z",
-      "updated_at": "2026-09-13T12:55:00Z"
+      "updated_at": "2026-09-13T14:16:00Z"
     },
     {
       "schema_version": "1.0",

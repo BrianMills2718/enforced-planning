@@ -1,6 +1,6 @@
 # Plan #137: Observe-Only Cross-Client Execution Tracking
 
-**Status:** In Progress — neutral and Codex adapters accepted; Claude adapter merged, audit repair ready, and authentic probe blocked by existing quota; no host activation or blocking enforcement
+**Status:** In Progress — neutral/Codex and XCET-03R repair accepted; Claude adapter merged but authentic probe blocked by existing quota; no host activation or blocking enforcement
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -279,6 +279,17 @@ synchronized closeout across the plan, graph, roadmap, and plan index.
   native snapshot returned `matched` for two canonical projections with different
   criterion IDs, and observation-only metadata changed the alleged native digest.
   XCET-03R must land before the authentic Claude probe can accept XCET-03.
+- XCET-03R is accepted at
+  `d1a30cfaeeb5dce432ab5e99861aff8b16c60283`. Native digests now derive only
+  from normalized Task-visible content; canonical projection identity is
+  retained separately; changed criterion/provenance descriptions cannot match
+  the same snapshot; observation metadata cannot change the native digest; and
+  reason categories remain finite while item detail stays structured. The
+  missing-binding control returns typed non-success instead of raising from an
+  equal subset digest. All 22 focused adapter/neutral tests, affected Ruff,
+  affected mypy, `scripts/self_test.py`, and `git diff --check` pass. This does
+  not accept XCET-03: its authentic Task create/update/list/hook evidence is
+  still unavailable.
 
 - Focused Pydantic contract tests for identity, revision, dependencies,
   idempotency, evidence freshness, completion, and divergence.

@@ -1058,9 +1058,10 @@ def test_cli_queue_round_trip_and_unavailable_exit(
     )
     assert passing_code == 0, passing_stderr
     passing_payload = json.loads(passing_stdout)
-    assert "npw-03-safe-lifecycle-integration" in passing_payload["eligible_unit_ids"]
+    assert passing_payload["eligible_unit_ids"] == []
     assert "npw-01-progress-lease-current-main" in passing_payload["terminal_unit_ids"]
     assert "npw-02-provider-free-blocker-decision" in passing_payload["terminal_unit_ids"]
+    assert "npw-03-safe-lifecycle-integration" in passing_payload["terminal_unit_ids"]
     assert stale_code == 3
     assert json.loads(stale_stdout)["coverage"] == "unavailable"
 
@@ -1070,13 +1071,13 @@ def test_cli_decide_uses_source_graph(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    repo_root = Path(__file__).parents[1]
-    graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
-    digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
+    _graph_path, digest = _write_graph(tmp_path, [_unit("A", "blocked"), _unit("B", "ready")])
+    graph_ref = GRAPH_REF
+    monkeypatch.setattr(blocker_cli, "REPOSITORY_ROOT", tmp_path)
     input_path = tmp_path / "decision.json"
     decision_input = BlockerDecisionInputV1(
         request_ref="fixture",
-        request=_request(blocked_items=("npw-03-safe-lifecycle-integration",)),
+        request=_request(blocked_items=("A",)),
         work_graph_ref_path=graph_ref,
         expected_work_graph_sha256=digest,
     )
@@ -1322,9 +1323,9 @@ def test_checked_in_owner_calibration_receipts_cover_both_signs(
 def test_blocker_application_records_continue_without_mutating_claims(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    repo_root = Path(__file__).parents[1]
-    graph_ref = "docs/plans/110_no_passive_waiting_work_graph.json"
-    digest = hashlib.sha256((repo_root / graph_ref).read_bytes()).hexdigest()
+    _graph_path, digest = _write_graph(tmp_path, [_unit("A", "blocked"), _unit("B", "ready")])
+    repo_root = tmp_path
+    graph_ref = GRAPH_REF
     claims_dir = tmp_path / "claims"
     receipt_dir = tmp_path / "receipts"
     dirty_worktree = tmp_path / "dirty-worktree"
@@ -1333,11 +1334,11 @@ def test_blocker_application_records_continue_without_mutating_claims(
     dirty_file.write_text("preserve me\n", encoding="utf-8")
     root = _write_application_claim(
         claims_dir, scope="goal-root", graph_path=graph_ref, graph_sha256=digest,
-        work_unit_id="npw-03-safe-lifecycle-integration",
+        work_unit_id="B",
     )
     child = _write_application_claim(
         claims_dir, scope="goal-child", parent_scope="goal-root", graph_path=graph_ref,
-        graph_sha256=digest, work_unit_id="npw-03-safe-lifecycle-integration",
+        graph_sha256=digest, work_unit_id="B",
     )
     unrelated = _write_application_claim(
         claims_dir, scope="unrelated-root", graph_path=None, graph_sha256=None,
@@ -1349,7 +1350,7 @@ def test_blocker_application_records_continue_without_mutating_claims(
     )
     decision_input = BlockerDecisionInputV1(
         request_ref="continue-fixture",
-        request=_request(blocked_items=("npw-04-installation-and-hook-rollout",)),
+        request=_request(blocked_items=("A",)),
         work_graph_ref_path=graph_ref,
         expected_work_graph_sha256=digest,
     )

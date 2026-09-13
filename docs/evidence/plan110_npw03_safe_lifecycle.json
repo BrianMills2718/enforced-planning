@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "record_type": "plan_acceptance_evidence",
+  "plan": "enforced-planning#110",
+  "work_unit_id": "npw-03-safe-lifecycle-integration",
+  "criterion_id": "NPW03-A1",
+  "implementation_commit": "36636e923b1d967c3a0747f0e9afa02144c75837",
+  "upstream_reconciliation_commit": "6397093e51a46dd297ee276e885945972443b2e4",
+  "upstream_main_revision": "0c5ccc82ff93156a8e5361f3e9a09f2d06bcf83c",
+  "fixture_receipts": {
+    "continue_ready_work": {
+      "application_id": "blocker_application_ccbdbe3c96ee72d9d8f55eb9e78965b0",
+      "disposition_id": "blocker_disposition_f2f43f681ad79e81f47376a456b4a609",
+      "ready_queue_evaluation_id": "ready_queue_c21d9c41242704c9b2f508c07663bb81",
+      "claim_action": "none",
+      "result": "recorded_no_mutation",
+      "registry_unchanged": true,
+      "recorded_at": "2026-09-13T22:22:41.663801Z",
+      "receipt_sha256": "c755a8285a9331d0bbd82521393b845185b788732d2ebba09b285c7cd063df45"
+    },
+    "goal_blocked_verified": {
+      "application_id": "blocker_application_b80ea6f9376ddca9d8035a99142540f3",
+      "disposition_id": "blocker_disposition_dbdc139813679b5ba2bf8dab78115562",
+      "ready_queue_evaluation_id": "ready_queue_4dd63126619f91f48404831493212fc8",
+      "claim_action": "retire_goal_scope",
+      "result": "applied",
+      "affected_scopes": ["goal-child", "goal-root"],
+      "unrelated_root_status": "active",
+      "recorded_at": "2026-09-13T22:22:41.685132Z",
+      "receipt_sha256": "7dd728d2aedd7816804f8fb452140d4b307bac9b630e4b6cbe5fea9c9fd18653"
+    }
+  },
+  "verification": [
+    {
+      "command": "pytest -q tests/test_blocker_policy.py",
+      "result": "87 passed"
+    },
+    {
+      "command": "pytest -q tests/test_install_governed_repo.py",
+      "result": "57 passed"
+    },
+    {
+      "command": "pytest -q tests/test_blocker_policy.py -k blocker_application --basetemp=/tmp/npw03-evidence",
+      "result": "2 passed; exact immutable receipt files inspected and hashed"
+    }
+  ],
+  "negative_controls": [
+    "caller-supplied claim and mailbox snapshots are rejected",
+    "a stale native runtime cannot consume or replay the owner's disposition",
+    "a ready alternative produces no claim mutation",
+    "true-blocker retirement changes only the selected root and descendants",
+    "an unrelated root owned by the same runtime remains active",
+    "dirty worktree content is byte-identical after application",
+    "idempotent replay retains one application receipt and creates no second executor"
+  ],
+  "scope_statement": "Local lifecycle behavior is accepted. This is not fleet deployment or authentic external shared-action evidence, and it does not complete Plan 110, Plan 137, or Plan 279."
+}

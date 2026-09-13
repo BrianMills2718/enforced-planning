@@ -1,6 +1,6 @@
 # Plan #110: No-Passive-Waiting Enforcement
 
-**Status:** 🚧 In Progress — NPW-01 and NPW-02 accepted; NPW-03 ready
+**Status:** 🚧 In Progress — NPW-01 through NPW-03 accepted; NPW-04 blocked on its Project Meta bootstrap seam
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Coordination runtime maintenance"
@@ -232,6 +232,12 @@ The public CLI additionally binds `session_id` to the exact native invoking
 runtime before loading canonical claims. A fabricated identity cannot suppress
 a self-conflict or manufacture an other-session conflict.
 
+## Capability Adoption
+
+**Disposition: extend.** Extend the existing Enforced Planning claim/session
+lifecycle and canonical installer manifests. Do not introduce a second queue,
+claim registry, scheduler, or consumer-owned wrapper implementation.
+
 ## Capabilities
 
 | Capability | Input schema | Output schema | Producer | Consumer(s) | Cost tier |
@@ -348,6 +354,20 @@ the diagnostic envelope to canonical claim-registry and repository bytes and
 require the recomputed queue and disposition IDs to match. If scoped retirement is missing,
 implement it here; the unrelated-root fixture must remain active.
 
+**Accepted 2026-09-13.** Candidate
+`36636e923b1d967c3a0747f0e9afa02144c75837`, reconciled with upstream at
+`6397093e51a46dd297ee276e885945972443b2e4`, adds the installed
+`apply_blocker_disposition.py` command, canonical locked re-evaluation, a
+root-plus-descendants lifecycle transaction, immutable application receipts,
+and exact-native-owner replay checks. The evidence packet at
+`docs/evidence/plan110_npw03_safe_lifecycle.json` binds both fixture receipts:
+ready work leaves the registry unchanged, while a verified whole-goal blocker
+session-ends only `goal-root` and `goal-child`. The unrelated root remains
+active, dirty bytes remain unchanged, stale-owner application is rejected, and
+replay emits no second executor. The blocker-policy suite passed 87 tests and
+the installer suite passed 57 tests. This accepts only local lifecycle behavior;
+it is not fleet deployment or authentic external shared-action evidence.
+
 ### Slice 4 — Installed-consumer integration
 
 **Epistemic state:** `conditional`.
@@ -394,6 +414,9 @@ reporting deadline; it cannot authorize automatic takeover or deletion.
 - `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
 - `docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md`
 - `docs/reference/CONFIG_REFERENCE.md`
+- `GETTING_STARTED.md`
+- `docs/plans/125_planning_integrity_loop.md`
+- `docs/plans/132_overbroad_claim_narrowing.md`
 
 ## Concerns and promotion triggers
 
@@ -417,6 +440,7 @@ behaviors.
 
 ## Next action
 
-Execute `npw-03-safe-lifecycle-integration` from the validated companion work
-graph. NPW-01 and NPW-02 are accepted, so the lifecycle integration is now
-ready; preserve both accepted contracts and their negative controls.
+Keep `npw-04-workspace-bootstrap-integration` blocked until the Project Meta
+bootstrap seam is integrated or released. Continue the broader outcome through
+its other owner-local Enforced Planning and AES units; preserve NPW-03's exact
+owner, scoped-retirement, unrelated-root, and dirty-work negative controls.

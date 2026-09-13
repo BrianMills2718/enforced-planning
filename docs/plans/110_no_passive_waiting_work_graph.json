@@ -234,7 +234,7 @@
       "objective": "Record the deterministic disposition and either continue another unit or safely narrow, hand off, or retire only the blocked goal scope while preserving unrelated roots and dirty work.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "not_applicable",
       "authorization_mode": "registry_claim",
       "integration_owner_id": "enforced-planning",
       "scope": {
@@ -345,8 +345,8 @@
         "max_active_per_claimant": 1,
         "named_owner_id": null
       },
-      "status": "ready",
-      "record_version": 2
+      "status": "accepted",
+      "record_version": 3
     },
     {
       "schema_version": "1.0",
@@ -430,7 +430,6 @@
         "required_approval_types": [],
         "approvals": [],
         "failed_guards": [
-          "npw-03-safe-lifecycle-integration must be accepted",
           "the project-meta universal-feedback bootstrap claim must be integrated or released"
         ]
       },
@@ -442,7 +441,7 @@
         "named_owner_id": null
       },
       "status": "blocked",
-      "record_version": 1
+      "record_version": 2
     },
     {
       "schema_version": "1.0",

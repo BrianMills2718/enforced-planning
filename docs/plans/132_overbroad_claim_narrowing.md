@@ -617,3 +617,10 @@ transferring claim. Fence state binds the exact pre-transfer claim digest, and
 the immutable process-fence receipt is then bound into the custody-transfer
 receipt before reporting success. Installer import-closure tests execute the installed
 `session_resume.py` adapter with source `PYTHONPATH` removed.
+
+Last verified 2026-09-13 against Plan 110's NPW-03 lifecycle extension. The
+new blocker-disposition application path reuses the same canonical registry
+lock, projection writer, exact-native-owner guard, and installed manifest
+closure. Its root-plus-descendants handoff/session-end operation does not widen
+or bypass Plan 132 narrowing authority, and its negative fixture preserves an
+unrelated root plus dirty worktree bytes.

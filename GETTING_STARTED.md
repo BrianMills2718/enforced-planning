@@ -173,6 +173,12 @@ no-mutation receipt; a verified terminal wait may hand off or session-end only
 the selected goal root and its descendants. It never deletes or takes over a
 worktree, and a different native runtime cannot replay the owner's action.
 
+The installer also carries `enforced_planning/outcome_completion.py` and
+`scripts/meta/outcome_completion_hook.py` for selected-outcome completion
+checks. Installation alone does not enable blocking: completion enforcement
+remains off unless the repository explicitly configures
+`meta_process.claims.outcome_completion_mode: enforce_selected`.
+
 The installed hook stack blocks direct pull-request merges and routes them to
 the sanctioned finish transaction. Supply a planning-derived review spec from
 outside the repository and all of its linked worktrees:

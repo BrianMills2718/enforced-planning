@@ -1,6 +1,6 @@
 # Plan #137: Observe-Only Cross-Client Execution Tracking
 
-**Status:** In Progress — XCET-01 accepted locally; Codex and Claude adapter lanes ready; no host activation or blocking enforcement
+**Status:** In Progress — neutral and Codex adapters accepted; Claude adapter merged but authentic probe blocked by existing quota; no host activation or blocking enforcement
 **Type:** implementation
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -255,6 +255,21 @@ synchronized closeout across the plan, graph, roadmap, and plan index.
   dependencies, transition and completion ID collisions, missing/stale
   criterion evidence, omitted and unknown criterion links, false native match,
   and unavailable native capability.
+- XCET-02 is accepted in the AES target graph at
+  `5742bfe48b7cfd252b7f546cebf5f764baee1c14`. Independent source-side replay
+  confirmed that revision is on AES `main` and all 12 focused Codex adapter
+  tests pass.
+- XCET-03 implementation merged at
+  `9b26b97735101720712941874a32e5ba2aa7856d`. Its observe-only Claude adapter
+  binds neutral identity only from structured `TaskCreate` results, emits exact
+  native `TaskCreate`/`TaskUpdate` inputs, and treats `TaskCompleted` as a
+  per-task observation with no canonical goal-completion authority. Fourteen
+  focused neutral and adapter tests, affected Ruff, and affected mypy pass.
+- The isolated Claude Code 2.1.269 probe exposed `TaskCreate` and `TaskUpdate`,
+  but session `f421e695-278f-4b8c-8ccd-4ae7b1f817f3` received API 429 before
+  creating a task. It is retained as `unavailable`, not native acceptance;
+  XCET-03 and the integrated fixture remain blocked until one post-reset live
+  Task create/update/list/hook journey is observed.
 
 - Focused Pydantic contract tests for identity, revision, dependencies,
   idempotency, evidence freshness, completion, and divergence.

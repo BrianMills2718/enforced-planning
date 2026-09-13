@@ -311,11 +311,40 @@ def attention_receipt_count(*, state_dir: Path, agent: str, session_id: str) -> 
     return count
 
 
+REPORT_FIELD_NAMES = (
+    "Session goal",
+    "Active subgoals",
+    "Done",
+    "Policy",
+    "Concerns",
+    "Learnings",
+    "Decisions",
+    "Recommended next",
+    "Need anything from human",
+)
+_REPORT_FIELD_PATTERN = re.compile(
+    rf"^[ \t]*(?:[-*][ \t]+)?(?:"
+    rf"\*\*(?P<bold>{'|'.join(map(re.escape, REPORT_FIELD_NAMES))})\*\*"
+    rf"[ \t]*(?:[-—:][ \t]*)?"
+    rf"|(?P<plain>{'|'.join(map(re.escape, REPORT_FIELD_NAMES))})"
+    rf"[ \t]*[-—:][ \t]*"
+    rf")(?P<value>.*)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
 def report_field(report: str, name: str) -> str | None:
-    """Return one CommonMark closing-report bullet by bold field name."""
-    pattern = rf"[-*]\s*\*\*{re.escape(name)}\*\*\s*[-—:]?\s*(.+?)(?=\n[-*]\s*\*\*|\Z)"
-    match = re.search(pattern, report, re.DOTALL | re.IGNORECASE)
-    return match.group(1).strip() if match else None
+    """Return one closing-report field in Markdown or simple ``Name: value`` form."""
+    matches = list(
+        _REPORT_FIELD_PATTERN.finditer(report)  # prose-matching-exempt: parses explicit closeout field grammar
+    )
+    for index, match in enumerate(matches):
+        field_name = match.group("bold") or match.group("plain")
+        if field_name.casefold() != name.casefold():
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(report)
+        return report[match.start("value") : end].strip()
+    return None
 
 
 # A decline is only checkable when it points at something. These are the shapes a
@@ -333,6 +362,14 @@ REFERENCE_PATTERNS = (
 def _names_a_reference(reason: str) -> bool:
     """Return whether a decline points at something a reader could open."""
     return any(re.search(pattern, reason, re.IGNORECASE) for pattern in REFERENCE_PATTERNS)
+
+
+def _actionable_failure(code: str, why: str, next_action: str) -> str:
+    """Render one stable, copyable recovery contract for a blocking outcome."""
+    return (
+        f"[{code}] Why: {why} Next: {next_action} "
+        "Verify: submit the corrected closing report; fixing the line is a complete response."
+    )
 
 
 # A closing report can state the "already recorded elsewhere" disposition
@@ -372,7 +409,9 @@ def _parse_learnings_status_marker(disposition: str) -> dict[str, str] | None:
     into a valid ``status``/``ref`` pair -- that case must never fall back to
     the prose heuristic as if nothing had been written.
     """
-    match = LEARNINGS_STATUS_MARKER.search(disposition)
+    match = LEARNINGS_STATUS_MARKER.search(  # prose-matching-exempt: parses an explicit HTML status marker
+        disposition
+    )
     if match is None:
         return None
     tokens = match.group("body").split()
@@ -400,10 +439,11 @@ def classify_report(report: str) -> tuple[str, str]:
     if disposition is None:
         return (
             "block_missing",
-            (
-                "Completed work requires a Learnings disposition: record a reusable finding or lesson "
-                "through /learned and cite project-meta/learnings.md, or state "
-                "`None — <specific reason>`. "
+            _actionable_failure(
+                "learning_capture.block_missing",
+                "completed work has no Learnings disposition.",
+                "Add exactly one line: `Learnings: recorded <lrn-entry-id>` or "
+                "`Learnings: none — <concrete reason of at least 20 characters>`.",
             ),
         )
 
@@ -412,10 +452,17 @@ def classify_report(report: str) -> tuple[str, str]:
     # startswith check twice in one session and cost two round-trips.
     normalized = disposition.strip().strip("*_` ")
     if re.match(r"^recorded\b", normalized, re.IGNORECASE):
-        if "learnings.md" not in normalized.casefold():
+        if "learnings.md" not in normalized.casefold() and not re.search(
+            REFERENCE_PATTERNS[0], normalized, re.IGNORECASE
+        ):
             return (
                 "block_unverifiable_record",
-                "A `Recorded` learning disposition must cite the canonical project-meta/learnings.md register.",
+                _actionable_failure(
+                    "learning_capture.block_unverifiable_record",
+                    "the Recorded disposition does not identify a verifiable register entry.",
+                    "Use `Learnings: recorded <lrn-entry-id>` (preferred) or cite "
+                    "`project-meta/learnings.md`.",
+                ),
             )
         return "recorded", normalized
 
@@ -425,9 +472,10 @@ def classify_report(report: str) -> tuple[str, str]:
         if len(reason) < 20:
             return (
                 "block_empty_none",
-                (
-                    "A `None` learning disposition requires a concrete reason of at least 20 characters; "
-                    "do not use it as an empty bypass."
+                _actionable_failure(
+                    "learning_capture.block_empty_none",
+                    "the None disposition has no concrete reason of at least 20 characters.",
+                    "Use `Learnings: none — <concrete reason of at least 20 characters>`.",
                 ),
             )
         try:
@@ -435,11 +483,11 @@ def classify_report(report: str) -> tuple[str, str]:
         except MalformedLearningsStatusMarker as exc:
             return (
                 "block_malformed_learnings_marker",
-                (
-                    f"A learnings-status marker was present but invalid: {exc}. "
-                    "Fix its syntax -- `<!-- learnings-status: prior-record "
-                    "ref=<entry-id> -->` -- or remove it entirely to fall back to "
-                    "the plain-text disposition."
+                _actionable_failure(
+                    "learning_capture.block_malformed_learnings_marker",
+                    f"the learnings-status marker is invalid: {exc}.",
+                    "Use `<!-- learnings-status: prior-record ref=<entry-id> -->` "
+                    "or remove the marker and use a plain-text disposition.",
                 ),
             )
         if marker is not None:
@@ -458,20 +506,23 @@ def classify_report(report: str) -> tuple[str, str]:
         if prior_claim and not _names_a_reference(reason):
             return (
                 "block_unreferenced_decline",
-                (
-                    "A decline that claims something is already recorded must name it: an entry id "
-                    "(lrn-...), a commit sha, a memory slug, or a file path. Measured across 296 closing "
-                    "reports, 51% of `already recorded` declines cited nothing at all, which makes the "
-                    "reason unfalsifiable. Cite what you are deferring to, or record the finding."
+                _actionable_failure(
+                    "learning_capture.block_unreferenced_decline",
+                    "the disposition says the learning was already recorded but names no verifiable reference.",
+                    "To name it, add its `lrn-...` entry id, commit SHA, memory slug, or file path; "
+                    "otherwise record the finding.",
                 ),
             )
         return "none", reason
 
     return (
         "block_invalid",
-        (
-            "Learnings must start with `Recorded` and cite project-meta/learnings.md, or start with "
-            "`None` and give a concrete reason. "
+        _actionable_failure(
+            "learning_capture.block_invalid",
+            "the Learnings disposition is neither a recorded entry nor a concrete none reason.",
+            (
+            "Replace it with `Learnings: recorded <lrn-entry-id>` or "
+            "`Learnings: none — <concrete reason of at least 20 characters>`. "
             # This sentence exists because the gate was read as a work order.
             # On 2026-08-28 a session answered a refusal on form by recording the
             # entry: it invoked a skill, tripped three read-first gates, created a
@@ -490,11 +541,12 @@ def classify_report(report: str) -> tuple[str, str]:
             # once for a finding the user then asked why it had not written down.
             # The condition is being blocked on someone else, not the ordinary
             # cost of the register.
-            "Fixing the line is a complete response. Recording costs a lane and a push; that is "
+            "Recording costs a lane and a push; that is "
             "the ordinary price of the register and not a reason to skip it -- if you learned "
             "something, write it down. The one case to defer is being blocked: if you are waiting "
             "on the user and they have not answered, do not start work to clear this gate. Write "
             "`None -- not recorded because <reason>` and stop."
+            ),
         ),
     )
 
@@ -645,7 +697,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         invocation = start_hook_invocation(
             hook_name="learning-capture",
-            hook_version="2",
+            hook_version="3",
             script_path=Path(__file__).resolve(),
             payload=payload,
             receipt_root=args.hook_receipt_dir,
@@ -683,9 +735,11 @@ def main(argv: list[str] | None = None) -> int:
                 and args.correction_mode == "block"
             ):
                 decision = "block_unresolved_correction"
-                detail = (
-                    "A validated correction audit found a user correction without a "
-                    "matching same-session immutable learning. Record it with the learned skill."
+                detail = _actionable_failure(
+                    "learning_capture.block_unresolved_correction",
+                    "a validated correction audit found a user correction without a "
+                    "matching same-session immutable learning.",
+                    "Record it with the learned skill, then cite the new `lrn-...` entry id.",
                 )
         telemetry_decision = "block" if decision.startswith("block_") else "allow"
         telemetry_reason = decision

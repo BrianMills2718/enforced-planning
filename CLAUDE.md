@@ -210,6 +210,20 @@ adoption.
    tips before new-lane mutation; retain both identities and the exact plan
    digest in the claim/tracker. Never copy a proxy plan into the target. See
    the operator guide's cross-repository plan-authority contract.
+10. A PR no longer needs to be rebased onto the latest `main` before it can
+    merge (the required `hook-contract` check dropped its "must be up to
+    date" requirement, and `allow_auto_merge` is on) -- `main` moves too fast
+    for a manual rebase to keep up (observed: repeated real merges landing
+    within the ~1-2 minutes a single CI run takes). Open the PR and run
+    `gh pr merge --auto --squash`; it merges as soon as its own CI passes,
+    without needing to already be at the current tip. A real merge queue
+    (serialized re-validation against the true tip) would be the stronger
+    version of this, but is not available on the current plan tier for this
+    repo -- confirmed by testing GitHub's own documented example against
+    three different repos, all rejected identically. Real semantic overlap
+    between two lanes is still caught independently by
+    `push_safety.py`'s coordination-claim check, which does not depend on
+    branch-protection strictness.
 
 ## Notes
 

@@ -243,6 +243,87 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
     }
 
 
+def test_push_check_overlapping_write_claim_surfaces_other_contact_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """overlapping_write_claim exposes the blocking claim's session_id and
+    contact_ref, so the blocked session can resolve who owns it through
+    ListAgents instead of only seeing an opaque session_id.
+
+    This is the root-cause fix for the 2026-09-14 gap where a session blocked
+    by check-enforced-planning-vendor-drift-20260914's broad claim had no way
+    to correlate its session_id to a ListAgents entry and message the owner
+    directly.
+    """
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    other_worktree = tmp_path / "demo_worktrees" / "plan-99-other"
+    other_worktree.mkdir(parents=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-99-other"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.py").write_text("print('a genuinely different version')\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "other lane's divergent feature.py"], check=True, capture_output=True, text=True)
+
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-42-demo"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.py").write_text("print('hi')\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "current.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "plan-42-demo",
+            "intent": "Own current branch",
+            "claim_type": "program",
+            "plan_ref": "UNPLANNED",
+            "branch": "plan-42-demo",
+            "worktree_path": str(repo_root),
+            "session_id": "codex:thread-1",
+            "session_name": "current-branch-owner",
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "other.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-09T10:05:00+00:00",
+            "expires_at": "2099-04-09T11:05:00+00:00",
+            "projects": ["demo"],
+            "scope": "reviewed-scope",
+            "intent": "Touch feature file",
+            "claim_type": "write",
+            "write_paths": ["feature.py"],
+            "branch": "plan-99-other",
+            "worktree_path": str(other_worktree),
+            "session_id": "claude-code:session-1",
+            "contact_ref": "check-enforced-planning-vendor-drift-20260914",
+            "status": "active",
+        },
+    )
+
+    monkeypatch.setattr(concern_routing, "route_concern", lambda **kwargs: {"ok": True, "route": "coordination_mailbox", "destination": "x"})
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    finding = next(item for item in payload["issues"] if item["code"] == "overlapping_write_claim")
+    assert finding["details"]["other_session_id"] == "claude-code:session-1"
+    assert finding["details"]["other_contact_ref"] == "check-enforced-planning-vendor-drift-20260914"
+
+
 def test_push_check_warns_instead_of_blocking_a_predicted_clean_overlap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

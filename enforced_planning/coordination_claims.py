@@ -848,6 +848,7 @@ class ClaimRecord:
     broad_scope_mode: str | None = None
     broad_scope_reason: str | None = None
     target_worktree_path: str | None = None
+    contact_ref: str | None = None
 
     def primary_project(self) -> str | None:
         """Return the first project for CLI compatibility surfaces."""
@@ -882,6 +883,7 @@ class ClaimInteraction:
     reservation_kind: str | None = None
     other_broad_scope_mode: str | None = None
     current_diff_disjoint: bool | None = None
+    other_contact_ref: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe interaction summary."""
@@ -2755,6 +2757,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
             else None
         ),
         target_worktree_path=target_worktree_path,
+        contact_ref=data.get("contact_ref") if isinstance(data.get("contact_ref"), str) else None,
     )
 
 
@@ -2928,6 +2931,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    other_contact_ref=other.contact_ref,
                     **_interaction_explanation(candidate, other),
                 )
             )
@@ -2949,6 +2953,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    other_contact_ref=other.contact_ref,
                     **_interaction_explanation(candidate, other),
                 )
             )
@@ -2967,6 +2972,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    other_contact_ref=other.contact_ref,
                     **(_interaction_explanation(candidate, other) if overlapping_write_paths else {}),
                 )
             )
@@ -2985,6 +2991,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                     other_source_file=other.source_file,
                     other_session_id=other.session_id,
                     other_session_last_active_at=session_last_active_at(other.session_id),
+                    other_contact_ref=other.contact_ref,
                     **_interaction_explanation(candidate, other),
                 )
             )
@@ -3002,6 +3009,7 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
                 other_source_file=other.source_file,
                 other_session_id=other.session_id,
                 other_session_last_active_at=session_last_active_at(other.session_id),
+                other_contact_ref=other.contact_ref,
             )
         )
     return ClaimCheckResult(candidate=candidate, interactions=interactions)
@@ -3049,6 +3057,7 @@ def build_candidate_claim(
     broad_scope_mode: str | None = None,
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
+    contact_ref: str | None = None,
     schema_version: int | None = None,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
@@ -3122,6 +3131,7 @@ def build_candidate_claim(
         broad_scope_mode=normalized_mode,
         broad_scope_reason=normalized_reason,
         target_worktree_path=effective_target_worktree,
+        contact_ref=contact_ref,
     )
 
 
@@ -3309,6 +3319,7 @@ def create_claim(
     broad_scope_mode: str | None = None,
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
+    contact_ref: str | None = None,
     verified_goal_default_revision: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
@@ -3472,6 +3483,7 @@ def create_claim(
         broad_scope_mode=broad_scope_mode,
         broad_scope_reason=broad_scope_reason,
         target_worktree_path=target_worktree_path,
+        contact_ref=contact_ref,
         schema_version=6,
         **_progress_event_payload(initial_progress),
     )
@@ -3516,7 +3528,8 @@ def create_claim(
         if check_result.hard_conflicts:
             formatted = "; ".join(
                 f"{item.other_agent} ({item.other_scope}: {', '.join(item.overlapping_write_paths)}"
-                f"; owner {describe_session_activity(item.other_session_last_active_at)})"
+                f"; owner {describe_session_activity(item.other_session_last_active_at)}"
+                f"{f'; contact {item.other_contact_ref}' if item.other_contact_ref else ''})"
                 for item in check_result.hard_conflicts
             )
             return False, (
@@ -4712,6 +4725,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--broad-scope-mode", choices=sorted(BROAD_SCOPE_MODES))
     parser.add_argument("--broad-scope-reason")
     parser.add_argument("--target-worktree-path")
+    parser.add_argument(
+        "--contact-ref",
+        help=(
+            "Optional peer-messaging identity for this claim (e.g. a ListAgents name/ref), "
+            "so another session hitting overlapping_write_claim against it can message the "
+            "owner directly instead of only seeing agent/project/scope."
+        ),
+    )
     parser.add_argument("--repo-root", help="Canonical repository root for readiness validation")
     parser.add_argument("--branch", help="Branch for this claim")
     parser.add_argument(
@@ -4928,6 +4949,7 @@ def main(argv: list[str] | None = None) -> int:
                 broad_scope_mode=args.broad_scope_mode,
                 broad_scope_reason=args.broad_scope_reason,
                 target_worktree_path=args.target_worktree_path,
+                contact_ref=args.contact_ref,
                 worktree_path=args.worktree_path,
                 repo_root=args.repo_root,
                 branch=args.branch,
@@ -5132,6 +5154,7 @@ def main(argv: list[str] | None = None) -> int:
                 broad_scope_mode=args.broad_scope_mode,
                 broad_scope_reason=args.broad_scope_reason,
                 target_worktree_path=args.target_worktree_path,
+                contact_ref=args.contact_ref,
                 require_native_session_binding=True,
                 require_native_session_marker=True,
             )

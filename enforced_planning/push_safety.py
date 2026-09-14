@@ -429,6 +429,8 @@ def evaluate_push_safety(
             "other_scope": claim.scope,
             "other_branch": claim.branch,
             "other_claim_type": claim.claim_type,
+            "other_session_id": claim.session_id,
+            "other_contact_ref": claim.contact_ref,
             "overlaps": overlaps,
             "source_file": claim.source_file,
         }
@@ -596,7 +598,10 @@ def evaluate_push_safety(
                     message=(
                         "Changed files overlap another live claim with write ownership. Publication is "
                         "waiting on those paths; this is not evidence that the whole goal "
-                        "is blocked."
+                        "is blocked. Its owner's session_id is in `other_session_id`; if the claim "
+                        "declared `contact_ref`, that peer-messaging identity is in `other_contact_ref` "
+                        "-- check `ListAgents` for a matching entry before treating the owner as "
+                        "unreachable."
                     ),
                     details=claim_details,
                 )

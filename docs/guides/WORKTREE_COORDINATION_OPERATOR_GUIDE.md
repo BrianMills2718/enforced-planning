@@ -31,6 +31,22 @@ The older repo-local `.claude/active-work.yaml` plus legacy
 present in some repos for compatibility. They are not the canonical
 cross-project coordination authority.
 
+### A claim file with invalid YAML does not silently vanish
+
+`_load_claims()` skips a `*.yaml` claim file that fails to parse -- one bad
+file must never take down the read of every other live claim -- but it does
+not do so silently. The first time a process in this run encounters it, it
+warns to stderr, attributed to the exact file and parse error; the file also
+shows up explicitly in `check_coordination_claims.py malformed_claim_files()`
+and in the `malformed_claim_files` field of `--list`/`--check --json` output,
+alongside the existing `unregistered_claim_files` (wrong-extension) surface.
+Real recurrence, twice (2026-08-21, 2026-09-14): an unquoted colon inside a
+multi-line `broader_goal` scalar in a hand-written (non-CLI) claim file. The
+sanctioned CLI write paths (`create_claim`, `session_lifecycle`,
+`session_contracts`) always emit YAML via `yaml.safe_dump` and cannot produce
+this class of file; it only happens when a claim is hand-written outside the
+CLI.
+
 ## Core Model
 
 A **claim** is the canonical ownership record; a **lane** is the bounded work

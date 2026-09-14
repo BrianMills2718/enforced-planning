@@ -5458,6 +5458,74 @@ def test_unregistered_format_claim_files_surface_in_list(
     assert "codex-freeform-claim.md" in captured.err
 
 
+def test_malformed_yaml_claim_file_surfaces_instead_of_vanishing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A claim file with invalid YAML must be reported, not silently dropped.
+
+    Real recurrence, twice: an unquoted colon inside a multi-line
+    `broader_goal` plain scalar in a hand-written (non-CLI) claim file, once
+    2026-08-21 and again 2026-09-14. `_load_claims`'s `except: continue` made
+    the file vanish from every listing with no trace at all -- worse than a
+    loud failure, since nobody investigating a missing claim had any signal
+    one had ever existed. This locks in the fix: the file is still skipped
+    (one bad claim must never take down the whole registry read), but it is
+    now attributed via `malformed_claim_files()` and the `--list`/`--json`
+    surfaces, and warned to stderr the first time a process loads it.
+    """
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    _write_claim(
+        claims_dir,
+        "claude-code_project-meta_main.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2099-01-01T00:00:00+00:00",
+            "expires_at": "2099-01-02T00:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "main",
+            "intent": "test",
+            "claim_type": "program",
+            "status": "active",
+            "schema_version": 2,
+        },
+    )
+    bad_file = claims_dir / "claude-code_project-meta_broken.yaml"
+    bad_file.write_text(
+        "agent: claude-code\n"
+        "broader_goal: we need to build the substrate: to work out the discovery\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(coordination_claims, "_WARNED_MALFORMED_CLAIM_FILES", set())
+
+    malformed = module.malformed_claim_files()
+    assert [Path(entry["path"]).name for entry in malformed] == ["claude-code_project-meta_broken.yaml"]
+    assert "mapping values are not allowed here" in malformed[0]["error"]
+
+    exit_code = module.main(["--list", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert len(payload["claims"]) == 1
+    assert [Path(entry["path"]).name for entry in payload["malformed_claim_files"]] == [
+        "claude-code_project-meta_broken.yaml",
+    ]
+    # The good claim still loaded and the bad file did not crash the read --
+    # this warns to stderr, but the same process already warned above via
+    # malformed_claim_files(), so this call is deduplicated (empty stderr) and
+    # only the JSON payload carries the finding, exactly as intended.
+
+    monkeypatch.setattr(coordination_claims, "_WARNED_MALFORMED_CLAIM_FILES", set())
+    exit_code = module.main(["--list"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "invalid YAML" in captured.err
+    assert "claude-code_project-meta_broken.yaml" in captured.err
+
+
 from enforced_planning import coordination_claims  # noqa: E402
 
 # ---------------------------------------------------------------------------

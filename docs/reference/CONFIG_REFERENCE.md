@@ -116,6 +116,12 @@ setting and prewrite admission ignores it. See the operator guide for semantics.
 | `claims.enforce_in_ci` | bool | `false` | Not enforced by script | No effect |
 | `claims.claims_file` | string | `.claude/active-work.yaml` | Not enforced by script | No effect |
 
+No key here configures the malformed-claim-file diagnostic (a `.yaml` claim
+that fails to parse is always warned about and always surfaced via
+`malformed_claim_files()`/`--list --json`, unconditionally, same as the
+existing `unregistered_claim_files` wrong-extension surface) -- see the
+operator guide's "A claim file with invalid YAML does not silently vanish".
+
 Session lifecycle note: sanctioned session bootstrap and heartbeat do **not**
 require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
 resolve runtime identity through their adapters and populate the same claim and

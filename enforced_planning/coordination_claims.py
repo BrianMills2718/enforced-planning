@@ -2758,8 +2758,32 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
     )
 
 
+#: Paths already warned about in this process, so a hot read path (claim
+#: checks run on nearly every tool call, ecosystem-wide) doesn't spam stderr
+#: once per call for the same corrupt file. A fresh process (new session, new
+#: hook invocation) warns again, which is exactly the point: the corruption is
+#: still there until someone fixes or removes the file.
+_WARNED_MALFORMED_CLAIM_FILES: set[str] = set()
+
+
 def _load_claims(claims_dir: Path | None = None) -> list[ClaimRecord]:
-    """Load live claim files from the configured or explicitly supplied registry."""
+    """Load live claim files from the configured or explicitly supplied registry.
+
+    A claim file that fails to parse as YAML is skipped, not fatal to the rest
+    of the registry -- one bad file must never take down every session's view
+    of every other live claim (the same posture #513 established for
+    filesystem-evidence errors in `_broad_scope_contract_issues`). But a silent
+    `except: continue` here previously made a corrupt claim invisible with no
+    trace at all: it vanished from every listing and conflict check with
+    nothing printed anywhere, which is worse than a loud failure -- nobody
+    investigating "why doesn't my claim show up" or "why did two sessions
+    write overlapping paths" had any signal that a file existed and had been
+    dropped. Observed twice: an unquoted colon inside a multi-line
+    `broader_goal` scalar in a hand-written (non-CLI) claim file broke this
+    exact path, once 2026-08-21 and again 2026-09-14 for the identical reason.
+    Warn to stderr, attributed to the exact file and parse error, the first
+    time this process encounters it.
+    """
     resolved_claims_dir = claims_dir or CLAIMS_DIR
     if not resolved_claims_dir.exists():
         return []
@@ -2768,7 +2792,18 @@ def _load_claims(claims_dir: Path | None = None) -> list[ClaimRecord]:
     for claim_file in resolved_claims_dir.glob("*.yaml"):
         try:
             data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            claim_path_str = str(claim_file)
+            if claim_path_str not in _WARNED_MALFORMED_CLAIM_FILES:
+                _WARNED_MALFORMED_CLAIM_FILES.add(claim_path_str)
+                print(
+                    f"WARNING: coordination claim file {claim_file} is not valid "
+                    f"YAML and is being skipped ({exc}). This claim is invisible "
+                    "to every listing/conflict check until it is fixed or "
+                    "removed; see `malformed_claim_files()` / "
+                    "`--list --json`'s malformed_claim_files field.",
+                    file=sys.stderr,
+                )
             continue
         if not isinstance(data, dict):
             continue
@@ -2797,6 +2832,36 @@ def unregistered_claim_files() -> list[str]:
     return sorted(
         str(path) for path in CLAIMS_DIR.iterdir() if path.is_file() and path.suffix.lower() not in {".yaml", ".yml"}
     )
+
+
+def malformed_claim_files(claims_dir: Path | None = None) -> list[dict[str, str]]:
+    """Return `.yaml` claim-dir files that exist but fail to parse as YAML.
+
+    Companion to `unregistered_claim_files()` for the other way a claim can be
+    invisible to every listing/conflict check: right extension, broken content.
+    `_load_claims()` already warns to stderr the first time a process hits one
+    of these; this gives `--list`/`--check` (both text and `--json`) an
+    explicit, queryable, per-invocation view instead of relying on a reader
+    having seen that one-time stderr line.
+    """
+    resolved_claims_dir = claims_dir or CLAIMS_DIR
+    if not resolved_claims_dir.exists():
+        return []
+    malformed: list[dict[str, str]] = []
+    for claim_file in sorted(resolved_claims_dir.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            malformed.append({"path": str(claim_file), "error": str(exc)})
+            continue
+        if not isinstance(data, dict):
+            malformed.append(
+                {
+                    "path": str(claim_file),
+                    "error": f"parses as YAML but is not a mapping (got {type(data).__name__})",
+                }
+            )
+    return malformed
 
 
 def _claim_filename(agent: str, project: str, scope: str) -> str:
@@ -4796,6 +4861,7 @@ def _render_check_output(
             for claim in claims
         ],
         "unregistered_claim_files": unregistered_claim_files(),
+        "malformed_claim_files": malformed_claim_files(),
     }
     if candidate is not None:
         prospective_claims = [claim for claim in claims if not _same_claim(claim, candidate)] + [candidate]
@@ -4922,6 +4988,15 @@ def main(argv: list[str] | None = None) -> int:
             )
             for path in unregistered:
                 print(f"    {path}", file=sys.stderr)
+        malformed = malformed_claim_files()
+        if malformed:
+            print(
+                f"⚠ {len(malformed)} claim file(s) have invalid YAML — invisible to "
+                "coordination tooling until fixed or removed:",
+                file=sys.stderr,
+            )
+            for entry in malformed:
+                print(f"    {entry['path']}: {entry['error']}", file=sys.stderr)
         if not claims:
             print("No active claims.")
             return 0

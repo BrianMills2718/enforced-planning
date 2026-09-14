@@ -991,3 +991,17 @@ does not prove plan optimality, fleet adoption, automatic semantic judgment,
 WhyGame value, or stable `1.0` guarantees. A project rewrite may use the controls
 that have passed while treating the remaining controls as observations; this
 plan is not a platform-completion gate for that rewrite.
+
+### Post-completion note (2026-09-14)
+
+A bounded, narrow-scope repair to `enforced_planning/coordination_claims.py`
+landed after this plan's completion, within the post-completion provider-repair
+bound this plan already allows (see "Decision" above): `_load_claims()` now
+warns to stderr and exposes a new `malformed_claim_files()` surface, attributed
+to the exact file and parse error, when a `.yaml` claim file fails to parse --
+previously a silent `except: continue` made a corrupt claim vanish from every
+listing with no trace. This does not change the parser, admission model, claim
+seam, or worktree templates this plan defines; it only makes an existing
+failure-to-load path observable instead of silent. See
+`docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`'s "A claim file with
+invalid YAML does not silently vanish" section for the operator-facing detail.

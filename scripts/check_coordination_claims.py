@@ -156,6 +156,12 @@ def unregistered_claim_files() -> list[str]:
     return _impl.unregistered_claim_files()
 
 
+def malformed_claim_files() -> list[dict[str, str]]:
+    """Delegate malformed-YAML claim detection while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.malformed_claim_files()
+
+
 def prune_expired(*args: Any, **kwargs: Any) -> tuple[int, list[str]]:
     """Delegate claim pruning while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()

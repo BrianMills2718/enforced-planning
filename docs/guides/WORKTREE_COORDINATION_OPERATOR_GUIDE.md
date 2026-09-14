@@ -20,6 +20,7 @@ coordination. Other documentation has narrower roles:
 | Live ownership | `~/.claude/coordination/claims/*.yaml` |
 | Hook-optimized projection | `~/.claude/coordination/prewrite-authority-v1.json` |
 | Current-work readout | `python scripts/meta/check_coordination_claims.py --list --json` |
+| Is another agent's claimed work still actually covered? | `python scripts/meta/check_coordination_claims.py --list-stale [--json]`, read-only |
 | Consistency audit | `python scripts/check_coordination_consistency.py --repo PROJECT=/absolute/repo/path --verify-prewrite-projection --json` |
 | Repository policy | `meta-process.yaml` |
 | Worktree lifecycle | `make worktree*`, `scripts/meta/check_coordination_claims.py`, and `enforced_planning/worktree_lifecycle.yaml` |
@@ -967,6 +968,17 @@ canonical stale diagnostics are:
 - `stale_session_heartbeat`
 
 Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
+
+**Checking this is read-only; cleaning it up is not.** Both `--list --json`
+(every claim's `health_status`/`liveness_issues`) and the dedicated
+`--list-stale [--json]` compute these same diagnostics without deleting
+anything. `--prune-stale` is the only command that mutates on this signal, and
+it deletes the matching claim files as it reports them -- that conflates
+*checking whether another agent's claimed work is still covered* with
+*discarding the record that it was ever claimed*. Before assuming a claim is
+abandoned (spend, a human-gated merge, or any other consequential "the other
+agent is gone, I'll take over" decision), run `--list-stale` first; do not
+reach for `--prune-stale` just to see the answer.
 
 `claim_lifecycle_issues()` also reports `missing_tracker_on_disk` — an
 explicitly *set* `tracker_path` (state 2 below) whose file does not exist; an

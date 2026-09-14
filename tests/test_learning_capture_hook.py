@@ -53,6 +53,7 @@ def run_hook(
     correction_mode: str = "off",
     extra_args: list[str] | None = None,
     transcript_path: str | None = None,
+    stop_hook_active: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Run one native-shaped Stop event through the hook."""
     stop_payload: dict[str, object] = {
@@ -60,6 +61,8 @@ def run_hook(
         "hook_event_name": "Stop",
         "last_assistant_message": report,
     }
+    if stop_hook_active:
+        stop_payload["stop_hook_active"] = True
     if transcript_path is not None:
         stop_payload["transcript_path"] = transcript_path
     return subprocess.run(
@@ -923,33 +926,57 @@ def test_no_marker_prose_still_governs_unchanged(tmp_path: Path) -> None:
     assert receipts(tmp_path)[0]["decision"] == "block_unreferenced_decline"
 
 
-def test_stop_hook_active_ends_the_turn(monkeypatch, tmp_path: Path) -> None:
-    """A re-fired Stop must not refuse the same report again.
+def test_stop_hook_active_still_blocks_when_nothing_changed(tmp_path: Path) -> None:
+    """A re-fired Stop must re-check the fresh report, not blanket-allow.
 
-    The agent has already been told what its report is missing; refusing it a
-    second time cannot change the report and only deadlocks the session.
+    Regression for the single-shot re-fire gap (Plan #135,
+    135_correction_learning_gate_contest_design.md section 3): the hook used
+    to allow unconditionally on stop_hook_active, discarding this signal on
+    every forced re-fire even though the flagged problem was never fixed.
     """
-    import io
-    import json
-    import sys
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.",
+        stop_hook_active=True,
+    )
 
-    from scripts import learning_capture_hook
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert receipts(tmp_path)[0]["decision"] == "block_missing"
 
-    payload = {
-        "hook_event_name": "Stop",
-        "session_id": "s",
-        "stop_hook_active": True,
-        "last_assistant_message": "a report with no Learnings line at all",
-    }
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
 
-    def unexpected(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("repeat Stop reached fallible receipt state")
+def test_stop_hook_active_allows_once_learning_is_recorded(tmp_path: Path) -> None:
+    """A re-fired Stop must allow once the forced continuation fixes it."""
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n- **Learnings** — Recorded — lrn-20260914T000000000000Z-abc123.",
+        stop_hook_active=True,
+    )
 
-    monkeypatch.setattr(learning_capture_hook, "start_hook_invocation", unexpected)
-    assert learning_capture_hook.main(
-        ["--agent", "claude-code", "--hook-receipt-dir", str(tmp_path)]
-    ) == 0
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert receipts(tmp_path)[0]["decision"] == "recorded"
+
+
+def test_stop_hook_active_still_blocks_unresolved_correction(tmp_path: Path) -> None:
+    """The correction-mode block must survive a re-fire, not silently pass.
+
+    This is the exact motivating bug: correction-mode's ``block`` decision
+    only ever forced one nudge because the re-fire path allowed unconditionally
+    regardless of whether the correction was actually recorded or contested.
+    """
+    write_correction_receipt(tmp_path, status="correction_unresolved")
+    result = run_hook(
+        tmp_path,
+        "- **Done** — Implemented.\n- **Learnings** — None because no reusable finding emerged.",
+        correction_mode="block",
+        stop_hook_active=True,
+    )
+
+    payload = json.loads(result.stdout)
+    assert payload["decision"] == "block"
+    assert "same-session immutable learning" in payload["reason"]
+    assert receipts(tmp_path)[0]["decision"] == "block_unresolved_correction"
 
 
 _MINIMAL_COMPLETE_REPORT = (

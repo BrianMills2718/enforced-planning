@@ -73,12 +73,20 @@ class CorrectionAuditReceiptV1(StrictModel):
         "no_corrections",
         "correction_unresolved",
         "correction_resolved",
+        "correction_contest_accepted",
         "audit_error",
     ]
     correction_event_hashes: list[str] = Field(default_factory=list)
     rationale_hashes: list[str] = Field(default_factory=list)
     learning_ids: list[str] = Field(default_factory=list)
     error_code: str | None = None
+    # Populated only by the contest/rebuttal re-fire path (Plan #135 design,
+    # 135_correction_learning_gate_contest_design.md section 2). Slice 1 adds
+    # the schema; the adjudication call that produces non-default values here
+    # is a later slice.
+    contest_rejection_reason_hash: str | None = None
+    contest_attempt_count: int = Field(default=0, ge=0)
+    contest_rationale_hash: str | None = None
 
     @model_validator(mode="after")
     def coherent_status(self) -> CorrectionAuditReceiptV1:
@@ -91,7 +99,11 @@ class CorrectionAuditReceiptV1(StrictModel):
             correction_count or self.rationale_hashes or self.learning_ids
         ):
             raise ValueError(f"{self.status} cannot carry correction evidence")
-        if self.status in {"correction_unresolved", "correction_resolved"} and not correction_count:
+        if self.status in {
+            "correction_unresolved",
+            "correction_resolved",
+            "correction_contest_accepted",
+        } and not correction_count:
             raise ValueError(f"{self.status} requires correction events")
         if correction_count and len(self.rationale_hashes) != correction_count:
             raise ValueError("correction and rationale hash counts must match")
@@ -103,6 +115,23 @@ class CorrectionAuditReceiptV1(StrictModel):
             raise ValueError("audit_error requires error_code")
         if self.status != "audit_error" and self.error_code is not None:
             raise ValueError("only audit_error may carry error_code")
+        if self.status != "correction_unresolved" and self.contest_rejection_reason_hash is not None:
+            raise ValueError("contest_rejection_reason_hash only applies to correction_unresolved")
+        if self.status == "correction_contest_accepted":
+            if self.learning_ids:
+                raise ValueError("correction_contest_accepted cannot carry learning_ids")
+            if not self.contest_rationale_hash:
+                raise ValueError("correction_contest_accepted requires contest_rationale_hash")
+        elif self.contest_rationale_hash is not None:
+            raise ValueError("contest_rationale_hash only applies to correction_contest_accepted")
+        if self.contest_attempt_count and self.status not in {
+            "correction_unresolved",
+            "correction_contest_accepted",
+        }:
+            raise ValueError(
+                "contest_attempt_count only applies to correction_unresolved or "
+                "correction_contest_accepted"
+            )
         return self
 
 

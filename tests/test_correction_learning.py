@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from pydantic import ValidationError
+
 from enforced_planning.correction_learning import (
+    CorrectionAuditReceiptV1,
     CorrectionClassification,
     CorrectionVerdict,
     NativeCorrectionCorpusV1,
@@ -672,3 +675,86 @@ def test_frozen_sonnet_classifier_pilot() -> None:
     assert false_positives == 0
     assert true_positives / len(positives) >= 0.9
     assert boundary_positives == 0
+
+
+def _base_receipt_kwargs() -> dict[str, object]:
+    return {
+        "agent": "codex",
+        "session_id": "session-123",
+        "analyzed_at": datetime.fromisoformat("2026-09-14T18:00:00Z"),
+    }
+
+
+def test_correction_contest_accepted_requires_rationale_hash() -> None:
+    with pytest.raises(ValidationError, match="requires contest_rationale_hash"):
+        CorrectionAuditReceiptV1(
+            **_base_receipt_kwargs(),
+            status="correction_contest_accepted",
+            correction_event_hashes=["corr_a"],
+            rationale_hashes=["reason_a"],
+        )
+
+
+def test_correction_contest_accepted_cannot_carry_learning_ids() -> None:
+    with pytest.raises(ValidationError, match="cannot carry learning_ids"):
+        CorrectionAuditReceiptV1(
+            **_base_receipt_kwargs(),
+            status="correction_contest_accepted",
+            correction_event_hashes=["corr_a"],
+            rationale_hashes=["reason_a"],
+            learning_ids=["lrn-x"],
+            contest_rationale_hash="hash_x",
+        )
+
+
+def test_correction_contest_accepted_is_valid_with_rationale_hash() -> None:
+    receipt = CorrectionAuditReceiptV1(
+        **_base_receipt_kwargs(),
+        status="correction_contest_accepted",
+        correction_event_hashes=["corr_a"],
+        rationale_hashes=["reason_a"],
+        contest_rationale_hash="hash_x",
+    )
+    assert receipt.status == "correction_contest_accepted"
+
+
+def test_contest_rejection_reason_hash_only_valid_on_unresolved() -> None:
+    with pytest.raises(ValidationError, match="only applies to correction_unresolved"):
+        CorrectionAuditReceiptV1(
+            **_base_receipt_kwargs(),
+            status="no_corrections",
+            contest_rejection_reason_hash="hash_y",
+        )
+
+
+def test_correction_unresolved_may_carry_a_rejected_contest() -> None:
+    receipt = CorrectionAuditReceiptV1(
+        **_base_receipt_kwargs(),
+        status="correction_unresolved",
+        correction_event_hashes=["corr_a"],
+        rationale_hashes=["reason_a"],
+        contest_rejection_reason_hash="hash_y",
+        contest_attempt_count=1,
+    )
+    assert receipt.contest_attempt_count == 1
+
+
+def test_contest_attempt_count_only_valid_on_unresolved_or_contest_accepted() -> None:
+    with pytest.raises(ValidationError, match="only applies to correction_unresolved"):
+        CorrectionAuditReceiptV1(
+            **_base_receipt_kwargs(),
+            status="no_corrections",
+            contest_attempt_count=1,
+        )
+
+
+def test_contest_rationale_hash_only_valid_on_contest_accepted() -> None:
+    with pytest.raises(ValidationError, match="only applies to correction_contest_accepted"):
+        CorrectionAuditReceiptV1(
+            **_base_receipt_kwargs(),
+            status="correction_resolved",
+            correction_event_hashes=["corr_a"],
+            rationale_hashes=["reason_a"],
+            learning_ids=["lrn-a"],
+            contest_rationale_hash="hash_x",
+        )

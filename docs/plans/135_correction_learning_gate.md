@@ -716,3 +716,19 @@ Source evidence at this revision: 40 focused learning/prose-safety tests and
 the framework self-test pass. A native-shaped Codex prompt replay emitted the
 additional context and a privacy-reduced receipt with no retained prompt prose.
 This proves the adapter boundary only; installed-host adoption remains pending.
+
+### 2026-09-14: contest/rebuttal design increment selected (Company Planning)
+
+Brian supplied the human decision this plan's own Reassessment Contract was
+waiting on: accept a materially lower per-call precision bar, because a new
+design constraint (the blocked agent can contest a verdict rather than being
+silently stuck) bounds the cost of a wrong classifier call. This does not
+retry the rejected classifier unchanged -- it changes what "good enough"
+means for it, by adding a real recourse path.
+
+Selection recorded via Company Planning's `initiative-roadmap` skill:
+[`135_correction_learning_gate_roadmap_goal_handoff.json`](135_correction_learning_gate_roadmap_goal_handoff.json)
+(`project_id: correction-mode-contest-gate`, `goal_id:
+design-contest-rebuttal-loop`). Routed to `bounded-design` for the contest/
+rebuttal mechanism's design ambiguity (new receipt status, adjudication flow,
+circuit-breaker bound) -- not a fresh classifier-accuracy attempt.

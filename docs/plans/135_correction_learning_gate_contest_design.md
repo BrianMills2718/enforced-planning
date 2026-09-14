@@ -108,32 +108,53 @@ This closes the gap found in section 1 without needing the offline
 `correction_learning_audit.py` sweep to catch up first: the common "agent
 complied" case is verified the same turn, synchronously, for free.
 
-## 4. Circuit breaker (resolves the `circuit-breaker-bound` material unknown)
+## 4. Circuit breaker — revised 2026-09-14 with real measured evidence
 
-**Recommendation: one contest attempt per flagged event.** After a rejected
-contest, the block re-fires with `contest_attempt_count == 1` and the
-message no longer offers a second contest — it states plainly that the
-rebuttal was reviewed and rejected, why, and that recording the learning is
-now the only path to end the turn. This mirrors an ordinary one-appeal
-process rather than an unbounded negotiation, and keeps the worst case
-bounded at exactly two blocks (original + one rejected contest) before the
-gate stops offering alternatives.
+**The `harness-refire-ceiling` unknown is now resolved, empirically, not
+assumed.** Isolated test: a throwaway directory with its own
+`.claude/settings.local.json` registering a Stop hook that unconditionally
+returns `block`, run via `claude -p "say hi"` under a 60-second wall-clock
+safety bound. Reproduced identically on two independent runs:
 
-This is a real product/policy choice, not a derivable fact — flagged here
-for Brian's disposition (`accept | revise | reject | delegate`) rather than
-silently assumed. The alternative (allow N attempts, or allow escalation to
-Brian via `coordination_messages.py` after the bound) is a reasonable
-revision if one contest proves too tight in practice; recommend shipping
-with one and revisiting from observed friction, not from a guess now.
+```
+fire=1 stop_hook_active=False
+fire=2 stop_hook_active=True
+fire=3 stop_hook_active=True
+fire=4 stop_hook_active=True
+```
 
-**Investigate, don't assume:** whether Claude Code's own Stop-hook re-fire
-mechanism has an independent hard ceiling on how many times a single Stop
-event can be blocked and retried before the harness itself gives up. If
-one exists, that is an additional, harness-level backstop this design
-should not duplicate or exceed — flagged as `contest-adjudication-model-and-cost`'s
-sibling unknown, `harness-refire-ceiling`, treatment `investigate`, to be
-settled with a real test rather than assumed from documentation, before
-implementation.
+The process exited cleanly (exit 0, no model output, 27.9s wall time on the
+timed run — well under the 60s bound, confirming a natural harness exit,
+not a timeout kill). **Claude Code's own harness hard-caps at exactly 3
+forced re-fires (4 Stop events total) before giving up silently: no error,
+no output, nothing that would tell a caller why nothing happened.**
+
+This also corrects an assumption in section 3: `stop_hook_active` stays
+`true` across *every* re-fire in the chain, not just the second one. A gate
+that does `if stop_hook_active: return 0` (today's behavior) discards this
+signal on all three re-fires, not only the first.
+
+**Revised recommendation, per Brian's explicit disposition (2026-09-14):
+do not cap contest attempts at one.** Brian's stated reasoning: a bound of
+one gives the tuning feedback loop too little signal to optimize from.
+Start high and tune down from observed friction, not up from an
+under-informed guess. But "high" is now bounded by a real number, not
+arbitrary: **cap at 3 contest attempts**, matching the harness's own
+measured ceiling exactly. Anything above 3 is not actually "higher" — the
+harness silently exits at the 4th Stop event regardless of what
+`contest_attempt_count` says, so a configured limit of, say, 10 would
+produce indistinguishable silent harness give-ups mixed in with genuine
+"ran out of attempts" blocks, which would corrupt exactly the tuning
+signal Brian wants to collect. 3 is the highest value that stays fully
+inside the design's own control.
+
+Each of the 3 allowed attempts should log a durable, distinguishable event
+(via `coordination_messages.py` or the existing receipt/telemetry path) so
+the promised feedback loop has real data to tune from: how often 1 attempt
+would have sufficed, how often it took 2 or 3, and how often even 3 wasn't
+enough (which would be the actual signal to consider raising further,
+bounded by whatever new harness behavior a future test would need to
+re-verify at that point).
 
 ## 5. The adjudication call (justifies itself per the LLM-systems test)
 

@@ -82,6 +82,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "existing installs and tests are unaffected until explicitly opted in."
         ),
     )
+    parser.add_argument(
+        "--check-implicit-completion",
+        action="store_true",
+        help=(
+            "On a report classified not_completed_work (no Done marker), emit a "
+            "non-blocking systemMessage if the transcript shows this turn "
+            "committed, pushed, or merged (a Bash call containing 'git commit', "
+            "'git push', or 'gh pr merge') -- catching a completed-work turn "
+            "that omitted the closing format entirely, which --check-full-format "
+            "alone cannot see (it only runs when a report already passed the "
+            "Done-marker gate). Deliberately narrower than 'any tool used this "
+            "turn': replayed against 489 real historical turns, that broader "
+            "signal fired on 73% of them. Never blocks; default off. Silently "
+            "skips when transcript_path is missing or unreadable."
+        ),
+    )
     parser.add_argument("--codex-config", type=Path, default=DEFAULT_CODEX_CONFIG)
     parser.add_argument("--claude-settings", type=Path, default=DEFAULT_CLAUDE_SETTINGS)
     parser.add_argument("--openclaw-runner", type=Path, default=DEFAULT_OPENCLAW_RUNNER)
@@ -633,6 +649,111 @@ def classify_report(report: str) -> tuple[str, str]:
     )
 
 
+# enforced-planning/project-meta closeout-disposition-must-cover-ask-only-turns
+# (proposal filed 2026-09-02, strengthened 2026-09-14): classify_report()'s
+# "not_completed_work" branch fires whenever a response has no literal Done
+# marker -- including a completed-work turn that simply never used that exact
+# marker syntax. That branch skips every downstream check, so such a turn is
+# currently invisible to the whole mechanism, not merely exempt from one
+# field. This detector adds an independent, orthogonal signal so main() can
+# still raise a (non-blocking) flag on that case. It intentionally does not
+# touch classify_report() itself: that function stays a pure string->decision
+# mapping, unit-testable without a transcript fixture, matching how every
+# other check in this file is structured.
+#
+# First cut used "any tool beyond Read/Grep/Glob/WebFetch/WebSearch" as the
+# signal and was replaced before landing: replayed against 15 real historical
+# transcripts (489 real turns), it fired on 324/442 (73%) of
+# not_completed_work turns -- almost every ordinary mid-task turn touches a
+# file or runs a command, so that signal mostly detects "did anything at
+# all," not "completed work that needed a closing report." CLAUDE.md's own
+# framing of the completion boundary is narrower: "Commit coherent authorized
+# increments and push recoverable checkpoints" -- a durable, published change,
+# not any tool call. Scoped to that instead: a git commit, a git push, or a
+# PR merge in the current turn.
+_DURABLE_ACTION_BASH_MARKERS = ("git commit", "git push", "gh pr merge")
+
+
+def _is_tool_result_only_content(content: object) -> bool:
+    """Return whether a transcript event's message content is pure tool output.
+
+    A real user turn's content is a string, or a list containing at least one
+    non-tool_result block (text, image, document). A list of nothing but
+    tool_result blocks is the transcript's own representation of tool output
+    being handed back to the assistant, not a new prompt -- see the Claude
+    Code transcript schema `assertion_evidence_gate.py` (agent-skills) already
+    parses the same way for a different purpose.
+    """
+    return isinstance(content, list) and bool(content) and all(
+        isinstance(item, dict) and item.get("type") == "tool_result" for item in content
+    )
+
+
+def _bash_command_took_durable_action(command: object) -> bool:
+    """Return whether a Bash tool_use's command committed, pushed, or merged.
+
+    Substring match, not a shell parse -- deliberately coarse. A false
+    positive (e.g. the phrase "git commit" inside a quoted string being
+    grepped for) only produces an unwanted advisory nudge, never a block; a
+    false negative just means this specific turn goes unflagged, same as
+    today. Precision is not worth the complexity for a non-blocking signal.
+    """
+    return isinstance(command, str) and any(
+        marker in command for marker in _DURABLE_ACTION_BASH_MARKERS
+    )
+
+
+def turn_took_durable_action(transcript_path: str | Path | None) -> bool | None:
+    """Return whether the turn since the last real user prompt committed,
+    pushed, or merged (a Bash tool_use containing "git commit", "git push",
+    or "gh pr merge").
+
+    Returns ``None`` when the transcript is missing, unreadable, or contains
+    no parseable JSON lines -- callers must treat that as "unknown, do not
+    flag" and never silently coerce it to False.
+    """
+    if not transcript_path:
+        return None
+    try:
+        raw = Path(transcript_path).expanduser().read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    events: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    if not events:
+        return None
+    boundary = 0
+    for index, event in enumerate(events):
+        if event.get("type") != "user":
+            continue
+        content = event.get("message", {}).get("content")
+        if not _is_tool_result_only_content(content):
+            boundary = index
+    took_action = False
+    for event in events[boundary:]:
+        if event.get("type") != "assistant":
+            continue
+        content = event.get("message", {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            if block.get("name") != "Bash":
+                continue
+            if _bash_command_took_durable_action(block.get("input", {}).get("command")):
+                took_action = True
+    return took_action
+
+
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     """Write one private receipt atomically."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -865,6 +986,16 @@ def main(argv: list[str] | None = None) -> int:
                 if advisories:
                     output["systemMessage"] = (
                         " ".join(advisories) + " This is advisory only -- it never blocks the turn."
+                    )
+            if args.check_implicit_completion and decision == "not_completed_work":
+                if turn_took_durable_action(payload.get("transcript_path")):
+                    output["systemMessage"] = (
+                        "This turn committed, pushed, or merged but the response has no "
+                        "**Done** marker, so the mandated closing-format check never ran on "
+                        "it. If this was completed work, add the closing format (Session "
+                        "goal/Active subgoals/Done/Policy/Concerns/Learnings/Decisions/"
+                        "Recommended next/Need anything from human). This is advisory only -- "
+                        "it never blocks the turn."
                     )
             if output:
                 print(json.dumps(output, sort_keys=True))

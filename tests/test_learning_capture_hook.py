@@ -52,8 +52,16 @@ def run_hook(
     agent: str = "codex",
     correction_mode: str = "off",
     extra_args: list[str] | None = None,
+    transcript_path: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one native-shaped Stop event through the hook."""
+    stop_payload: dict[str, object] = {
+        "session_id": "session-123",
+        "hook_event_name": "Stop",
+        "last_assistant_message": report,
+    }
+    if transcript_path is not None:
+        stop_payload["transcript_path"] = transcript_path
     return subprocess.run(
         [
             "python3",
@@ -70,13 +78,7 @@ def run_hook(
             str(tmp_path / "correction-receipts"),
             *(extra_args or []),
         ],
-        input=json.dumps(
-            {
-                "session_id": "session-123",
-                "hook_event_name": "Stop",
-                "last_assistant_message": report,
-            }
-        ),
+        input=json.dumps(stop_payload),
         capture_output=True,
         text=True,
         check=False,
@@ -1084,3 +1086,222 @@ def test_check_full_format_warns_on_none_subgoals_but_open_recommendation(
     payload = json.loads(result.stdout)
     assert "decision" not in payload
     assert "disagree" in payload["systemMessage"]
+
+
+# --- --check-implicit-completion -------------------------------------------
+#
+# closeout-disposition-must-cover-ask-only-turns (project-meta policy
+# proposal, filed 2026-09-02, strengthened 2026-09-14): --check-full-format
+# only ever runs once a report has already passed classify_report()'s
+# Done-marker gate. A completed-work turn that omits the closing format
+# entirely -- no Done marker at all -- is classified `not_completed_work` and
+# never reaches --check-full-format. These tests cover the independent,
+# transcript-based signal that catches that case instead.
+
+def _transcript_event(event_type: str, content: object) -> dict[str, object]:
+    return {"type": event_type, "message": {"content": content}}
+
+
+def _write_transcript(tmp_path: Path, events: list[dict[str, object]], name: str = "transcript.jsonl") -> str:
+    path = tmp_path / name
+    path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def _bash_event(command: str) -> dict[str, object]:
+    return _transcript_event(
+        "assistant", [{"type": "tool_use", "name": "Bash", "input": {"command": command}}]
+    )
+
+
+def test_turn_took_durable_action_true_on_git_commit(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "ship the fix"),
+            _bash_event('git commit -m "fix the bug"'),
+            _transcript_event("user", [{"type": "tool_result", "content": "ok"}]),
+        ],
+    )
+
+    assert learning_capture_hook.turn_took_durable_action(transcript) is True
+
+
+def test_turn_took_durable_action_true_on_gh_pr_merge(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "merge it"),
+            _bash_event("gh pr merge 514 --squash"),
+        ],
+    )
+
+    assert learning_capture_hook.turn_took_durable_action(transcript) is True
+
+
+def test_turn_took_durable_action_false_on_ordinary_edits_and_reads(tmp_path: Path) -> None:
+    """The narrowed signal: editing files, reading them, and running an
+    unrelated Bash command (e.g. a test run) is NOT a durable action -- this
+    is the exact distinction the replay against 489 real historical turns
+    showed was necessary (the broader 'any tool use' signal fired on 73% of
+    not_completed_work turns)."""
+    from scripts import learning_capture_hook
+
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "fix the bug and run the tests"),
+            _transcript_event(
+                "assistant",
+                [
+                    {"type": "tool_use", "name": "Edit", "input": {}},
+                    {"type": "tool_use", "name": "Write", "input": {}},
+                    {"type": "tool_use", "name": "Read", "input": {}},
+                    {"type": "tool_use", "name": "Grep", "input": {}},
+                ],
+            ),
+            _bash_event("python -m pytest -q"),
+            _transcript_event("user", [{"type": "tool_result", "content": "5 passed"}]),
+            _transcript_event("assistant", [{"type": "text", "text": "all green"}]),
+        ],
+    )
+
+    assert learning_capture_hook.turn_took_durable_action(transcript) is False
+
+
+def test_turn_took_durable_action_scopes_to_current_turn_only(tmp_path: Path) -> None:
+    """A commit in an EARLIER turn must not leak into the current one."""
+    from scripts import learning_capture_hook
+
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "commit the fix"),
+            _bash_event('git commit -m "fix"'),
+            _transcript_event("user", [{"type": "tool_result", "content": "done"}]),
+            _transcript_event("assistant", [{"type": "text", "text": "done"}]),
+            # A new real user prompt starts a new turn boundary.
+            _transcript_event("user", "now just tell me the time"),
+            _transcript_event("assistant", [{"type": "text", "text": "it's 5pm"}]),
+        ],
+    )
+
+    assert learning_capture_hook.turn_took_durable_action(transcript) is False
+
+
+def test_turn_took_durable_action_none_on_missing_file(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    assert learning_capture_hook.turn_took_durable_action(str(tmp_path / "does-not-exist.jsonl")) is None
+
+
+def test_turn_took_durable_action_none_on_no_path(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    assert learning_capture_hook.turn_took_durable_action(None) is None
+
+
+def test_check_implicit_completion_off_by_default(tmp_path: Path) -> None:
+    """The new check is opt-in, matching --check-full-format's own rollout posture."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "ship it"),
+            _bash_event('git commit -m "ship it"'),
+        ],
+    )
+    result = run_hook(
+        tmp_path,
+        "Done, all set.",
+        transcript_path=transcript,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_check_implicit_completion_warns_on_real_commit_with_no_done_marker(
+    tmp_path: Path,
+) -> None:
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "fix the failing test"),
+            _transcript_event("assistant", [{"type": "tool_use", "name": "Edit", "input": {}}]),
+            _bash_event('git commit -m "fix the assertion"'),
+            _transcript_event("user", [{"type": "tool_result", "content": "ok"}]),
+        ],
+    )
+    result = run_hook(
+        tmp_path,
+        "Fixed it -- the assertion was checking the wrong field.",
+        extra_args=["--check-implicit-completion"],
+        transcript_path=transcript,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "decision" not in payload  # advisory only, never blocks
+    assert "no **Done** marker" in payload["systemMessage"]
+    assert "never blocks" in payload["systemMessage"]
+
+
+def test_check_implicit_completion_silent_on_ordinary_edit_turn(tmp_path: Path) -> None:
+    """A turn that edited files and ran tests, but never committed, is not
+    flagged -- editing/reading/testing alone is not the signal."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "try fixing this"),
+            _transcript_event("assistant", [{"type": "tool_use", "name": "Edit", "input": {}}]),
+            _bash_event("python -m pytest -q"),
+        ],
+    )
+    result = run_hook(
+        tmp_path,
+        "Tried a fix, tests still failing, will try a different approach.",
+        extra_args=["--check-implicit-completion"],
+        transcript_path=transcript,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_check_implicit_completion_silent_when_transcript_path_missing(tmp_path: Path) -> None:
+    """No transcript_path in the payload: skip silently, never crash the hook."""
+    result = run_hook(
+        tmp_path,
+        "Fixed it.",
+        extra_args=["--check-implicit-completion"],
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_check_implicit_completion_does_not_fire_when_done_marker_present(
+    tmp_path: Path,
+) -> None:
+    """A report that already has a Done marker is not this check's job --
+    that path is --check-full-format's, and the two must not double-fire."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _transcript_event("user", "fix it"),
+            _bash_event('git commit -m "fix"'),
+        ],
+    )
+    result = run_hook(
+        tmp_path,
+        _MINIMAL_COMPLETE_REPORT,
+        extra_args=["--check-implicit-completion"],
+        transcript_path=transcript,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""

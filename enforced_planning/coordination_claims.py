@@ -2263,13 +2263,24 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         if possible_broad:
             issues.append("legacy_broad_scope_unclassified")
         return issues
-    broad_paths = classify_broad_write_paths(claim.repo_root, claim.write_paths)
+    try:
+        broad_paths = classify_broad_write_paths(claim.repo_root, claim.write_paths)
+    except ValueError as exc:
+        # A live claim's repo_root/worktree commonly stops existing on disk
+        # long before its claim file is cleaned up (see missing_worktree_on_disk
+        # in claim_lifecycle_issues). classify_broad_write_paths cannot resolve
+        # broad-vs-narrow from filesystem evidence that is no longer there, and
+        # every caller of this function -- including read-only --list/--check
+        # rendering across the whole registry -- must survive one such claim
+        # rather than crash on it.
+        issues.append(str(exc).split(":", 1)[0])
+        broad_paths = None
     if broad_paths:
         if mode not in BROAD_SCOPE_MODES:
             issues.append("broad_scope_mode_required")
         if not reason:
             issues.append("broad_scope_reason_required")
-    elif mode is not None or reason is not None:
+    elif broad_paths is not None and (mode is not None or reason is not None):
         issues.append("broad scope metadata is forbidden when no broad path remains")
     if mode == "bootstrap":
         if not claim.target_worktree_path:

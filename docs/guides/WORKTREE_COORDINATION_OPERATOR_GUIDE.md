@@ -986,6 +986,17 @@ abandoned (spend, a human-gated merge, or any other consequential "the other
 agent is gone, I'll take over" decision), run `--list-stale` first; do not
 reach for `--prune-stale` just to see the answer.
 
+**A `missing_worktree_on_disk` claim used to be able to crash both readouts
+outright.** `--list --json` and `--list-stale` both classify every claim's
+write paths as broad or narrow, and that classification legitimately raises
+when it cannot resolve the filesystem evidence -- and a claim whose
+worktree/repo_root has already disappeared (the exact, normal case this
+section describes) is the most common way to hit that. Until this was fixed,
+one such claim anywhere in the registry took down the whole `--list --json`
+render with an uncaught `ValueError`, not just that claim's row. Both readouts
+now degrade to reporting the ambiguity as an ordinary issue string on that one
+claim instead.
+
 `claim_lifecycle_issues()` also reports `missing_tracker_on_disk` — an
 explicitly *set* `tracker_path` (state 2 below) whose file does not exist; an
 unset `tracker_path` (state 1) is not flagged. Unlike the diagnostics above,

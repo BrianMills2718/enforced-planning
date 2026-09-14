@@ -103,6 +103,7 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     # hook.  Install the package marker so the consumer-local runtime owns the
     # import boundary.
     "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/blocker_policy.py": "enforced_planning/blocker_policy.py",
     "enforced_planning/claim_bootstrap.py": "enforced_planning/claim_bootstrap.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",

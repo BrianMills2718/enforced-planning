@@ -864,3 +864,56 @@ def test_generate_hook_wiring_fails_when_target_python_lacks_yaml(tmp_path: Path
 
     assert result.returncode == 1
     assert "cannot import PyYAML" in result.stderr
+
+
+def test_installed_prewrite_runtime_includes_its_enforced_planning_import_closure() -> None:
+    """Every enforced_planning module the installed prewrite runtime imports is installed.
+
+    Observed 2026-09-14: session_lifecycle.py imported blocker_policy.py, which the
+    prewrite support map omitted, so the installed gate crashed with
+    ModuleNotFoundError whenever it reached claim_bootstrap's recovery path.
+    """
+    import ast
+
+    sys.path.insert(0, str(PROJECT_META_ROOT))
+    from enforced_planning import hook_wiring
+
+    installed = {
+        **hook_wiring.HOOK_FILES,
+        **hook_wiring.SUPPORT_FILES,
+        **hook_wiring.PREWRITE_HOOK_FILES,
+        **hook_wiring.PREWRITE_SUPPORT_FILES,
+    }
+    sources = set(installed.values())
+
+    def local_imports(relpath: str) -> set[str]:
+        tree = ast.parse((PROJECT_META_ROOT / relpath).read_text(encoding="utf-8"))
+        found: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] == "enforced_planning":
+                if node.module == "enforced_planning":
+                    found |= {f"enforced_planning/{alias.name}.py" for alias in node.names}
+                else:
+                    found.add(node.module.replace(".", "/") + ".py")
+            elif isinstance(node, ast.Import):
+                found |= {
+                    alias.name.replace(".", "/") + ".py"
+                    for alias in node.names
+                    if alias.name.startswith("enforced_planning.")
+                }
+        return {path for path in found if (PROJECT_META_ROOT / path).is_file()}
+
+    missing: set[str] = set()
+    seen: set[str] = set()
+    pending = [path for path in sources if path.endswith(".py")]
+    while pending:
+        path = pending.pop()
+        if path in seen or not (PROJECT_META_ROOT / path).is_file():
+            continue
+        seen.add(path)
+        for dependency in local_imports(path):
+            if dependency not in sources:
+                missing.add(dependency)
+            pending.append(dependency)
+    assert len(seen) > 20, "closure walk read too few modules to be meaningful"
+    assert not missing, f"prewrite runtime imports modules it does not install: {sorted(missing)}"

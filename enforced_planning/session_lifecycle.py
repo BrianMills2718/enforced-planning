@@ -435,7 +435,9 @@ def _session_ended_reconciliation_tracker(
 def _validate_missing_worktree_reconciliation(
     *,
     claim: coordination_claims.ClaimRecord,
+    claim_file: Path,
     expected_tracker_sha256: str | None,
+    expected_claim_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Fail closed before reconciling one preserved lane with no worktree."""
 
@@ -451,6 +453,28 @@ def _validate_missing_worktree_reconciliation(
             "Missing-worktree reconciliation rejects an existing recorded worktree; "
             "use ordinary sanctioned closeout instead."
         )
+    if not claim.tracker_path and not expected_tracker_sha256 and not _exact_tracker_candidates(claim):
+        # A lane created by a direct claim never had a tracker (tracker_path
+        # state 1). Bind the exact claim bytes instead; the ordinary
+        # merge/recovery preflight still runs before any mutation.
+        expected_claim = (expected_claim_sha256 or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_claim):
+            raise ValueError(
+                "Tracker-less missing-worktree reconciliation requires --claim-sha256 as a SHA-256 digest."
+            )
+        if _claim_sha256(claim_file) != expected_claim:
+            raise ValueError(
+                "Missing-worktree reconciliation claim digest mismatch; preserve the lane and regenerate evidence."
+            )
+        return {
+            "schema_version": "1.0",
+            "claim_status_before": claim.status,
+            "recorded_worktree_path": str(recorded_worktree),
+            "tracker_path": None,
+            "tracker_sha256": None,
+            "claim_sha256": expected_claim,
+            "filesystem_action": "not_attempted_absent_recorded_worktree",
+        }
     expected_digest = (expected_tracker_sha256 or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
         raise ValueError("Missing-worktree reconciliation requires --tracker-sha256 as a SHA-256 digest.")
@@ -4803,7 +4827,9 @@ def close_session(
     reconciliation_receipt = (
         _validate_missing_worktree_reconciliation(
             claim=claim,
+            claim_file=claim_file,
             expected_tracker_sha256=expected_tracker_sha256,
+            expected_claim_sha256=expected_claim_sha256,
         )
         if reconcile_missing_worktree
         else None

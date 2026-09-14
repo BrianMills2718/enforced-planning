@@ -2435,6 +2435,28 @@ python scripts/session_close.py \
 The JSON response and completed claim retain a `missing_worktree_reconciliation`
 receipt. Do not use this path to close a live, handoff, or existing worktree.
 
+**A claim that never had a tracker** (`tracker_path` state 1, e.g. one created
+by the bare `--claim` CLI) binds the exact claim bytes instead, because there is
+no tracker digest to supply:
+
+```bash
+python scripts/session_close.py \
+  --agent claude-code --project example --scope example-lane \
+  --reconcile-missing-worktree \
+  --claim-sha256 "$(sha256sum ~/.claude/coordination/claims/claude-code_example_example-lane.yaml | cut -d' ' -f1)" \
+  --disposition merged --merge-commit <canonical-merge-or-squash-commit> \
+  --json
+```
+
+It applies only when the claim records no `tracker_path`, no `--tracker-sha256`
+is given, and no identity-matched tracker exists; otherwise the tracker form
+above is required. The receipt records `tracker_path: null` and the
+`claim_sha256`. The same `session_ended`, absent-worktree, and ordinary
+merge/recovery preflight checks apply. Observed 2026-09-14: such a lane, merged
+but with its worktree removed before `session-close`, could not be released,
+reconciled, or resumed, and refused every later claim by that session in the
+project ("Preserved session-ended lane(s) still require disposition").
+
 ### Exact ownerless session-ended closeout
 
 When a different native runtime inherits a clean linked worktree whose claim is

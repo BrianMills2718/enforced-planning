@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# scope: global_by_design - dispatches to the freshest published evidence-
+# sample gate for whichever repo triggered Stop; the dispatch itself has no
+# per-project variant
+#
 # Execute the freshest locally known published evidence-sample gate while
 # preserving the Stop payload on stdin.
 

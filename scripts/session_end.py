@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# scope: global_by_design - a session's live claims are a property of the
+# runtime session, not of whichever project it happens to be in
 """Retire exact-session live claims when a tool runtime truly terminates."""
 
 from __future__ import annotations

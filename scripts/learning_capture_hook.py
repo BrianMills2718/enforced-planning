@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# scope: global_by_design - the portable framework owns this client-neutral
+# lifecycle adapter; the learning-disposition requirement applies to
+# completed work in any governed project, not one project specifically
 """Prompt for and require a learning disposition around completed work.
 
 The hook does not try to decide whether a reusable learning exists. It enforces

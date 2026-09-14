@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# scope: global_by_design - the pace/course-check pulse applies to every
+# agent session regardless of which project it is working in; SUPPORTED_EVENTS
+# deliberately spans SessionStart/UserPromptSubmit/PreToolUse/PostToolUse/Stop
 """Inject a periodic non-blocking goal-equivalence pulse into agent sessions."""
 
 from __future__ import annotations

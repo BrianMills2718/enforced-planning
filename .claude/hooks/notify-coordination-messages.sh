@@ -14,5 +14,18 @@ PYTHON="$WORKTREE_ROOT/.venv/bin/python"
 [[ -x "$PYTHON" ]] || PYTHON="$REPO_ROOT/.venv/bin/python"
 [[ -x "$PYTHON" ]] || PYTHON=$(command -v python3 2>/dev/null) || exit 0
 
-"$PYTHON" "$SCRIPT" --agent claude-code --project "$PROJECT" 2>&1 || true
+ERR_FILE=$(mktemp)
+"$PYTHON" "$SCRIPT" --agent claude-code --project "$PROJECT" 2>"$ERR_FILE"
+STATUS=$?
+if [[ $STATUS -ne 0 ]]; then
+    # Never block work, but never go silent either: a hook that cannot start
+    # (import error, broken interpreter) delivers no messages at all.
+    "$PYTHON" -c 'import json, sys
+lines = open(sys.argv[1], errors="replace").read().strip().splitlines()
+reason = lines[-1] if lines else "no stderr"
+print(json.dumps({"systemMessage": "coordination mailbox hook failed (exit %s): %s; messages were not checked" % (sys.argv[2], reason)}))' "$ERR_FILE" "$STATUS"
+else
+    cat "$ERR_FILE" >&2
+fi
+rm -f "$ERR_FILE"
 exit 0

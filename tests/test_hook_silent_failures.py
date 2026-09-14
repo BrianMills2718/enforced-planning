@@ -140,6 +140,33 @@ def test_canonical_lock_hook_reports_a_script_that_cannot_start(tmp_path: Path) 
     assert "demo-crash-marker" in body["systemMessage"]
 
 
+def test_mailbox_notice_hook_reports_a_crashed_coordination_hook(tmp_path: Path) -> None:
+    """The mailbox wrapper ran the hook with `2>&1 || true; exit 0`.
+
+    Observed 2026-09-14: the installed coordination_hook.py failed on import at every
+    lifecycle event in the default install, and nothing surfaced it.
+    """
+    repo = _repo(tmp_path, "notify-coordination-messages.sh")
+    (repo / "scripts" / "meta" / "coordination_hook.py").write_text(CRASH, encoding="utf-8")
+    result = _run(repo, "notify-coordination-messages.sh", {"hook_event_name": "SessionStart"})
+    assert result.returncode == 0
+    body = json.loads(result.stdout)
+    assert "demo-crash-marker" in body["systemMessage"]
+    assert "coordination mailbox" in body["systemMessage"]
+
+
+def test_mailbox_notice_hook_passes_through_a_working_hook_unchanged(tmp_path: Path) -> None:
+    """Negative control: a hook that succeeds keeps its own stdout, with no added message."""
+    repo = _repo(tmp_path, "notify-coordination-messages.sh")
+    notice = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "mailbox ok"}}
+    (repo / "scripts" / "meta" / "coordination_hook.py").write_text(
+        f"import json\nprint(json.dumps({notice!r}))\n", encoding="utf-8"
+    )
+    result = _run(repo, "notify-coordination-messages.sh", {"hook_event_name": "SessionStart"})
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == notice
+
+
 def test_hook_enabled_helper_still_reports_disabled_without_a_crash(tmp_path: Path) -> None:
     """Negative control: a deliberate exit 1 from the config reader still means disabled."""
     repo = _repo(tmp_path, "check-hook-enabled.sh")

@@ -11,7 +11,7 @@ permissions:
 jobs:
   hook-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,3 +31,20 @@ jobs:
             tests/test_install_governed_repo.py \
             tests/test_host_prewrite_claim_gate.py \
             tests/test_generate_hook_wiring.py
+      # These files regressed on main unnoticed because no CI ran them
+      # (fixed 2026-09-14 in #523, #525, #526, #529, #530). The coordination
+      # messages suite is limited to the two closeout-gate tests: several of
+      # its other tests carry a 1.5s projection-repair budget that is flaky
+      # under load.
+      - name: Guard previously unguarded regression surfaces
+        run: |
+          pytest -q \
+            tests/test_governed_delivery.py \
+            tests/test_pr_auto.py \
+            tests/test_makefile_worktree_targets.py \
+            tests/test_maintenance_lane_usage_is_truthful.py \
+            tests/test_check_no_prose_string_matching.py \
+            tests/test_check_coordination_claims.py \
+            tests/test_session_cli.py \
+            "tests/test_coordination_messages.py::test_stop_blocks_dirty_sibling_then_passes_after_cleanup" \
+            "tests/test_coordination_messages.py::test_stop_ignores_unchanged_preexisting_dirt_but_blocks_session_delta"

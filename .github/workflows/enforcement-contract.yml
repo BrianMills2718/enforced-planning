@@ -46,5 +46,6 @@ jobs:
             tests/test_check_no_prose_string_matching.py \
             tests/test_check_coordination_claims.py \
             tests/test_session_cli.py \
+            tests/test_hook_silent_failures.py \
             "tests/test_coordination_messages.py::test_stop_blocks_dirty_sibling_then_passes_after_cleanup" \
             "tests/test_coordination_messages.py::test_stop_ignores_unchanged_preexisting_dirt_but_blocks_session_delta"

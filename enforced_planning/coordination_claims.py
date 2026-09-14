@@ -4576,6 +4576,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     group.add_argument("--claim", action="store_true", help="Create a new claim")
     group.add_argument("--release", action="store_true", help="Release an existing claim")
     group.add_argument("--list", action="store_true", help="List all active claims")
+    group.add_argument(
+        "--list-stale",
+        action="store_true",
+        help=(
+            "Report live claims with a liveness issue (e.g. stale heartbeat), read-only. "
+            "The same check --prune-stale acts on, without deleting anything -- "
+            "use this to answer 'what work is another agent still covering' before "
+            "assuming a claim is abandoned."
+        ),
+    )
     group.add_argument("--prune", action="store_true", help="Remove expired claims")
     group.add_argument(
         "--prune-stale",
@@ -4909,6 +4919,36 @@ def main(argv: list[str] | None = None) -> int:
                 print("    broad_scope: legacy_unclassified")
         for line in render_peer_claim_groups(claims):
             print(line)
+        return 0
+
+    if args.list_stale:
+        claims = check_claims(args.project)
+        stale = [(claim, claim_liveness_issues(claim)) for claim in claims]
+        stale = [(claim, issues) for claim, issues in stale if issues]
+        if args.json:
+            print(
+                json.dumps(
+                    [
+                        {
+                            "agent": claim.agent,
+                            "project": claim.primary_project(),
+                            "scope": claim.scope,
+                            "session_id": claim.session_id,
+                            "heartbeat_at": claim.heartbeat_at,
+                            "issues": issues,
+                        }
+                        for claim, issues in stale
+                    ],
+                    indent=2,
+                )
+            )
+            return 0
+        if not stale:
+            print("No live claims with a liveness issue.")
+            return 0
+        for claim, issues in stale:
+            print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} — {', '.join(issues)}")
+            print(f"    heartbeat_at: {claim.heartbeat_at}")
         return 0
 
     if args.progress:

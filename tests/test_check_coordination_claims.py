@@ -5284,6 +5284,72 @@ def test_check_json_outputs_stale_session_liveness_issue(
     assert payload["claims"][0]["liveness_issues"] == ["stale_session_heartbeat"]
 
 
+def test_list_stale_reports_only_claims_with_liveness_issues_and_deletes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--list-stale surfaces the same diagnostic --prune-stale acts on,
+    read-only: the stale claim is reported and its file is left on disk,
+    and a genuinely fresh claim is not reported at all."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
+    base = {
+        "claimed_at": "2026-04-05T08:00:00+00:00",
+        "expires_at": "2099-04-05T13:00:00+00:00",
+        "projects": ["project-meta"],
+        "intent": "Test list-stale",
+        "claim_type": "write",
+        "plan_ref": "UNPLANNED",
+        "write_paths": ["README.md"],
+        "status": "active",
+    }
+    _write_claim(
+        claims_dir,
+        "stale-session.yaml",
+        {
+            **base,
+            "agent": "codex",
+            "scope": "stale-session",
+            "branch": "plan-95-stale-session",
+            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-stale-session"),
+            "session_id": "codex:thread-old",
+            "heartbeat_at": "2026-04-05T08:00:00+00:00",
+        },
+    )
+    # A genuinely fresh heartbeat has to be close to real "now" -- claim_liveness_issues
+    # compares against datetime.now(timezone.utc) by default, not the other fixture's
+    # fixed 2026-04-05 date, so a second hardcoded-past timestamp would be stale too.
+    fresh_heartbeat = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+    _write_claim(
+        claims_dir,
+        "fresh-session.yaml",
+        {
+            **base,
+            "agent": "claude-code",
+            "scope": "fresh-session",
+            "branch": "plan-96-fresh-session",
+            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-96-fresh-session"),
+            "session_id": "claude-code:thread-new",
+            "heartbeat_at": fresh_heartbeat,
+        },
+    )
+
+    exit_code = module.main(["--list-stale", "--json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert len(payload) == 1
+    assert payload[0]["scope"] == "stale-session"
+    assert payload[0]["issues"] == ["stale_session_heartbeat"]
+    # Read-only: unlike --prune-stale, neither claim file is removed.
+    assert (claims_dir / "stale-session.yaml").is_file()
+    assert (claims_dir / "fresh-session.yaml").is_file()
+
+
 def test_unregistered_format_claim_files_surface_in_list(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

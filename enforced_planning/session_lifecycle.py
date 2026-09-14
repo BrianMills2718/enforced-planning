@@ -2488,10 +2488,34 @@ def _validate_worktree_path_repair(
         )
 
 
-def _patch_without_blob_identity(patch: bytes) -> bytes:
-    """Remove only full-index blob IDs while preserving the complete patch body."""
+_HUNK_HEADER_OFFSETS_RE = re.compile(rb"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 
-    return b"".join(line for line in patch.splitlines(keepends=True) if not line.startswith(b"index "))
+
+def _patch_without_blob_identity(patch: bytes) -> bytes:
+    """Remove full-index blob IDs and hunk-header line offsets while preserving
+    the complete patch body.
+
+    Both are position metadata, not content: a squash merge that lands on a
+    main tip already advanced by an unrelated earlier change to the same file
+    reproduces the identical added/removed lines, but git's own diff embeds
+    the surrounding line numbers in the `@@ -a,b +c,d @@` header, and those
+    numbers legitimately differ between the task branch's own diff (against
+    its own base) and the merge commit's diff (against the new base) even
+    though nothing about the actual change is different. Comparing raw diff
+    bytes without normalizing this shift makes a genuinely exact squash merge
+    look unproven whenever anything else landed on the same file first --
+    observed directly the same day this normalization was added, on this
+    exact function's own file after an unrelated PR landed just ahead of it.
+    """
+
+    normalized: list[bytes] = []
+    for line in patch.splitlines(keepends=True):
+        if line.startswith(b"index "):
+            continue
+        if line.startswith(b"@@ "):
+            line = _HUNK_HEADER_OFFSETS_RE.sub(b"@@ -N,N +N,N @@", line, count=1)
+        normalized.append(line)
+    return b"".join(normalized)
 
 
 def _squash_merge_matches_branch(

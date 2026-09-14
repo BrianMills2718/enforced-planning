@@ -666,6 +666,21 @@ the SHA, `squash_patch_equivalent_discovered` when the closeout found it. If
 discovery finds nothing the preflight refuses exactly as before —
 `--merge-commit` and the non-merge dispositions remain available.
 
+**The patch-equality proof itself had a residual gap in the opposite
+direction from "a different change must be refused": an *identical* change
+whose `git diff` hunk-header line numbers shift because an unrelated,
+unconflicting commit landed earlier in the same file was also wrongly
+refused.** `_patch_without_blob_identity` originally stripped only the
+`index <blob>..<blob>` line before comparing branch-patch to merge-patch
+bytes; it left the `@@ -a,b +c,d @@` line-offset numbers in place, and those
+are position metadata exactly like blob identity — legitimately different
+between the branch's own diff (against its own base) and the merge commit's
+diff (against whatever tip landed first), even when the added/removed lines
+are byte-identical. Fixed the same day this was found: the function now
+normalizes hunk-header offsets to a fixed placeholder too, while still
+comparing every content line, so a genuinely different change is still
+refused exactly as before.
+
 The tracker is **moved**, never deleted, to
 `~/.claude/coordination/sessions-archive/<YYYY-MM-DD>/<project>/`, and the
 archived copy carries an `archive:` section holding the pre-move digest, the

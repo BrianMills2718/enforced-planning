@@ -3708,6 +3708,28 @@ def test_patch_normalization_ignores_only_full_index_blob_identity() -> None:
     )
 
 
+def test_patch_normalization_ignores_hunk_header_line_offsets_but_not_content() -> None:
+    """A pure line-number shift in the `@@ -a,b +c,d @@` header must not defeat
+    the squash-equivalence proof, but an actual content difference still must."""
+
+    shifted_only = (
+        b"diff --git a/f.py b/f.py\n"
+        b"@@ -986,6 +986,17 @@ context text\n"
+        b"+added line one\n"
+        b"+added line two\n"
+    )
+    with_offset_shift = shifted_only.replace(b"@@ -986,6 +986,17 @@", b"@@ -1001,6 +1001,17 @@")
+
+    assert session_lifecycle._patch_without_blob_identity(
+        shifted_only
+    ) == session_lifecycle._patch_without_blob_identity(with_offset_shift)
+
+    genuinely_different_content = with_offset_shift.replace(b"+added line two", b"+different line two")
+    assert session_lifecycle._patch_without_blob_identity(
+        shifted_only
+    ) != session_lifecycle._patch_without_blob_identity(genuinely_different_content)
+
+
 def test_close_session_accepts_squash_patch_after_independent_same_file_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -3740,6 +3762,65 @@ def test_close_session_accepts_squash_patch_after_independent_same_file_change(
     merge_base = _git(repo_root, "merge-base", branch, merge_parent)
     _git(repo_root, "cherry-pick", "--no-commit", f"{merge_base}..{branch}")
     _git(repo_root, "commit", "-m", "squash merge feature after main advanced")
+    merge_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    payload = _close_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        merge_commit=merge_commit,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["merge_evidence"] == "squash_patch_equivalent"
+    assert not worktree.exists()
+    assert not claim_file.exists()
+    claim_payload = _archived_claim_payload(payload["claim_archive_id"])
+    assert claim_payload["merge_commit"] == merge_commit
+
+
+def test_close_session_accepts_squash_patch_after_independent_earlier_same_file_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unrelated change earlier in the same file shifts every later hunk's
+    line-number header, not just its blob identity -- the sibling test above
+    only exercises an unrelated change positioned AFTER the branch's own hunk,
+    where no such shift occurs. This is the direction that actually broke
+    _patch_without_blob_identity in production: PR #513 could not close its
+    own already-merged lane because PR #512 had landed one hunk earlier in
+    the same file moments before, shifting #513's hunk header from
+    `@@ -986,...` to `@@ -1001,...` with byte-identical added/removed lines."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    branch_lines = (worktree / "README.md").read_text(encoding="utf-8").splitlines()
+    branch_lines[17] = "task branch change"
+    (worktree / "README.md").write_text("\n".join(branch_lines) + "\n", encoding="utf-8")
+    _git(worktree, "add", "README.md")
+    _git(worktree, "commit", "-m", "update task setting")
+
+    # Insert (not merely modify) a line before the branch's own change point,
+    # so every line at or after it shifts down by one -- exactly what an
+    # unrelated earlier PR does to a hot shared file.
+    main_lines = (repo_root / "README.md").read_text(encoding="utf-8").splitlines()
+    main_lines.insert(1, "independent main insertion")
+    (repo_root / "README.md").write_text("\n".join(main_lines) + "\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "insert unrelated earlier main line")
+    merge_parent = _git(repo_root, "rev-parse", "HEAD")
+    merge_base = _git(repo_root, "merge-base", branch, merge_parent)
+    _git(repo_root, "cherry-pick", "--no-commit", f"{merge_base}..{branch}")
+    _git(repo_root, "commit", "-m", "squash merge feature after earlier main insertion")
     merge_commit = _git(repo_root, "rev-parse", "HEAD")
 
     payload = _close_session_as_owner(

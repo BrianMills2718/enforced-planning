@@ -129,14 +129,15 @@ def test_the_vocabulary_still_intersects_a_real_hook() -> None:
     """Bind the check to live code, so a renamed field is caught here.
 
     `PROSE_NAMES` is a list of names, and a list of names rots. This asserts the
-    check still finds the prose heuristic in the learning capture hook -- the
-    concrete violation it was written against. If that hook is repaired, replace
-    this with the next real one rather than deleting it.
+    check still finds a prose heuristic in live code. It was written against the
+    learning capture hook, which 597f4d9 repaired; the evidence sample hook's
+    regex over the closing `report` is the next real one. If that hook is
+    repaired, replace this with the next real one rather than deleting it.
     """
 
-    hook = REPO / "scripts" / "learning_capture_hook.py"
+    hook = REPO / "scripts" / "evidence_sample_hook.py"
     if not hook.is_file():
-        pytest.skip("the learning capture hook is not present in this checkout")
+        pytest.skip("the evidence sample hook is not present in this checkout")
     result = checker.scan_paths([hook])
     assert result.violations, (
         "the check no longer finds the prose heuristic it was written against; "

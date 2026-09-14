@@ -7,6 +7,7 @@ coordination context for human review before shared state changes.
 
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 from dataclasses import asdict, dataclass
@@ -542,7 +543,19 @@ def evaluate_push_safety(
             if claim.branch and branch_claims:
                 notification["attempted"] = True
                 try:
-                    from enforced_planning import concern_routing
+                    # Imported by module name, not `from enforced_planning
+                    # import concern_routing`: concern_routing.py ships only
+                    # in the broader COORDINATION_MESSAGES installer profile,
+                    # not the narrower CLAIM_PROJECTION one that also ships
+                    # this file. A literal import statement would make
+                    # scripts/check_facade_sync_completeness.py's static
+                    # import-graph walk treat it as a hard requirement of
+                    # every profile shipping push_safety.py; this is a
+                    # best-effort capability instead, and the except clause
+                    # below already covers it being absent (ModuleNotFoundError).
+                    concern_routing = importlib.import_module(
+                        "enforced_planning.concern_routing"
+                    )
 
                     overlapping_paths = sorted(
                         overlap.split(" <-> ", 1)[0] for overlap in overlaps

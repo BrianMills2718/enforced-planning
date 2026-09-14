@@ -10,12 +10,12 @@
   "schema_disposition": "extend",
   "design_packet_ref": {
     "path": "docs/plans/135_correction_learning_gate_contest_design.md",
-    "revision": "1ac898f",
-    "concern": "Full Standard design: receipt schema delta, re-fire flow, circuit breaker, adjudication call justification, slice horizon"
+    "revision": "a7dfa1e",
+    "concern": "Full Standard design: receipt schema delta, re-fire flow, circuit breaker (measured), adjudication call justification, slice horizon"
   },
   "evidence_plan_ref": {
     "path": "docs/plans/135_correction_learning_gate_contest_design.md",
-    "revision": "1ac898f",
+    "revision": "a7dfa1e",
     "concern": "Section 8: verification this design licenses"
   },
   "material_concerns": [
@@ -29,26 +29,24 @@
     {
       "concern_id": "contest-attempt-bound",
       "concern_class": "policy",
-      "summary": "One-contest-attempt circuit breaker (section 4) is a recommended default, not a derived fact -- a real product/policy choice.",
-      "disposition": "assigned",
-      "owner_role": "brian",
-      "resume_condition": "Brian dispositions accept/revise/reject/delegate on the one-attempt bound before slice 2 (the adjudication call) is implemented."
+      "summary": "Circuit-breaker attempt bound needed Brian's disposition, not a silently assumed default.",
+      "disposition": "closed",
+      "resolution": "Brian disposed 2026-09-14: do not cap at 1 (too little signal for the tuning feedback loop he wants); start high and tune down from observed friction. Set to 3, the highest value the measured harness ceiling (section 4) actually allows to stay inside the design's own control rather than silently deferring to the harness."
     },
     {
       "concern_id": "harness-refire-ceiling",
       "concern_class": "verification",
-      "summary": "Whether Claude Code's own Stop-hook re-fire mechanism has an independent hard ceiling on repeated blocks is unverified and must not be assumed.",
-      "disposition": "assigned",
-      "owner_role": "implementer",
-      "resume_condition": "A real test observes the actual re-fire ceiling before slice 2 is wired live, per section 4."
+      "summary": "Whether Claude Code's own Stop-hook re-fire mechanism has an independent hard ceiling on repeated blocks was unverified.",
+      "disposition": "closed",
+      "resolution": "Measured directly via an isolated test, reproduced on two independent runs: exactly 3 forced re-fires (4 Stop events total) before the harness gives up silently (clean exit 0, no error, no output). Recorded as lrn-20260914T174509317199Z-df8d944ad2."
     }
   ],
   "next_slice_refs": [
     {
       "path": "docs/plans/135_correction_learning_gate_contest_design.md",
-      "revision": "1ac898f",
+      "revision": "a7dfa1e",
       "concern": "Slice 1 (fully_specifiable_now): schema extension + deterministic re-fire check, no LLM call, implementation-ready"
     }
   ],
-  "completed_at": "2026-09-14T17:10:00Z"
+  "completed_at": "2026-09-14T17:50:00Z"
 }

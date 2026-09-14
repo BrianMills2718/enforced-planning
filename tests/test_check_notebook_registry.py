@@ -299,16 +299,19 @@ def test_validate_notebook_registry_rejects_missing_phase_contract_cell(tmp_path
     assert any("missing explicit section for phase 'Phase Two'" in error for error in result.errors)
 
 
-def test_detect_workspace_root_handles_worktree_checkout() -> None:
+def test_detect_workspace_root_handles_worktree_checkout(tmp_path: Path) -> None:
+    # Built under tmp_path: detection resolves symlinks, so a hardcoded maintainer
+    # path answered differently on a host where that workspace is a symlink.
     module = _load_module()
+    workspace = tmp_path.resolve() / "projects"
 
-    main_checkout = Path("/home/brian/projects/enforced-planning")
-    worktree_checkout = Path(
-        "/home/brian/projects/enforced-planning_worktrees/plan-77-wave4-notebook-subtree"
-    )
+    main_checkout = workspace / "enforced-planning"
+    sibling_worktree = workspace / "enforced-planning_worktrees" / "plan-77-wave4-notebook-subtree"
+    nested_worktree = main_checkout / "worktrees" / "plan-77-wave4-notebook-subtree"
 
-    assert module._detect_workspace_root(main_checkout) == Path("/home/brian/projects")
-    assert module._detect_workspace_root(worktree_checkout) == Path("/home/brian/projects")
+    assert module._detect_workspace_root(main_checkout) == workspace
+    assert module._detect_workspace_root(sibling_worktree) == workspace
+    assert module._detect_workspace_root(nested_worktree) == workspace
 
 
 def test_check_notebook_registry_cli_validates_demo_registry(tmp_path: Path) -> None:

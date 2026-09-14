@@ -9,6 +9,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 
@@ -866,41 +867,67 @@ def test_generate_hook_wiring_fails_when_target_python_lacks_yaml(tmp_path: Path
     assert "cannot import PyYAML" in result.stderr
 
 
-def test_installed_prewrite_runtime_includes_its_enforced_planning_import_closure() -> None:
-    """Every enforced_planning module the installed prewrite runtime imports is installed.
+INSTALL_COMBINATIONS = {
+    "prewrite": ("HOOK_FILES", "SUPPORT_FILES", "PREWRITE_HOOK_FILES", "PREWRITE_SUPPORT_FILES"),
+    # The default install: coordination messages on, prewrite_mode off.
+    "mailbox_default": (
+        "HOOK_FILES",
+        "SUPPORT_FILES",
+        "MERGE_GUARD_HOOK_FILES",
+        "MAILBOX_HOOK_FILES",
+        "CANONICAL_LOCK_HOOK_FILES",
+        "CANONICAL_LOCK_SUPPORT_FILES",
+        "MAILBOX_SUPPORT_FILES",
+    ),
+}
+
+
+@pytest.mark.parametrize("combination", sorted(INSTALL_COMBINATIONS))
+def test_installed_runtime_includes_its_import_closure(combination: str) -> None:
+    """Every module an installed hook runtime imports is installed with it.
 
     Observed 2026-09-14: session_lifecycle.py imported blocker_policy.py, which the
-    prewrite support map omitted, so the installed gate crashed with
-    ModuleNotFoundError whenever it reached claim_bootstrap's recovery path.
+    prewrite map omitted; and the default mailbox install shipped neither
+    scripts/hook_receipts.py nor the enforced_planning package marker, so its hook
+    crashed on import behind an exit-0 wrapper, or would have fallen back to a
+    stale site-packages enforced_planning.
     """
     import ast
 
     sys.path.insert(0, str(PROJECT_META_ROOT))
     from enforced_planning import hook_wiring
 
-    installed = {
-        **hook_wiring.HOOK_FILES,
-        **hook_wiring.SUPPORT_FILES,
-        **hook_wiring.PREWRITE_HOOK_FILES,
-        **hook_wiring.PREWRITE_SUPPORT_FILES,
-    }
+    installed: dict[str, str] = {}
+    for name in INSTALL_COMBINATIONS[combination]:
+        installed.update(getattr(hook_wiring, name))
     sources = set(installed.values())
+    if any(source.startswith("enforced_planning/") for source in sources):
+        assert "enforced_planning/__init__.py" in installed, "enforced_planning package marker missing"
 
     def local_imports(relpath: str) -> set[str]:
-        tree = ast.parse((PROJECT_META_ROOT / relpath).read_text(encoding="utf-8"))
+        source_path = PROJECT_META_ROOT / relpath
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
         found: set[str] = set()
+
+        def sibling(root: str) -> None:
+            if relpath.startswith("scripts/") and (source_path.parent / f"{root}.py").is_file():
+                found.add(str(Path(relpath).parent / f"{root}.py"))
+
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] == "enforced_planning":
+            if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                root = node.module.split(".")[0]
                 if node.module == "enforced_planning":
                     found |= {f"enforced_planning/{alias.name}.py" for alias in node.names}
-                else:
+                elif root == "enforced_planning":
                     found.add(node.module.replace(".", "/") + ".py")
+                else:
+                    sibling(root)
             elif isinstance(node, ast.Import):
-                found |= {
-                    alias.name.replace(".", "/") + ".py"
-                    for alias in node.names
-                    if alias.name.startswith("enforced_planning.")
-                }
+                for alias in node.names:
+                    if alias.name.startswith("enforced_planning."):
+                        found.add(alias.name.replace(".", "/") + ".py")
+                    else:
+                        sibling(alias.name.split(".")[0])
         return {path for path in found if (PROJECT_META_ROOT / path).is_file()}
 
     missing: set[str] = set()
@@ -915,5 +942,5 @@ def test_installed_prewrite_runtime_includes_its_enforced_planning_import_closur
             if dependency not in sources:
                 missing.add(dependency)
             pending.append(dependency)
-    assert len(seen) > 20, "closure walk read too few modules to be meaningful"
-    assert not missing, f"prewrite runtime imports modules it does not install: {sorted(missing)}"
+    assert len(seen) > 10, "closure walk read too few modules to be meaningful"
+    assert not missing, f"{combination} runtime imports modules it does not install: {sorted(missing)}"

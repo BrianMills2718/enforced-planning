@@ -139,6 +139,23 @@ ARTIFACT_CREATION_SUPPORT_FILES: dict[str, str] = {
 }
 
 MAILBOX_SUPPORT_FILES: dict[str, str] = {
+    # The default install enables the mailbox with prewrite off, so this map must
+    # carry its own package marker and import closure; otherwise a stale
+    # site-packages enforced_planning silently supplies (or lacks) these modules.
+    "enforced_planning/__init__.py": "enforced_planning/__init__.py",
+    "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
+    "enforced_planning/doc_authority.py": "enforced_planning/doc_authority.py",
+    "enforced_planning/file_context.py": "enforced_planning/file_context.py",
+    "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
+    "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
+    "enforced_planning/outcome_completion.py": "enforced_planning/outcome_completion.py",
+    "enforced_planning/outcome_continuation.py": "enforced_planning/outcome_continuation.py",
+    "enforced_planning/outcome_portfolio.py": "enforced_planning/outcome_portfolio.py",
+    "enforced_planning/outcome_selection.py": "enforced_planning/outcome_selection.py",
+    "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
+    "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
+    "enforced_planning/session_target.py": "enforced_planning/session_target.py",
+    "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
@@ -146,6 +163,9 @@ MAILBOX_SUPPORT_FILES: dict[str, str] = {
     "scripts/refresh_prewrite_claim_projection.py": "scripts/refresh_prewrite_claim_projection.py",
     "scripts/coordination_inbox.py": "scripts/coordination_inbox.py",
     "scripts/coordination_hook.py": "scripts/coordination_hook.py",
+    # coordination_hook.py imports this sibling at module load; without it the
+    # installed mailbox hook fails before delivering anything.
+    "scripts/hook_receipts.py": "scripts/hook_receipts.py",
     "scripts/meta/coordination_inbox.py": "scripts/meta/coordination_inbox.py",
     "scripts/meta/coordination_hook.py": "scripts/meta/coordination_hook.py",
 }

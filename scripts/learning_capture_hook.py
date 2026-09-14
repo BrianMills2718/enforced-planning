@@ -1010,10 +1010,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if payload.get("stop_hook_active"):
-            # A re-fired Stop must not depend on receipt or state availability.
-            # The first refusal already delivered the recovery instruction.
-            return 0
+        # A re-fired Stop (stop_hook_active) used to blanket-allow here on the
+        # assumption that the first refusal already delivered the recovery
+        # instruction and nothing could change before the next check. That
+        # assumption is false: the forced continuation's own response is new
+        # input, and reprocessing it through the same classify_report/
+        # correction-mode logic below is what step 1 of the contest/rebuttal
+        # re-fire flow (135_correction_learning_gate_contest_design.md
+        # section 3) requires -- a deterministic, zero-LLM-cost check that
+        # the flagged problem was actually fixed, not a second free pass.
         invocation = start_hook_invocation(
             hook_name="learning-capture",
             hook_version="3",

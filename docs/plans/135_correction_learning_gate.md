@@ -740,8 +740,27 @@ result record
 Real finding that changed the design: the existing block only forces one
 retry today (blanket-allows on Stop re-fire regardless of whether the
 problem was fixed) -- closing that, not just adding a schema field, is the
-actual work. Two concerns left explicitly assigned, not silently decided:
-the one-contest-attempt circuit-breaker bound (Brian's disposition) and
-whether Claude Code's own Stop-hook re-fire has an independent ceiling
-(needs a real test, not an assumption). Slice 1 (schema extension +
-deterministic re-fire check, zero LLM cost) is implementation-ready now.
+actual work. Both concerns the design left open are now resolved: the
+contest-attempt circuit-breaker bound is set to 3 (Brian's disposition,
+2026-09-14) and the harness's own Stop-hook re-fire ceiling was measured
+directly (exactly 3 forced re-fires, 4 Stop events total, before the
+harness gives up silently) and recorded as
+`lrn-20260914T174509317199Z-df8d944ad2`.
+
+**Slice 1 (schema extension + deterministic re-fire check, zero LLM cost)
+is implemented, 2026-09-14** (branch `plan-135-slice1-refire-check`):
+`CorrectionAuditReceiptV1` gained the `correction_contest_accepted` status
+and the `contest_rejection_reason_hash` / `contest_attempt_count` /
+`contest_rationale_hash` fields plus matching `coherent_status` validation
+(`enforced_planning/correction_learning.py`); `learning_capture_hook.py`'s
+Stop handler no longer blanket-allows on `stop_hook_active` -- a re-fired
+Stop now reprocesses the fresh report through the same
+`classify_report`/correction-mode logic as any other Stop, so it re-blocks
+unless the flagged problem was actually fixed. Verified via
+`pytest tests/test_learning_capture_hook.py tests/test_correction_learning.py`
+(new/rewritten cases: `test_stop_hook_active_still_blocks_when_nothing_changed`,
+`test_stop_hook_active_allows_once_learning_is_recorded`,
+`test_stop_hook_active_still_blocks_unresolved_correction`, plus 6 direct
+schema-validator cases for the new status/fields). Slices 2 (contest
+adjudication call) and 3 (human decision + Codex canary before live wiring)
+remain undone; correction-mode stays `off` by default until those land.

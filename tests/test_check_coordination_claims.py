@@ -5570,6 +5570,8 @@ def test_shared_sse_port_is_not_minted_when_a_real_id_exists(monkeypatch, tmp_pa
     registry = _registry_with_self(tmp_path, "uuid-mine")
     monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", registry)
     monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    # A host Claude Code session exports its real id, which wins over the registry walk.
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "41292")
 
     resolved = coordination_claims.resolve_session_id("claude-code")
@@ -5582,6 +5584,8 @@ def test_legacy_shared_identity_still_matches_an_existing_claim(monkeypatch, tmp
     registry = _registry_with_self(tmp_path, "uuid-mine")
     monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", registry)
     monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    # A host Claude Code session exports its real id, which wins over the registry walk.
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "41292")
 
     resolved = coordination_claims.resolve_session_id("claude-code")

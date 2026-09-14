@@ -7086,6 +7086,10 @@ def test_start_session_auto_resolves_claude_code_runtime_session_id(
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_SSE_PORT", "7777")
+    # The resolver walks process ancestry into ~/.claude/sessions before the
+    # SSE fallback; run inside a real Claude Code session, that finds the host
+    # session's UUID and this fallback is never reached.
+    monkeypatch.setattr(coordination_claims, "CLAUDE_SESSION_REGISTRY", tmp_path / "no-claude-sessions")
 
     payload = session_lifecycle.start_session(
         agent="claude-code",

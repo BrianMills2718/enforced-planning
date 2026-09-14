@@ -805,6 +805,25 @@ def _write_claim_and_refresh_projection(
     with the claim registry state, eliminating the race condition where
     the projection could be stale between write and refresh.
 
+    Delegates to coordination_claims._replace_claim_and_refresh_projection_fail_atomic,
+    the module's own canonical fail-atomic primitive (already used by
+    narrow_claim and covered by
+    test_narrow_projection_failure_restores_exact_claim_and_projection_bytes),
+    rather than a separate, weaker reimplementation. Before this change, this
+    function wrote the claim first and only then refreshed the projection --
+    matching neither its own docstring's atomicity claim nor the documented
+    pattern elsewhere in this module ("the exact preflight claim and tracker
+    bytes are restored; an unsuccessful rollback raises a visible error rather
+    than reporting success" -- WORKTREE_COORDINATION_OPERATOR_GUIDE.md,
+    restart-safe outcome custody). If refresh failed, the write stood: an
+    unrelated claim's corruption could strand THIS claim mid-write (observed
+    2026-09-14: a session-close call that had already written `status:
+    closing` crashed here on a different, concurrently-live session's
+    malformed claim file, leaving the caller's own claim permanently stuck in
+    a non-terminal status with no sanctioned recovery command for that exact
+    state). The caller still sees the same exception either way; only the
+    claim (and now also the projection) file's on-disk state differs.
+
     Args:
         path: Path to the claim file
         payload: Normalized claim payload to write
@@ -814,9 +833,11 @@ def _write_claim_and_refresh_projection(
         Tuple of (projection_path, projection_digest) for mutation tracking
     """
 
-    _write_claim_payload(path, payload)
-    projection_path, projection_digest = coordination_claims.refresh_prewrite_authority_projection(claims_dir)
-    return projection_path, projection_digest
+    return coordination_claims._replace_claim_and_refresh_projection_fail_atomic(
+        claim_path=path,
+        payload=payload,
+        claims_dir=claims_dir,
+    )
 
 
 def _atomic_restore_bytes(path: Path, content: bytes) -> None:

@@ -16,5 +16,17 @@ SCRIPT="$WORKTREE_ROOT/scripts/worktree-coordination/canonical_lock.py"
 PYTHON="$WORKTREE_ROOT/.venv/bin/python"
 [[ -x "$PYTHON" ]] || PYTHON=$(command -v python3 2>/dev/null) || exit 0
 
-"$PYTHON" "$SCRIPT" --hook 2>/dev/null || true
+ERR_FILE=$(mktemp)
+"$PYTHON" "$SCRIPT" --hook 2>"$ERR_FILE"
+STATUS=$?
+if [[ $STATUS -ne 0 ]]; then
+    # The script reports its own runtime errors; a non-zero exit means it could
+    # not start (import error, broken interpreter). That also skips the
+    # SessionStart stale-lock repair, so say so instead of going silent.
+    "$PYTHON" -c 'import json, sys
+lines = open(sys.argv[1], errors="replace").read().strip().splitlines()
+reason = lines[-1] if lines else "no stderr"
+print(json.dumps({"systemMessage": "canonical-lock hook could not run (exit %s): %s; stale-lock repair did not happen" % (sys.argv[2], reason)}))' "$ERR_FILE" "$STATUS"
+fi
+rm -f "$ERR_FILE"
 exit 0

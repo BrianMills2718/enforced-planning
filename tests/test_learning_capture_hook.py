@@ -1015,3 +1015,72 @@ def test_check_full_format_does_not_fire_on_non_completed_work(tmp_path: Path) -
 
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+# Real report that motivated this check (2026-09-14): claimed completion while
+# an unresolved item sat in Active subgoals, and a second unresolved item was
+# buried as "whenever convenient" prose inside Recommended next itself.
+_REAL_CONTRADICTORY_REPORT = (
+    "- **Done** — Implemented.\n"
+    "- **Learnings** — Recorded — project-meta/learnings.md at commit abc1234.\n"
+    "- **Active subgoals**\n"
+    "  - **Current:** None.\n"
+    "  - **Other:** 164 existing memory files across 20 project contexts now "
+    "have a visible, honest backlog (no `codex_parity` disposition) — not "
+    "fixed, correctly named as a separate future triage pass.\n"
+    "- **Recommended next** — Complete for tonight. Whenever convenient: "
+    "review the pending policy proposal, and separately decide whether the "
+    "164-file backlog is worth a dedicated triage pass."
+)
+
+
+def test_check_full_format_warns_on_real_contradictory_report(tmp_path: Path) -> None:
+    """Negative control: the exact real report that motivated this check."""
+    result = run_hook(
+        tmp_path, _REAL_CONTRADICTORY_REPORT, extra_args=["--check-full-format"]
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "decision" not in payload  # advisory only, never blocks
+    assert "Recommended next" in payload["systemMessage"]
+    assert "Active subgoals" in payload["systemMessage"]
+
+
+def test_check_full_format_silent_on_consistent_open_report(tmp_path: Path) -> None:
+    """A genuinely still-open report (Continuing + a real subgoal) is not flagged."""
+    report = (
+        "- **Session goal** — ship the thing.\n"
+        "- **Active subgoals**\n"
+        "  - **Current:** Merge the open PR.\n"
+        "- **Done** — Implemented.\n"
+        "- **Verification** — ran `pytest -q`, 35 passed.\n"
+        "- **Policy** — no deviations.\n"
+        "- **Concerns** — none.\n"
+        "- **Learnings** — Recorded — project-meta/learnings.md at commit abc1234.\n"
+        "- **Decisions** — None.\n"
+        "- **Recommended next** — Continuing: merge the open PR next.\n"
+        "- **Need anything from human** — No."
+    )
+    result = run_hook(tmp_path, report, extra_args=["--check-full-format"])
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_check_full_format_warns_on_none_subgoals_but_open_recommendation(
+    tmp_path: Path,
+) -> None:
+    """The inverse contradiction: nothing left, but still claims to be working."""
+    report = (
+        "- **Done** — Implemented.\n"
+        "- **Learnings** — Recorded — project-meta/learnings.md at commit abc1234.\n"
+        "- **Active subgoals** — None.\n"
+        "- **Recommended next** — Continuing with the next phase."
+    )
+    result = run_hook(tmp_path, report, extra_args=["--check-full-format"])
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "decision" not in payload
+    assert "disagree" in payload["systemMessage"]

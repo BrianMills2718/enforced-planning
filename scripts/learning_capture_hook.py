@@ -381,6 +381,54 @@ def missing_closing_fields(report: str) -> tuple[str, ...]:
     )
 
 
+_RECOMMENDATION_COMPLETE = re.compile(r"\bcomplete\b", re.IGNORECASE)
+_RECOMMENDATION_OPEN = re.compile(r"\b(continuing|blocked)\b", re.IGNORECASE)
+_SUBGOALS_EFFECTIVELY_NONE = re.compile(r"^\**none\**\.?$", re.IGNORECASE)
+
+
+def contradictory_recommendation(report: str) -> str | None:
+    """Return a detail string if Recommended-next and Active-subgoals disagree.
+
+    Structural cross-field check only -- comparing two explicit field values
+    against each other, not inferring what either one *means* -- so it stays
+    inside the no-prose-string-matching policy the same way missing_closing_fields
+    does. It will not catch a hedge that avoids these four words entirely; that
+    broader problem needs a light-LLM classifier, a deliberately separate and
+    more careful build.
+
+    Motivating instance (2026-09-14): a closing report said `Recommended next:
+    Complete for tonight.` while `Active subgoals: Other` still listed an
+    unresolved item -- the exact contradiction this function is built to catch.
+    """
+    recommended = report_field(report, "Recommended next")
+    subgoals = report_field(report, "Active subgoals")
+    if recommended is None or subgoals is None:
+        return None
+
+    subgoals_are_none = bool(
+        _SUBGOALS_EFFECTIVELY_NONE.match(subgoals.strip().strip("*_` "))
+    )
+    says_complete = bool(_RECOMMENDATION_COMPLETE.search(recommended))
+    says_open = bool(_RECOMMENDATION_OPEN.search(recommended))
+
+    if says_complete and not subgoals_are_none:
+        return (
+            "`Recommended next` claims completion while `Active subgoals` lists "
+            "unresolved items. Resolve every listed subgoal and set `Active "
+            "subgoals: None`, or change `Recommended next` to `continuing`/"
+            "`blocked` and move any human-owned item into `Need anything from "
+            "human` as a properly typed Decision or Action."
+        )
+    if subgoals_are_none and says_open and not says_complete:
+        return (
+            "`Active subgoals` is None but `Recommended next` says "
+            "continuing/blocked -- these disagree on whether the session goal "
+            "is done. State completion if it is, or name the remaining "
+            "subgoal in `Active subgoals` if it is not."
+        )
+    return None
+
+
 # A decline is only checkable when it points at something. These are the shapes a
 # reference actually takes in practice: a register entry id, a commit sha, an
 # agent-memory slug, or a path. Anything else is an assertion.
@@ -807,12 +855,16 @@ def main(argv: list[str] | None = None) -> int:
                 output["classification"] = decision
                 output["detail"] = detail
             if args.check_full_format and decision != "not_completed_work":
+                advisories: list[str] = []
                 missing = missing_closing_fields(report)
                 if missing:
+                    advisories.append("Closing format incomplete: missing " + ", ".join(missing) + ".")
+                contradiction = contradictory_recommendation(report)
+                if contradiction:
+                    advisories.append(f"Closing format inconsistent: {contradiction}")
+                if advisories:
                     output["systemMessage"] = (
-                        "Closing format incomplete: missing "
-                        + ", ".join(missing)
-                        + ". This is advisory only -- it never blocks the turn."
+                        " ".join(advisories) + " This is advisory only -- it never blocks the turn."
                     )
             if output:
                 print(json.dumps(output, sort_keys=True))

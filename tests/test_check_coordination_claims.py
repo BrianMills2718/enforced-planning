@@ -6117,3 +6117,83 @@ def test_session_activity_is_described_without_licensing_a_takeover() -> None:
     quiet = describe(datetime(2026, 8, 25, 15, 11, tzinfo=timezone.utc), now=now)
     assert quiet.startswith("last active 27h ago")
     assert "likely ended without releasing" in quiet
+
+
+def test_render_check_output_survives_a_claim_whose_repo_root_no_longer_exists(
+    tmp_path: Path,
+) -> None:
+    """--list/--check must never crash the whole registry render because one
+    live claim's repo_root/worktree has already disappeared from disk -- a
+    common, normal state (see missing_worktree_on_disk), not a malformed
+    claim. classify_broad_write_paths() legitimately raises ValueError for an
+    ambiguous top-level write path, but _broad_scope_contract_issues() must
+    absorb that for every caller, including this read-only render path that
+    real users depend on to see the whole registry."""
+
+    missing_repo_root = tmp_path / "gone" / "worktrees" / "vanished-lane"
+    claim = claims_impl.normalize_claim(
+        {
+            "schema_version": 6,
+            "agent": "claude-code",
+            "projects": ["demo"],
+            "scope": "vanished-lane",
+            "intent": "Reproduce the broad-scope crash on a missing repo_root",
+            "claim_type": "program",
+            "write_paths": ["CLAUDE.md"],
+            "status": "active",
+            "expires_at": "2099-09-01T00:00:00+00:00",
+            "repo_root": str(missing_repo_root),
+            "worktree_path": str(missing_repo_root),
+            "branch": "vanished-lane",
+            "session_id": "claude-code:vanished",
+            "session_name": "vanished-lane",
+        }
+    )
+    assert claim is not None
+    assert not missing_repo_root.exists()
+
+    rendered = claims_impl._render_check_output(claims=[claim], project="demo", candidate=None)
+
+    assert rendered["claims"][0]["scope"] == "vanished-lane"
+    assert rendered["claims"][0]["broad_scope_diagnostic"] is None
+    assert rendered["claims"][0]["lifecycle_issues"] == ["missing_worktree_on_disk"]
+
+
+def test_broad_scope_contract_issues_reports_unresolvable_repo_root_without_raising(
+    tmp_path: Path,
+) -> None:
+    """Unit-level companion to the render-level test above: the function that
+    actually crashed must itself surface the ambiguity as a normal issue
+    string, not propagate the ValueError -- and must still run the
+    bootstrap/bounded structural checks that do not depend on filesystem
+    evidence."""
+
+    missing_repo_root = tmp_path / "gone" / "worktrees" / "vanished-lane"
+    claim = claims_impl.normalize_claim(
+        {
+            "schema_version": 6,
+            "agent": "claude-code",
+            "projects": ["demo"],
+            "scope": "vanished-lane",
+            "intent": "Reproduce the broad-scope crash on a missing repo_root",
+            "claim_type": "program",
+            "write_paths": ["CLAUDE.md"],
+            "status": "active",
+            "expires_at": "2099-09-01T00:00:00+00:00",
+            "repo_root": str(missing_repo_root),
+            "worktree_path": str(missing_repo_root),
+            "branch": "vanished-lane",
+            "session_id": "claude-code:vanished",
+            "session_name": "vanished-lane",
+            "broad_scope_mode": "bootstrap",
+            "broad_scope_reason": "test",
+        }
+    )
+    assert claim is not None
+
+    issues = claims_impl._broad_scope_contract_issues(claim)
+
+    assert "broad_scope_ambiguous" in issues
+    # The bootstrap-mode structural check does not need filesystem evidence
+    # about repo_root and must still run.
+    assert "bootstrap_target_worktree_path_required" in issues

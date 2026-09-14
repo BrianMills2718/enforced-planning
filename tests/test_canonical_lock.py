@@ -250,6 +250,85 @@ def test_sync_refuses_dirty_checkout_without_dropping_the_lock(
         canonical_lock.unlock_repo(clone)
 
 
+def _fetched_pair_with_new_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    upstream, clone = _sync_pair(tmp_path, monkeypatch)
+    (upstream / "added.txt").write_text("added upstream\n", encoding="utf-8")
+    assert _git(upstream, "add", "-A").returncode == 0
+    assert _git(upstream, "commit", "-qm", "add file").returncode == 0
+    assert _git(clone, "fetch", "-q", "origin").returncode == 0
+    monkeypatch.setattr(canonical_lock, "RESIDUE_RECEIPT_DIR", tmp_path / "residue-receipts")
+    return upstream, clone
+
+
+def test_sync_clears_merged_residue_identical_to_upstream_and_advances_locked_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """2026-09-14: a session edited the canonical checkout, merged the same change
+    through a worktree, and left the canonical copy byte-identical to origin.
+    Every freshness path refused to advance over it, pinning project-meta 69
+    commits behind while a feedback runtime ran stale code."""
+    _, clone = _fetched_pair_with_new_file(tmp_path, monkeypatch)
+    (clone / "fact.txt").write_text("new\n", encoding="utf-8")  # == upstream content
+    assert _git(clone, "add", "fact.txt").returncode == 0  # staged, like the incident
+    (clone / "added.txt").write_text("added upstream\n", encoding="utf-8")  # untracked copy of upstream file
+    (clone / "scratch.log").write_text("unrelated\n", encoding="utf-8")  # benign untracked
+    canonical_lock.lock_repo(clone, justifying_claims=["lane-a"])
+    try:
+        result = canonical_lock.sync_repo(clone)
+
+        assert result["ok"] is True, result
+        assert {item["path"] for item in result["residue"]["cleared"]} == {"fact.txt", "added.txt"}
+        assert result["residue"]["benign_untracked"] == ["scratch.log"]
+        assert (clone / "fact.txt").read_text(encoding="utf-8") == "new\n"
+        assert (clone / "scratch.log").read_text(encoding="utf-8") == "unrelated\n"
+        assert result["lock_integrity"] == canonical_lock.VERDICT_LOCKED
+        assert canonical_lock.read_receipt(clone).justifying_claims == ["lane-a"]
+        assert Path(result["residue"]["receipt"]).is_file()
+    finally:
+        canonical_lock.unlock_repo(clone)
+
+
+def test_residue_is_not_cleared_when_any_change_is_real_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One genuine local edit means nothing is touched, residue included."""
+    _, clone = _fetched_pair_with_new_file(tmp_path, monkeypatch)
+    (clone / "fact.txt").write_text("new\n", encoding="utf-8")  # residue
+    (clone / "added.txt").write_text("someone's different draft\n", encoding="utf-8")  # real
+
+    result = canonical_lock.clear_upstream_residue(clone)
+
+    assert result["ok"] is False
+    assert result["action"] == "residue_not_cleared"
+    assert [item["path"] for item in result["real"]] == ["added.txt"]
+    assert (clone / "fact.txt").read_text(encoding="utf-8") == "new\n"
+    assert (clone / "added.txt").read_text(encoding="utf-8") == "someone's different draft\n"
+    assert not (tmp_path / "residue-receipts").exists()
+
+
+def test_residue_against_a_stale_upstream_ref_is_real_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a fetch the edit matches nothing known upstream: refuse, never guess."""
+    _, clone = _sync_pair(tmp_path, monkeypatch)  # no fetch: origin/main still has "old"
+    monkeypatch.setattr(canonical_lock, "RESIDUE_RECEIPT_DIR", tmp_path / "residue-receipts")
+    (clone / "fact.txt").write_text("new\n", encoding="utf-8")
+
+    result = canonical_lock.clear_upstream_residue(clone)
+
+    assert result["ok"] is False
+    assert (clone / "fact.txt").read_text(encoding="utf-8") == "new\n"
+
+
+def test_cli_clear_residue_exit_codes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    _, clone = _fetched_pair_with_new_file(tmp_path, monkeypatch)
+    (clone / "fact.txt").write_text("new\n", encoding="utf-8")
+    assert canonical_lock.main(["--clear-residue", str(clone), "--json"]) == 0
+    assert _git(clone, "status", "--porcelain").stdout.strip() == ""
+    (clone / "fact.txt").write_text("real edit\n", encoding="utf-8")
+    assert canonical_lock.main(["--clear-residue", str(clone), "--json"]) == 1
+
+
 def test_unlock_repairs_excluded_git_and_worktree_control_paths(repo: Path) -> None:
     canonical_lock.lock_repo(repo, justifying_claims=["lane-a"])
     git_worktrees = repo / ".git" / "worktrees"

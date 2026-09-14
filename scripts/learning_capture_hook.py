@@ -72,6 +72,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Check that configured coding-agent completion paths use this policy gate.",
     )
+    parser.add_argument(
+        "--check-full-format",
+        action="store_true",
+        help=(
+            "On an otherwise-allowed completed-work report, emit a non-blocking "
+            "systemMessage naming any mandated closing-format field beyond "
+            "Done/Learnings that is missing. Never blocks; default off so "
+            "existing installs and tests are unaffected until explicitly opted in."
+        ),
+    )
     parser.add_argument("--codex-config", type=Path, default=DEFAULT_CODEX_CONFIG)
     parser.add_argument("--claude-settings", type=Path, default=DEFAULT_CLAUDE_SETTINGS)
     parser.add_argument("--openclaw-runner", type=Path, default=DEFAULT_OPENCLAW_RUNNER)
@@ -318,12 +328,19 @@ REPORT_FIELD_NAMES = (
     "Session goal",
     "Active subgoals",
     "Done",
+    "Verification",
     "Policy",
     "Concerns",
     "Learnings",
     "Decisions",
     "Recommended next",
     "Need anything from human",
+)
+# Fields checked by --check-full-format beyond what classify_report() already
+# enforces on its own (Done gates completed-work detection; Learnings has its
+# own dedicated block_* checks). This tuple is deliberately the remainder.
+_FULL_FORMAT_REMAINING_FIELDS = tuple(
+    name for name in REPORT_FIELD_NAMES if name not in ("Done", "Learnings")
 )
 _REPORT_FIELD_PATTERN = re.compile(
     rf"^[ \t]*(?:[-*][ \t]+)?(?:"
@@ -348,6 +365,20 @@ def report_field(report: str, name: str) -> str | None:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(report)
         return report[match.start("value") : end].strip()
     return None
+
+
+def missing_closing_fields(report: str) -> tuple[str, ...]:
+    """Which mandated closing-format fields, beyond Done/Learnings, are absent.
+
+    Presence-only: this checks whether a field marker exists, not whether its
+    content is substantively correct (e.g. whether a Decision-typed "Need
+    anything from human" actually states a confidence level). Judging content
+    quality is a meaning question the no-prose-string-matching policy reserves
+    for a light LLM, not a regex; this function stays mechanical on purpose.
+    """
+    return tuple(
+        name for name in _FULL_FORMAT_REMAINING_FIELDS if report_field(report, name) is None
+    )
 
 
 # A decline is only checkable when it points at something. These are the shapes a
@@ -769,17 +800,22 @@ def main(argv: list[str] | None = None) -> int:
                     }
                 )
             )
-        elif args.emit_result:
-            print(
-                json.dumps(
-                    {
-                        "decision": "allow",
-                        "classification": decision,
-                        "detail": detail,
-                    },
-                    sort_keys=True,
-                )
-            )
+        else:
+            output: dict[str, Any] = {}
+            if args.emit_result:
+                output["decision"] = "allow"
+                output["classification"] = decision
+                output["detail"] = detail
+            if args.check_full_format and decision != "not_completed_work":
+                missing = missing_closing_fields(report)
+                if missing:
+                    output["systemMessage"] = (
+                        "Closing format incomplete: missing "
+                        + ", ".join(missing)
+                        + ". This is advisory only -- it never blocks the turn."
+                    )
+            if output:
+                print(json.dumps(output, sort_keys=True))
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
         reason = f"learning-capture gate unavailable: {type(exc).__name__}: {exc}"
         print(json.dumps({"decision": "block", "reason": reason}))

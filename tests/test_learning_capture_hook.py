@@ -51,6 +51,7 @@ def run_hook(
     *,
     agent: str = "codex",
     correction_mode: str = "off",
+    extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run one native-shaped Stop event through the hook."""
     return subprocess.run(
@@ -67,6 +68,7 @@ def run_hook(
             correction_mode,
             "--correction-receipt-dir",
             str(tmp_path / "correction-receipts"),
+            *(extra_args or []),
         ],
         input=json.dumps(
             {
@@ -946,3 +948,70 @@ def test_stop_hook_active_ends_the_turn(monkeypatch, tmp_path: Path) -> None:
     assert learning_capture_hook.main(
         ["--agent", "claude-code", "--hook-receipt-dir", str(tmp_path)]
     ) == 0
+
+
+_MINIMAL_COMPLETE_REPORT = (
+    "- **Done** — Implemented.\n"
+    "- **Learnings** — Recorded — project-meta/learnings.md at commit abc1234."
+)
+
+_FULL_CLOSING_FORMAT_REPORT = (
+    "- **Session goal** — ship the thing.\n"
+    "- **Active subgoals** — None.\n"
+    "- **Done** — Implemented.\n"
+    "- **Verification** — ran `pytest -q`, 35 passed.\n"
+    "- **Policy** — no deviations.\n"
+    "- **Concerns** — none.\n"
+    "- **Learnings** — Recorded — project-meta/learnings.md at commit abc1234.\n"
+    "- **Decisions** — None.\n"
+    "- **Recommended next** — none, complete.\n"
+    "- **Need anything from human** — No."
+)
+
+
+def test_check_full_format_off_by_default_stays_silent_on_missing_fields(
+    tmp_path: Path,
+) -> None:
+    """The new check is opt-in: an ordinary minimal report is untouched by default."""
+    result = run_hook(tmp_path, _MINIMAL_COMPLETE_REPORT)
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_check_full_format_warns_on_missing_fields_without_blocking(tmp_path: Path) -> None:
+    result = run_hook(
+        tmp_path, _MINIMAL_COMPLETE_REPORT, extra_args=["--check-full-format"]
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "decision" not in payload  # never blocks
+    assert "Session goal" in payload["systemMessage"]
+    assert "Verification" in payload["systemMessage"]
+    assert "Need anything from human" in payload["systemMessage"]
+    # Fields already enforced elsewhere are not re-listed as missing.
+    assert "Done" not in payload["systemMessage"]
+    assert "Learnings" not in payload["systemMessage"]
+
+
+def test_check_full_format_silent_when_all_fields_present(tmp_path: Path) -> None:
+    """Negative control: a genuinely complete report produces no warning."""
+    result = run_hook(
+        tmp_path, _FULL_CLOSING_FORMAT_REPORT, extra_args=["--check-full-format"]
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+
+
+def test_check_full_format_does_not_fire_on_non_completed_work(tmp_path: Path) -> None:
+    """A quick reply with no Done field is not a completed-work report at all."""
+    result = run_hook(
+        tmp_path,
+        "Sure, that file lives at scripts/foo.py.",
+        extra_args=["--check-full-format"],
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""

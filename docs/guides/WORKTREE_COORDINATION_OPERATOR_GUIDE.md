@@ -517,6 +517,14 @@ registry -- see the fix's own docstring and regression tests in
    - `session_id`
    - `session_name` (the durable broader-goal name when it differs from the runtime ID)
    - narrow `write_paths` for write claims
+   - optional `contact_ref` (`--contact-ref`): a peer-messaging identity for this
+     claim -- for example the exact name/ref another session's `ListAgents`
+     shows for this one. `session_id` alone does not resolve to anything a
+     peer session can message: it is an opaque runtime identifier with no
+     documented bridge to `ListAgents`' own naming. A session blocked on this
+     claim's `overlapping_write_claim` sees `other_contact_ref` (alongside
+     `other_session_id`) in the finding and can message the owner directly
+     instead of treating them as unreachable.
 4. Execute, commit verified slices, and keep docs/trackers truthful.
 5. Push from the checked-out claimed branch. The installed `pre-push` hook runs
    the canonical deterministic push check automatically. Use `make push-check`

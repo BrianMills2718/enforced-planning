@@ -617,6 +617,83 @@ def test_evaluate_claim_detects_parent_child_write_overlap_as_hard_conflict(
     }
 
 
+def test_contact_ref_round_trips_through_normalize_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim's optional contact_ref survives a YAML write/read round trip."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "with-contact.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "docs-authority",
+            "intent": "Patch authority docs",
+            "claim_type": "write",
+            "write_paths": ["docs/ops"],
+            "status": "active",
+            "session_id": "claude-code:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "contact_ref": "claude-code:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        },
+    )
+
+    claims = module.check_claims("project-meta")
+    assert len(claims) == 1
+    assert claims[0].contact_ref == "claude-code:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+
+def test_evaluate_claim_surfaces_other_contact_ref_on_hard_conflict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hard-conflict interaction exposes the other claim's contact_ref when set.
+
+    This is the ListAgents/session_id bridge gap surfaced 2026-09-14: a
+    session hitting overlapping_write_claim previously had no way to resolve
+    the other claim's opaque session_id to anything it could message through
+    ListAgents. An owner who sets --contact-ref on claim creation now shows up
+    directly on the conflict.
+    """
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "existing.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-02T08:00:00+00:00",
+            "expires_at": "2099-04-02T09:00:00+00:00",
+            "projects": ["project-meta"],
+            "scope": "docs-authority",
+            "intent": "Patch authority docs",
+            "claim_type": "write",
+            "write_paths": ["docs/ops"],
+            "status": "active",
+            "contact_ref": "check-enforced-planning-vendor-drift-20260914",
+        },
+    )
+
+    candidate = module.build_candidate_claim(
+        agent="codex",
+        project="project-meta",
+        scope="coordination-v2",
+        intent="Patch claims tool",
+        claim_type="write",
+        write_paths=["docs/ops/INDEX.md"],
+    )
+    result = module.evaluate_claim(candidate, active_claims=module.check_claims("project-meta"))
+
+    assert len(result.hard_conflicts) == 1
+    assert result.hard_conflicts[0].other_contact_ref == "check-enforced-planning-vendor-drift-20260914"
+
+
 def test_evaluate_claim_does_not_self_conflict_when_session_id_is_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -45,6 +45,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _print_notification_line(issue: dict[str, object]) -> None:
+    """Surface whether the colliding claim's owner was notified.
+
+    The `overlapping_write_claim` block already computes and returns this in
+    `details.notification` (real delivery, not just detection -- see
+    push_safety.py), but the real pre-push hook invokes this script without
+    `--json`, so a pusher who actually hits a real conflict never saw it: the
+    ``--json`` payload had it, the terminal output a person actually reads
+    did not. Found via `/audit` 2026-09-14.
+    """
+
+    details = issue.get("details")
+    notification = details.get("notification") if isinstance(details, dict) else None
+    if notification is None:
+        return
+    if not notification.get("attempted"):
+        return
+    if notification.get("ok"):
+        print(f"       notified the other lane's owner via {notification.get('route')}")
+    else:
+        print(f"       could not notify the other lane's owner: {notification.get('error')}")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     payload = push_safety.evaluate_push_safety(
@@ -63,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         for issue in payload["issues"]:
             print(f"ERROR {issue['code']}: {issue['message']}")
+            _print_notification_line(issue)
         for warning in payload["warnings"]:
             print(f"WARN  {warning['code']}: {warning['message']}")
     return 0 if payload["ok"] else 1

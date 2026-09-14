@@ -2001,6 +2001,11 @@ def _run_repository_closeout_hook(
         capture_output=True,
         text=True,
         check=False,
+        # Never read the host's real closeout-gate-disabled marker.
+        env={
+            **os.environ,
+            "ENFORCED_PLANNING_CLOSEOUT_GATE_DISABLE_MARKER": str(ledger_dir.parent / "no-gate-disable-marker"),
+        },
     )
 
 

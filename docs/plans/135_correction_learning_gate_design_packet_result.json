@@ -10,12 +10,12 @@
   "schema_disposition": "extend",
   "design_packet_ref": {
     "path": "docs/plans/135_correction_learning_gate_contest_design.md",
-    "revision": "a7dfa1e",
+    "revision": "ec13065",
     "concern": "Full Standard design: receipt schema delta, re-fire flow, circuit breaker (measured), adjudication call justification, slice horizon"
   },
   "evidence_plan_ref": {
     "path": "docs/plans/135_correction_learning_gate_contest_design.md",
-    "revision": "a7dfa1e",
+    "revision": "ec13065",
     "concern": "Section 8: verification this design licenses"
   },
   "material_concerns": [
@@ -44,7 +44,7 @@
   "next_slice_refs": [
     {
       "path": "docs/plans/135_correction_learning_gate_contest_design.md",
-      "revision": "a7dfa1e",
+      "revision": "ec13065",
       "concern": "Slice 1 (fully_specifiable_now): schema extension + deterministic re-fire check, no LLM call, implementation-ready"
     }
   ],

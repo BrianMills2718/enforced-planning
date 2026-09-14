@@ -51,10 +51,24 @@ if [[ ! -f "$QUIZ_SCRIPT" ]]; then
 fi
 
 # Generate quiz (JSON mode for structured output)
+QUIZ_STDERR_FILE=$(mktemp)
 set +e
-RESULT=$(cd "$REPO_ROOT" && python "$QUIZ_SCRIPT" "$REL_PATH" --json 2>/dev/null)
+RESULT=$(cd "$REPO_ROOT" && python "$QUIZ_SCRIPT" "$REL_PATH" --json 2>"$QUIZ_STDERR_FILE")
 QUIZ_EXIT=$?
 set -e
+QUIZ_CRASHED=0
+grep -q '^Traceback' "$QUIZ_STDERR_FILE" && QUIZ_CRASHED=1
+QUIZ_STDERR=$(tail -n 3 "$QUIZ_STDERR_FILE")
+rm -f "$QUIZ_STDERR_FILE"
+
+if [[ $QUIZ_EXIT -ne 0 && $QUIZ_CRASHED -eq 1 ]]; then
+    # Advisory, so never block; but a crashed generator must not look like
+    # "no questions for this file". Deliberate exits (2 = no relationships.yaml)
+    # stay quiet.
+    FAILURE_ESCAPED=$(printf 'post-edit quiz generator failed (exit %s) for %s: %s' "$QUIZ_EXIT" "$REL_PATH" "$QUIZ_STDERR" | jq -Rs .)
+    printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":%s}}\n' "$FAILURE_ESCAPED"
+    exit 0
+fi
 
 if [[ $QUIZ_EXIT -ne 0 ]] || [[ -z "$RESULT" ]] || [[ "$RESULT" == "[]" ]]; then
     exit 0

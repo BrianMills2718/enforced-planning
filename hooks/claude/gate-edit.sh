@@ -219,6 +219,12 @@ log_gate_decision() {
 }
 
 INPUT="$(cat)"
+if ! command -v jq >/dev/null 2>&1; then
+    # Without jq every field below parses as empty and the gate skips every
+    # edit. Degrade to allowing the edit, but never silently.
+    printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"required-reading gate is NOT running: jq is not installed on this host, so edits are not being checked."}}'
+    exit 0
+fi
 TOOL_NAME="$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || echo "")"
 FILE_PATH="$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null || echo "")"
 
@@ -268,14 +274,24 @@ if [[ ! -f "$CHECK_SCRIPT" ]]; then
     exit 0
 fi
 
+CHECK_STDERR_FILE="$(mktemp)"
 set +e
 if [[ -n "$CHECK_CONFIG" ]]; then
-    RESULT="$(cd "$REPO_ROOT" && python "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" --config "$CHECK_CONFIG" 2>/dev/null)"
+    RESULT="$(cd "$REPO_ROOT" && python "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" --config "$CHECK_CONFIG" 2>"$CHECK_STDERR_FILE")"
 else
-    RESULT="$(cd "$REPO_ROOT" && python "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" 2>/dev/null)"
+    RESULT="$(cd "$REPO_ROOT" && python "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" 2>"$CHECK_STDERR_FILE")"
 fi
 CHECK_EXIT=$?
 set -e
+CHECK_STDERR="$(tail -n 5 "$CHECK_STDERR_FILE")"
+rm -f "$CHECK_STDERR_FILE"
+if [[ $CHECK_EXIT -ne 0 && -z "${RESULT//[[:space:]]/}" ]]; then
+    # A crash exits non-zero with no report: say what failed so the block is
+    # actionable, instead of blocking with an empty reason.
+    RESULT="required-reading check failed to run (exit $CHECK_EXIT) for $REL_PATH:
+$CHECK_STDERR
+Fix scripts/check_required_reading.py, or set SKIP_READ_GATE=1 for this session."
+fi
 
 if [[ $CHECK_EXIT -ne 0 ]]; then
     CONTEXT_PAYLOAD="$(format_gate_context "$RESULT" "1")"

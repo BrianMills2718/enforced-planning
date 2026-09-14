@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "record_type": "design_packet_result",
+  "handoff_id": "roadmap-goal:correction-mode-contest-gate:design-contest-rebuttal-loop:111cda6",
+  "source_handoff_sha256": "3a71ecdd77f7a6bb1bf301150018752883f748e70873446b626d2fa844e1ffb6",
+  "source_roadmap_revision": "111cda6",
+  "goal_id": "design-contest-rebuttal-loop",
+  "objective_sha256": "a1b6fac3704d6c98c6eab9243e8bed4dde389f4d508bef0c197e3625ab933b2e",
+  "objective_disposition": "preserved",
+  "schema_disposition": "extend",
+  "design_packet_ref": {
+    "path": "docs/plans/135_correction_learning_gate_contest_design.md",
+    "revision": "1ac898f",
+    "concern": "Full Standard design: receipt schema delta, re-fire flow, circuit breaker, adjudication call justification, slice horizon"
+  },
+  "evidence_plan_ref": {
+    "path": "docs/plans/135_correction_learning_gate_contest_design.md",
+    "revision": "1ac898f",
+    "concern": "Section 8: verification this design licenses"
+  },
+  "material_concerns": [
+    {
+      "concern_id": "single-shot-refire-gap",
+      "concern_class": "architecture",
+      "summary": "The existing --correction-mode block only forces one retry: learning_capture_hook.py unconditionally allows on a re-fired Stop event (stop_hook_active: true) regardless of whether the flagged problem was fixed.",
+      "disposition": "closed",
+      "resolution": "Addressed directly in the design's section 3 re-fire flow: the re-fire path now checks for a compliant Learnings marker or a contest marker instead of blanket-allowing."
+    },
+    {
+      "concern_id": "contest-attempt-bound",
+      "concern_class": "policy",
+      "summary": "One-contest-attempt circuit breaker (section 4) is a recommended default, not a derived fact -- a real product/policy choice.",
+      "disposition": "assigned",
+      "owner_role": "brian",
+      "resume_condition": "Brian dispositions accept/revise/reject/delegate on the one-attempt bound before slice 2 (the adjudication call) is implemented."
+    },
+    {
+      "concern_id": "harness-refire-ceiling",
+      "concern_class": "verification",
+      "summary": "Whether Claude Code's own Stop-hook re-fire mechanism has an independent hard ceiling on repeated blocks is unverified and must not be assumed.",
+      "disposition": "assigned",
+      "owner_role": "implementer",
+      "resume_condition": "A real test observes the actual re-fire ceiling before slice 2 is wired live, per section 4."
+    }
+  ],
+  "next_slice_refs": [
+    {
+      "path": "docs/plans/135_correction_learning_gate_contest_design.md",
+      "revision": "1ac898f",
+      "concern": "Slice 1 (fully_specifiable_now): schema extension + deterministic re-fire check, no LLM call, implementation-ready"
+    }
+  ],
+  "completed_at": "2026-09-14T17:10:00Z"
+}

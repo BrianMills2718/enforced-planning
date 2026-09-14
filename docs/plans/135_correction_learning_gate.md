@@ -732,3 +732,16 @@ Selection recorded via Company Planning's `initiative-roadmap` skill:
 design-contest-rebuttal-loop`). Routed to `bounded-design` for the contest/
 rebuttal mechanism's design ambiguity (new receipt status, adjudication flow,
 circuit-breaker bound) -- not a fresh classifier-accuracy attempt.
+
+Standard design completed via `bounded-design`:
+[`135_correction_learning_gate_contest_design.md`](135_correction_learning_gate_contest_design.md),
+result record
+[`135_correction_learning_gate_design_packet_result.json`](135_correction_learning_gate_design_packet_result.json).
+Real finding that changed the design: the existing block only forces one
+retry today (blanket-allows on Stop re-fire regardless of whether the
+problem was fixed) -- closing that, not just adding a schema field, is the
+actual work. Two concerns left explicitly assigned, not silently decided:
+the one-contest-attempt circuit-breaker bound (Brian's disposition) and
+whether Claude Code's own Stop-hook re-fire has an independent ceiling
+(needs a real test, not an assumption). Slice 1 (schema extension +
+deterministic re-fire check, zero LLM cost) is implementation-ready now.

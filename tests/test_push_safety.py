@@ -113,10 +113,30 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
     monkeypatch: pytest.MonkeyPatch,
     other_claim_type: str,
 ) -> None:
-    """Push-check should block when branch delta overlaps another claim's write ownership."""
+    """Push-check should block when branch delta overlaps another claim's write ownership
+    AND the two branches' actual content would really conflict on integration."""
 
     repo_root = tmp_path / "demo"
     _init_git_repo(repo_root)
+    # The other lane branches from the same seed commit and independently adds
+    # its own, differently-worded feature.py -- a genuine content conflict on
+    # eventual integration, not just a branch pointer aliasing the same
+    # commit. The merge-tree prediction added alongside this test now only
+    # blocks on a declared-path overlap when a real conflict like this one is
+    # predicted.
+    other_worktree = tmp_path / "demo_worktrees" / "plan-99-other"
+    other_worktree.mkdir(parents=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-99-other"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.py").write_text("print('a genuinely different version')\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(repo_root), "add", "feature.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "other lane's divergent feature.py"], check=True, capture_output=True, text=True)
+
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
     subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-42-demo"], check=True, capture_output=True, text=True)
     (repo_root / "feature.py").write_text("print('hi')\n", encoding="utf-8")
     (repo_root / "independent.py").write_text("print('continue')\n", encoding="utf-8")
@@ -131,9 +151,6 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
-    other_worktree = tmp_path / "demo_worktrees" / "plan-99-other"
-    other_worktree.mkdir(parents=True)
-    subprocess.run(["git", "-C", str(repo_root), "branch", "plan-99-other"], check=True, capture_output=True, text=True)
     _write_claim(
         claims_dir,
         "current.yaml",
@@ -190,6 +207,89 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
             "and continue another authorized ready work unit."
         ),
     }
+
+
+def test_push_check_warns_instead_of_blocking_a_predicted_clean_overlap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A declared write_paths overlap that would actually merge cleanly (two
+    lanes editing different lines of the same file) warns instead of
+    blocking -- the metadata overlap alone is not proof of a real conflict."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    (repo_root / "shared.py").write_text("line one\nline two\nline three\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "shared.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "seed shared.py"], check=True, capture_output=True, text=True)
+
+    other_worktree = tmp_path / "demo_worktrees" / "plan-99-other"
+    other_worktree.mkdir(parents=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-99-other"], check=True, capture_output=True, text=True)
+    (repo_root / "shared.py").write_text("line one\nline two\nline three\nother lane's own new line\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-am", "other lane appends its own line"], check=True, capture_output=True, text=True)
+
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-42-demo"], check=True, capture_output=True, text=True)
+    (repo_root / "shared.py").write_text("this lane's own new line\nline one\nline two\nline three\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-am", "this lane prepends its own line"], check=True, capture_output=True, text=True)
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    sessions_dir = tmp_path / "sessions"
+    sessions_dir.mkdir(parents=True)
+    current_tracker_path = sessions_dir / "current.yaml"
+    current_tracker_path.write_text("session_id: codex:thread-1\n", encoding="utf-8")
+    _write_claim(
+        claims_dir,
+        "current.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "plan-42-demo",
+            "intent": "Own current branch",
+            "claim_type": "program",
+            "plan_ref": "UNPLANNED",
+            "branch": "plan-42-demo",
+            "worktree_path": str(repo_root),
+            "repo_root": str(repo_root),
+            "broader_goal": "Demonstrate a predicted-clean overlap warning",
+            "tracker_path": str(current_tracker_path),
+            "session_id": "codex:thread-1",
+            "session_name": "current-branch-owner",
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "other.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-09T10:05:00+00:00",
+            "expires_at": "2099-04-09T11:05:00+00:00",
+            "projects": ["demo"],
+            "scope": "reviewed-scope",
+            "intent": "Append to shared file",
+            "claim_type": "write",
+            "write_paths": ["shared.py"],
+            "branch": "plan-99-other",
+            "worktree_path": str(other_worktree),
+            "session_id": "claude-code:session-1",
+            "status": "active",
+        },
+    )
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    assert payload["ok"]
+    assert not any(item["code"] == "overlapping_write_claim" for item in payload["issues"])
+    assert any(
+        item["code"] == "overlapping_write_claim_predicted_clean" for item in payload["warnings"]
+    )
 
 
 @pytest.mark.parametrize(

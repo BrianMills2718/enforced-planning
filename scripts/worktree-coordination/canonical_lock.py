@@ -857,6 +857,171 @@ def reconcile(
 # --------------------------------------------------------------------------
 
 
+RESIDUE_RECEIPT_DIR = Path.home() / ".local" / "state" / "canonical-residue"
+
+
+def _blob_at(repo_root: Path, ref: str, path: str) -> str | None:
+    done = _git(repo_root, ["rev-parse", "--verify", "--quiet", f"{ref}:{path}"])
+    return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
+
+
+def _worktree_blob(repo_root: Path, path: str) -> str | None:
+    target = repo_root / path
+    if not target.is_file() or target.is_symlink():
+        return None
+    done = _git(repo_root, ["hash-object", "--", path])
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def _index_blob(repo_root: Path, path: str) -> str | None:
+    done = _git(repo_root, ["ls-files", "-s", "--", path])
+    fields = done.stdout.split()
+    return fields[1] if done.returncode == 0 and len(fields) >= 2 else None
+
+
+def classify_dirty_entries(repo_root: Path, upstream: str) -> dict[str, Any]:
+    """Split working-tree changes into upstream residue, benign untracked, and real work.
+
+    Why this exists: a session edits a canonical checkout, the pre-commit guard
+    refuses the commit, the session moves the same change to a worktree and
+    merges it, and the canonical copy is left behind byte-identical to what
+    ``origin`` now holds. Every automatic freshness path then treats that
+    leftover as unrelated work and refuses to advance, forever: on 2026-09-14
+    three such files kept project-meta 69 commits behind while a feedback
+    runtime ran stale code all night. Content already in ``upstream`` is not
+    local work; discarding the local copy loses nothing.
+
+    Conservative by construction. An entry is residue only when its working
+    file hashes to exactly the upstream blob (or is absent where upstream has
+    no such path) and its index entry is HEAD's or upstream's blob. Renames,
+    copies, conflicts, symlinks, and anything unreadable are real work.
+    Untracked files upstream does not contain cannot block a fast-forward and
+    are reported separately, never touched.
+    """
+    status = subprocess.run(
+        ["git", "-C", str(repo_root), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        capture_output=True,
+        check=False,
+    )
+    result: dict[str, Any] = {"residue": [], "benign_untracked": [], "real": [], "error": None}
+    if status.returncode != 0:
+        result["error"] = status.stderr.decode(errors="replace").strip() or "git status failed"
+        return result
+    fields = status.stdout.decode("utf-8", errors="surrogateescape").split("\0")
+    index = 0
+    while index < len(fields):
+        entry = fields[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2], entry[3:]
+        if "R" in code or "C" in code:
+            index += 1  # skip the rename/copy source path
+            result["real"].append({"path": path, "code": code, "why": "rename or copy"})
+            continue
+        if "U" in code or code in {"AA", "DD"}:
+            result["real"].append({"path": path, "code": code, "why": "unmerged"})
+            continue
+        upstream_blob = _blob_at(repo_root, upstream, path)
+        worktree_blob = _worktree_blob(repo_root, path)
+        worktree_exists = (repo_root / path).exists() or (repo_root / path).is_symlink()
+        if code == "??":
+            if upstream_blob is None:
+                result["benign_untracked"].append(path)
+            elif worktree_blob is not None and worktree_blob == upstream_blob:
+                result["residue"].append({"path": path, "code": code, "blob": upstream_blob})
+            else:
+                result["real"].append({"path": path, "code": code, "why": "untracked path differs from upstream"})
+            continue
+        if worktree_exists:
+            content_matches = worktree_blob is not None and worktree_blob == upstream_blob
+        else:
+            content_matches = upstream_blob is None
+        index_blob = _index_blob(repo_root, path)
+        head_blob = _blob_at(repo_root, "HEAD", path)
+        index_matches = index_blob in {head_blob, upstream_blob}
+        if content_matches and index_matches:
+            result["residue"].append({"path": path, "code": code, "blob": upstream_blob})
+        else:
+            why = "content differs from upstream" if not content_matches else "staged content differs"
+            result["real"].append({"path": path, "code": code, "why": why})
+    return result
+
+
+def _upstream_of(repo_root: Path) -> str | None:
+    done = _git(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+    return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
+
+
+def _restore_residue(repo_root: Path, residue: list[dict[str, Any]]) -> None:
+    """Return residue paths to HEAD so a fast-forward can bring upstream's identical copy."""
+    tracked = [item["path"] for item in residue if item["code"] != "??" and _blob_at(repo_root, "HEAD", item["path"])]
+    if tracked:
+        done = _git(repo_root, ["restore", "--source=HEAD", "--staged", "--worktree", "--", *tracked])
+        if done.returncode != 0:
+            raise RuntimeError(f"git restore failed: {done.stderr.strip()}")
+    for item in residue:
+        path = item["path"]
+        if item["code"] != "??" and _blob_at(repo_root, "HEAD", path):
+            continue
+        # Absent from HEAD: staged addition or untracked copy of an upstream file.
+        _git(repo_root, ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", path])
+        target = repo_root / path
+        if target.is_file() and not target.is_symlink():
+            target.unlink()
+
+
+def clear_upstream_residue(repo_root: Path, *, upstream: str | None = None) -> dict[str, Any]:
+    """Discard working-tree changes that are byte-identical to upstream; never touch real work.
+
+    Writes a receipt (paths and upstream blob ids, which remain in the object
+    store) before changing anything. A locked checkout is unlocked only for the
+    restore and re-locked in ``finally`` with its original justifying claims.
+    """
+    repo_root = repo_root.resolve()
+    upstream = upstream or _upstream_of(repo_root)
+    if upstream is None:
+        return {"ok": False, "action": "residue_skipped", "repo_root": str(repo_root),
+                "reason": "checkout has no upstream branch"}
+    # Callers fetch first; classification compares against the upstream ref as observed.
+    classified = classify_dirty_entries(repo_root, upstream)
+    base = {"repo_root": str(repo_root), "upstream": upstream,
+            "benign_untracked": classified["benign_untracked"], "real": classified["real"]}
+    if classified["error"]:
+        return {**base, "ok": False, "action": "residue_skipped", "reason": classified["error"]}
+    if classified["real"]:
+        return {**base, "ok": False, "action": "residue_not_cleared", "cleared": [],
+                "reason": f"{len(classified['real'])} change(s) are real local work; nothing touched"}
+    residue = classified["residue"]
+    if not residue:
+        return {**base, "ok": True, "action": "no_residue", "cleared": []}
+
+    RESIDUE_RECEIPT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    receipt_file = RESIDUE_RECEIPT_DIR / f"{repo_root.name}-{stamp}.json"
+    head = _git(repo_root, ["rev-parse", "HEAD"]).stdout.strip()
+    receipt_file.write_text(json.dumps({
+        "schema_version": 1, "repo_root": str(repo_root), "head": head, "upstream": upstream,
+        "upstream_revision": _git(repo_root, ["rev-parse", upstream]).stdout.strip(),
+        "cleared": residue, "benign_untracked": classified["benign_untracked"],
+        "cleared_at": datetime.now(timezone.utc).isoformat(),
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    lock = read_receipt(repo_root)
+    justifying = list(lock.justifying_claims) if lock else []
+    if lock is not None:
+        unlock_repo(repo_root)
+    try:
+        _restore_residue(repo_root, residue)
+    finally:
+        if lock is not None:
+            lock_repo(repo_root, justifying_claims=justifying, session_id="residue")
+    after = classify_dirty_entries(repo_root, upstream)
+    ok = not after["residue"] and not after["real"] and not after["error"]
+    return {**base, "ok": ok, "action": "residue_cleared" if ok else "residue_clear_incomplete",
+            "cleared": residue, "receipt": str(receipt_file)}
+
+
 def sync_repo(repo_root: Path, *, ref_args: list[str] | None = None) -> dict[str, Any]:
     """Fast-forward a locked canonical checkout, restoring the lock afterwards.
 
@@ -885,13 +1050,26 @@ def sync_repo(repo_root: Path, *, ref_args: list[str] | None = None) -> dict[str
             }
 
         status = _git(repo_root, ["status", "--porcelain"])
-        if status.returncode != 0 or status.stdout.strip():
+        residue_report: dict[str, Any] | None = None
+        if status.returncode != 0:
             return {
                 "ok": False,
                 "action": "sync_skipped",
                 "repo_root": str(repo_root),
-                "reason": "canonical checkout has uncommitted changes; lock preserved",
+                "reason": "canonical checkout status is unreadable; lock preserved",
             }
+        if status.stdout.strip():
+            # Already-merged leftovers identical to upstream must not pin the
+            # checkout forever; real local work still refuses the sync.
+            residue_report = clear_upstream_residue(repo_root)
+            if not residue_report["ok"]:
+                return {
+                    "ok": False,
+                    "action": "sync_skipped",
+                    "repo_root": str(repo_root),
+                    "reason": "canonical checkout has uncommitted changes; lock preserved",
+                    "residue": residue_report,
+                }
         branch = _git(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"])
         upstream = _git(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
         expected_branch = upstream.stdout.strip().removeprefix("origin/")
@@ -935,6 +1113,7 @@ def sync_repo(repo_root: Path, *, ref_args: list[str] | None = None) -> dict[str
             "relock": relocked.get("action"),
             "lock_integrity": integrity.get("verdict"),
             "justifying_claims": justifying,
+            "residue": residue_report,
         }
 
 
@@ -1311,6 +1490,14 @@ def build_parser() -> argparse.ArgumentParser:
             "re-lock. The re-lock always runs, including when the pull fails."
         ),
     )
+    mode.add_argument(
+        "--clear-residue",
+        metavar="REPO_ROOT",
+        help=(
+            "Discard uncommitted changes that are byte-identical to the upstream branch "
+            "(merged-work leftovers), with a receipt. Real local work is never touched."
+        ),
+    )
     mode.add_argument("--reconcile", action="store_true", help="Sync lock state with live lane claims")
     mode.add_argument("--explain", metavar="REPO_ROOT", help="Print the recovery message for a locked checkout")
     mode.add_argument("--hook", action="store_true", help="Run as a Claude Code / Codex hook, reading JSON on stdin")
@@ -1387,6 +1574,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sync:
         result = sync_repo(Path(args.sync))
+        emit(result)
+        return 0 if result["ok"] else 1
+
+    if args.clear_residue:
+        result = clear_upstream_residue(Path(args.clear_residue))
         emit(result)
         return 0 if result["ok"] else 1
 

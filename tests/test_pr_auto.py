@@ -31,6 +31,17 @@ def test_parse_github_repo_slug_supports_common_remote_forms() -> None:
     assert module.parse_github_repo_slug("https://github.com/BrianMills2718/project-meta.git") == "BrianMills2718/project-meta"  # type: ignore[attr-defined]
 
 
+def test_account_defaults_to_origin_owner_not_a_maintainer_identity() -> None:
+    """Installed consumers must not carry one maintainer's GitHub login as the default."""
+    module = _load()
+
+    assert module.resolve_github_account(None, "git@github.com:example-org/tool.git") == "example-org"  # type: ignore[attr-defined]
+    assert module.resolve_github_account("explicit-user", "git@github.com:example-org/tool.git") == "explicit-user"  # type: ignore[attr-defined]
+    with pytest.raises(SystemExit, match="--account"):
+        module.resolve_github_account(None, "")  # type: ignore[attr-defined]
+    assert "BrianMills2718" not in MODULE_PATH.read_text(encoding="utf-8")
+
+
 def test_origin_matches_expected_repo_compares_repo_name_only() -> None:
     """Origin check should compare the repo name after slug parsing."""
     module = _load()

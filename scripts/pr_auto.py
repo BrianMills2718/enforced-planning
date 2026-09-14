@@ -66,6 +66,22 @@ def origin_matches_expected_repo(remote_url: str, expected_repo: str) -> bool:
     return repo == expected_repo
 
 
+def resolve_github_account(explicit_account: str | None, remote_url: str) -> str:
+    """Return the gh login to act as: explicit, else the origin repository owner.
+
+    This script is installed into every governed consumer, so it must not
+    default to one maintainer's login. finish_pr routes by owner the same way.
+    """
+    if explicit_account:
+        return explicit_account
+    slug = parse_github_repo_slug(remote_url)
+    if slug is None:
+        raise SystemExit(
+            f"Cannot derive a GitHub account from origin '{remote_url}'; pass --account.",
+        )
+    return slug.split("/", 1)[0]
+
+
 def filter_non_ignorable_status_lines(lines: list[str]) -> list[str]:
     """Drop known transient metadata files from git-status output lines."""
     out: list[str] = []
@@ -416,7 +432,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Autonomous PR workflow with preflight checks.")
     parser.add_argument("--base", default="main", help="Target base branch.")
     parser.add_argument("--expected-origin-repo", required=True, help="Expected origin repo name (e.g., my-repo).")
-    parser.add_argument("--account", default="BrianMills2718", help="GitHub account for gh auth switch.")
+    parser.add_argument(
+        "--account",
+        default=None,
+        help="GitHub account for gh auth switch (default: the origin repository owner).",
+    )
     parser.add_argument("--fill", action="store_true", help="Use gh --fill when creating PR.")
     parser.add_argument("--title", default=None, help="PR title (optional).")
     parser.add_argument("--body-file", type=Path, default=None, help="PR body file path.")
@@ -430,7 +450,10 @@ def main() -> int:
     branch = _ensure_branch(cwd)
     _ensure_clean_tree(cwd)
     _ensure_origin(cwd, args.expected_origin_repo)
-    with isolated_github_auth(cwd=cwd, gh_env=gh_env, account=args.account) as isolated_env:
+    account = resolve_github_account(
+        args.account, _git_stdout(["config", "--get", "remote.origin.url"], cwd=cwd)
+    )
+    with isolated_github_auth(cwd=cwd, gh_env=gh_env, account=account) as isolated_env:
         if args.preflight_only:
             print("Preflight passed.")
             return 0

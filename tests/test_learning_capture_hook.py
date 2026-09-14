@@ -1305,3 +1305,175 @@ def test_check_implicit_completion_does_not_fire_when_done_marker_present(
 
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+# -- investigation_turns_since_last_disposition -----------------------------
+
+
+def _tool_turn(prompt: str, *, text: str = "") -> list[dict[str, object]]:
+    """One turn: a real user prompt, a tool call, and optional assistant text."""
+    events: list[dict[str, object]] = [
+        _transcript_event("user", prompt),
+        _bash_event("python -m pytest -q"),
+        _transcript_event("user", [{"type": "tool_result", "content": "ok"}]),
+    ]
+    if text:
+        events.append(_transcript_event("assistant", [{"type": "text", "text": text}]))
+    return events
+
+
+def _no_tool_turn(prompt: str, text: str) -> list[dict[str, object]]:
+    """One turn: a real user prompt answered with text only, no tool use."""
+    return [
+        _transcript_event("user", prompt),
+        _transcript_event("assistant", [{"type": "text", "text": text}]),
+    ]
+
+
+def _disposition_turn(prompt: str) -> list[dict[str, object]]:
+    """One turn that used a tool AND recorded a Learnings-shaped disposition."""
+    return [
+        _transcript_event("user", prompt),
+        _bash_event("python -m pytest -q"),
+        _transcript_event("user", [{"type": "tool_result", "content": "ok"}]),
+        _transcript_event(
+            "assistant",
+            [{"type": "text", "text": "Investigated the failure.\n**Learnings**: Recorded lrn-example."}],
+        ),
+    ]
+
+
+def test_split_transcript_into_turns_splits_on_real_user_boundaries(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    events = _tool_turn("first ask") + _tool_turn("second ask")
+    transcript = _write_transcript(tmp_path, events)
+
+    turns = learning_capture_hook._split_transcript_into_turns(transcript)
+
+    assert turns is not None
+    assert len(turns) == 2
+    assert turns[0][0]["message"]["content"] == "first ask"
+    assert turns[1][0]["message"]["content"] == "second ask"
+
+
+def test_split_transcript_into_turns_none_on_missing_file(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    assert (
+        learning_capture_hook._split_transcript_into_turns(str(tmp_path / "missing.jsonl")) is None
+    )
+
+
+def test_turn_used_any_tool_true_and_false() -> None:
+    from scripts import learning_capture_hook
+
+    tool_turn = [_transcript_event("assistant", [{"type": "tool_use", "name": "Bash", "input": {}}])]
+    text_only_turn = [_transcript_event("assistant", [{"type": "text", "text": "hi"}])]
+
+    assert learning_capture_hook._turn_used_any_tool(tool_turn) is True
+    assert learning_capture_hook._turn_used_any_tool(text_only_turn) is False
+
+
+def test_turn_assistant_text_joins_text_blocks() -> None:
+    from scripts import learning_capture_hook
+
+    turn = [
+        _transcript_event("assistant", [{"type": "tool_use", "name": "Bash", "input": {}}]),
+        _transcript_event("assistant", [{"type": "text", "text": "part one"}]),
+        _transcript_event("assistant", [{"type": "text", "text": "part two"}]),
+    ]
+
+    assert learning_capture_hook._turn_assistant_text(turn) == "part one\npart two"
+
+
+def test_investigation_turns_since_last_disposition_counts_backward(tmp_path: Path) -> None:
+    """Three consecutive tool-using turns with no disposition anywhere ->
+    count 3, matching the replay script's own exact backward-walk logic."""
+    from scripts import learning_capture_hook
+
+    events = _tool_turn("item one") + _tool_turn("item two") + _tool_turn("item three")
+    transcript = _write_transcript(tmp_path, events)
+
+    assert learning_capture_hook.investigation_turns_since_last_disposition(transcript) == 3
+
+
+def test_investigation_turns_since_last_disposition_breaks_on_disposition(tmp_path: Path) -> None:
+    """A disposition-bearing turn resets the count to 0 at that point --
+    only turns AFTER it (more recent) are counted."""
+    from scripts import learning_capture_hook
+
+    events = _disposition_turn("recorded finding") + _tool_turn("item two") + _tool_turn("item three")
+    transcript = _write_transcript(tmp_path, events)
+
+    assert learning_capture_hook.investigation_turns_since_last_disposition(transcript) == 2
+
+
+def test_investigation_turns_since_last_disposition_breaks_on_no_tool_turn(tmp_path: Path) -> None:
+    """A pure read-and-answer turn (no tool use) also breaks the count."""
+    from scripts import learning_capture_hook
+
+    events = (
+        _no_tool_turn("what time is it", "5pm")
+        + _tool_turn("item two")
+        + _tool_turn("item three")
+    )
+    transcript = _write_transcript(tmp_path, events)
+
+    assert learning_capture_hook.investigation_turns_since_last_disposition(transcript) == 2
+
+
+def test_investigation_turns_since_last_disposition_none_on_missing_file(tmp_path: Path) -> None:
+    from scripts import learning_capture_hook
+
+    assert (
+        learning_capture_hook.investigation_turns_since_last_disposition(
+            str(tmp_path / "missing.jsonl")
+        )
+        is None
+    )
+
+
+def test_check_implicit_completion_warns_on_long_investigation_arc_with_no_disposition(
+    tmp_path: Path,
+) -> None:
+    """The gap this feature exists for: no commit anywhere (case 1 can't
+    see it), but 10 consecutive tool-using turns with no Learnings-shaped
+    disposition -- the original 2026-09-02 motivating incident's shape."""
+    events: list[dict[str, object]] = []
+    for i in range(10):
+        events.extend(_tool_turn(f"item {i}"))
+    transcript = _write_transcript(tmp_path, events)
+
+    result = run_hook(
+        tmp_path,
+        "Investigated the last item and it looks like a dead end, no fix needed.",
+        extra_args=["--check-implicit-completion"],
+        transcript_path=transcript,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "decision" not in payload  # advisory only, never blocks
+    assert "10th consecutive turn" in payload["systemMessage"]
+    assert "never blocks" in payload["systemMessage"]
+
+
+def test_check_implicit_completion_silent_below_investigation_arc_threshold(
+    tmp_path: Path,
+) -> None:
+    """Below the calibrated threshold (9 turns, one short of 10): stays silent."""
+    events: list[dict[str, object]] = []
+    for i in range(9):
+        events.extend(_tool_turn(f"item {i}"))
+    transcript = _write_transcript(tmp_path, events)
+
+    result = run_hook(
+        tmp_path,
+        "Still working through the list.",
+        extra_args=["--check-implicit-completion"],
+        transcript_path=transcript,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""

@@ -87,15 +87,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help=(
             "On a report classified not_completed_work (no Done marker), emit a "
-            "non-blocking systemMessage if the transcript shows this turn "
-            "committed, pushed, or merged (a Bash call containing 'git commit', "
-            "'git push', or 'gh pr merge') -- catching a completed-work turn "
-            "that omitted the closing format entirely, which --check-full-format "
-            "alone cannot see (it only runs when a report already passed the "
-            "Done-marker gate). Deliberately narrower than 'any tool used this "
-            "turn': replayed against 489 real historical turns, that broader "
-            "signal fired on 73% of them. Never blocks; default off. Silently "
-            "skips when transcript_path is missing or unreadable."
+            "non-blocking systemMessage in either of two cases: (1) the "
+            "transcript shows this turn committed, pushed, or merged (a Bash "
+            "call containing 'git commit', 'git push', or 'gh pr merge') -- "
+            "catching a completed-work turn that omitted the closing format "
+            "entirely, which --check-full-format alone cannot see (it only runs "
+            "when a report already passed the Done-marker gate); or (2) this is "
+            "the 10th+ consecutive tool-using turn since the last turn that "
+            "recorded a Learnings-shaped disposition -- catching a long "
+            "investigation arc that ends in a bare ask with no commits anywhere "
+            "in it, the shape case (1) structurally cannot see. Deliberately "
+            "narrower than 'any tool used this turn': replayed against 489 real "
+            "historical turns, that broader signal fired on 73% of them; the "
+            "investigation-arc threshold was separately calibrated against 598 "
+            "real not_completed_work turns and fires on 2.3% of them. Never "
+            "blocks; default off. Silently skips when transcript_path is "
+            "missing or unreadable."
         ),
     )
     parser.add_argument("--codex-config", type=Path, default=DEFAULT_CODEX_CONFIG)
@@ -673,6 +680,15 @@ def classify_report(report: str) -> tuple[str, str]:
 # PR merge in the current turn.
 _DURABLE_ACTION_BASH_MARKERS = ("git commit", "git push", "gh pr merge")
 
+# Calibrated against 598 real not_completed_work turns sampled from 15 real
+# transcripts (2026-09-14): count distribution 0:158 1:154 2:97 3:58 4:38
+# 5:24 6:16 7:16 8:13 9:10 10:5 11:4 12:3 13:2. Threshold 10 fires on 2.3%
+# (14/598) -- rare enough to stay a real signal, not noise, and manual review
+# of the count>=8 sample fires showed genuine long investigation arcs
+# (including ones that read as completed work described in prose without a
+# formal Done/Learnings marker), not routine mid-task narration.
+_INVESTIGATION_ARC_THRESHOLD = 10
+
 
 def _is_tool_result_only_content(content: object) -> bool:
     """Return whether a transcript event's message content is pure tool output.
@@ -752,6 +768,106 @@ def turn_took_durable_action(transcript_path: str | Path | None) -> bool | None:
             if _bash_command_took_durable_action(block.get("input", {}).get("command")):
                 took_action = True
     return took_action
+
+
+def _split_transcript_into_turns(transcript_path: str | Path | None) -> list[list[dict[str, Any]]] | None:
+    """Split a transcript into turns, each starting at one real user-prompt
+    boundary (inclusive) and running up to the next one (exclusive).
+
+    Returns ``None`` (never an empty list standing in for it) on any read,
+    parse, or no-real-boundary failure -- callers must treat that as
+    "unknown", not "zero turns".
+    """
+    if not transcript_path:
+        return None
+    try:
+        raw = Path(transcript_path).expanduser().read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    events: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    if not events:
+        return None
+    boundaries: list[int] = []
+    for index, event in enumerate(events):
+        if event.get("type") != "user":
+            continue
+        content = event.get("message", {}).get("content")
+        if not _is_tool_result_only_content(content):
+            boundaries.append(index)
+    if not boundaries:
+        return None
+    return [
+        events[start : boundaries[i + 1] if i + 1 < len(boundaries) else len(events)]
+        for i, start in enumerate(boundaries)
+    ]
+
+
+def _turn_used_any_tool(turn_events: list[dict[str, Any]]) -> bool:
+    for event in turn_events:
+        if event.get("type") != "assistant":
+            continue
+        content = event.get("message", {}).get("content")
+        if not isinstance(content, list):
+            continue
+        if any(isinstance(block, dict) and block.get("type") == "tool_use" for block in content):
+            return True
+    return False
+
+
+def _turn_assistant_text(turn_events: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for event in turn_events:
+        if event.get("type") != "assistant":
+            continue
+        content = event.get("message", {}).get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+    return "\n".join(parts)
+
+
+def investigation_turns_since_last_disposition(transcript_path: str | Path | None) -> int | None:
+    """How many consecutive recent turns used a tool and recorded no
+    Learnings-shaped disposition of their own, counted backward from the
+    current (most recent) turn.
+
+    Targets the shape --check-implicit-completion's commit/push/merge
+    signal structurally cannot see at all: a multi-turn investigation that
+    produces a genuine finding and correctly ends in a bare decision-ask
+    (per the human-decision-gets-its-own-turn policy) with no commits
+    anywhere in it -- the exact original 2026-09-02 incident
+    closeout-disposition-must-cover-ask-only-turns was proposed for. A
+    turn with no tool use at all (a pure read-and-answer exchange) breaks
+    the count; a turn that already carries its own Learnings-shaped
+    disposition also breaks it, in both cases treating that point as
+    "already accounted for" rather than counting through it.
+
+    Returns ``None`` (never 0-as-unknown) when the transcript cannot be
+    split into turns at all.
+    """
+    turns = _split_transcript_into_turns(transcript_path)
+    if turns is None:
+        return None
+    count = 0
+    for turn_events in reversed(turns):
+        text = _turn_assistant_text(turn_events)
+        if text and report_field(text, "Learnings") is not None:
+            break
+        if not _turn_used_any_tool(turn_events):
+            break
+        count += 1
+    return count
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
@@ -997,6 +1113,25 @@ def main(argv: list[str] | None = None) -> int:
                         "Recommended next/Need anything from human). This is advisory only -- "
                         "it never blocks the turn."
                     )
+                else:
+                    investigation_count = investigation_turns_since_last_disposition(
+                        payload.get("transcript_path")
+                    )
+                    if (
+                        investigation_count is not None
+                        and investigation_count >= _INVESTIGATION_ARC_THRESHOLD
+                    ):
+                        output["systemMessage"] = (
+                            f"This is the {investigation_count}th consecutive turn that used "
+                            "a tool without recording a Learnings-shaped disposition -- a "
+                            "long investigation arc with no closing format anywhere in it. "
+                            "If this reached a real finding, a completed fix, or a genuine "
+                            "decision-ask, it should still close with the mandated format "
+                            "(Session goal/Active subgoals/Done/Policy/Concerns/Learnings/"
+                            "Decisions/Recommended next/Need anything from human), even when "
+                            "the turn correctly ends in a bare ask with no commits. This is "
+                            "advisory only -- it never blocks the turn."
+                        )
             if output:
                 print(json.dumps(output, sort_keys=True))
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:

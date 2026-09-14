@@ -175,6 +175,7 @@ def route_concern(
     subject: str,
     content: str,
     recipient: str | None = None,
+    idempotency_key: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Route a concern to a PR or persist it in the canonical mailbox."""
@@ -246,6 +247,7 @@ def route_concern(
             subject=subject,
             body=content,
             claim_ref=target_branch,
+            idempotency_key=idempotency_key,
         )
     )
     route = ConcernRoute(

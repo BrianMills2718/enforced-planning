@@ -578,7 +578,26 @@ def test_outcome_bootstrap_makefile_passes_exact_start_revision_to_session_start
     """
 
     repo_root = Path(__file__).resolve().parents[1]
-    revision = _git(repo_root, "rev-parse", "HEAD")
+    # The bootstrap binds the freshly resolved upstream tip, which equals HEAD
+    # only on an up-to-date default checkout (not a pull-request merge ref in CI).
+    resolved = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "worktree-coordination" / "create_worktree.py"),
+            "--repo-root",
+            str(repo_root),
+            "--start-point",
+            "HEAD",
+            "--print-fresh-start-revision",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert resolved.returncode == 0, resolved.stdout + resolved.stderr
+    revision = resolved.stdout.strip()
+    assert len(revision) == 40
     result = subprocess.run(
         [
             "make",

@@ -308,6 +308,52 @@ def test_superseded_staged_draft_is_preserved_then_cleared(
     assert _git(clone, "status", "--porcelain").stdout.strip() == ""
 
 
+def test_uncommitted_copy_of_an_older_committed_version_is_cleared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exact shape of the 2026-09-14 ~/projects/.claude incident: CLAUDE.md was
+    staged and on disk as the parent commit's version (`M ` in status), an
+    uncommitted revert of a merged PR that kept the shared instructions behind.
+    That content is already in history, so it is residue; the file ends at upstream."""
+    upstream, clone = _sync_pair(tmp_path, monkeypatch)
+    monkeypatch.setattr(canonical_lock, "RESIDUE_RECEIPT_DIR", tmp_path / "residue-receipts")
+    assert _git(clone, "pull", "-q", "--ff-only").returncode == 0  # clone HEAD: "new"
+    (upstream / "other.txt").write_text("later upstream work\n", encoding="utf-8")
+    assert _git(upstream, "add", "-A").returncode == 0
+    assert _git(upstream, "commit", "-qm", "later").returncode == 0
+    assert _git(clone, "fetch", "-q", "origin").returncode == 0
+    assert _git(clone, "checkout", "HEAD~1", "--", "fact.txt").returncode == 0  # stage the old version
+    assert _git(clone, "status", "--porcelain").stdout.startswith("M  fact.txt")
+
+    classified = canonical_lock.classify_dirty_entries(clone, "origin/main")
+    [item] = classified["residue"]
+    assert classified["real"] == []
+    assert item["ancestor_commit"] == _git(clone, "rev-parse", "HEAD~1").stdout.strip()
+
+    result = canonical_lock.clear_upstream_residue(clone)
+
+    assert result["ok"] is True, result
+    assert Path(result["receipt"]).is_file()
+    assert _git(clone, "merge", "-q", "--ff-only", "origin/main").returncode == 0
+    assert (clone / "fact.txt").read_text(encoding="utf-8") == "new\n"
+    assert (clone / "other.txt").read_text(encoding="utf-8") == "later upstream work\n"
+    assert _git(clone, "status", "--porcelain").stdout.strip() == ""
+
+
+def test_edit_matching_no_committed_version_stays_real_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ancestor rule must not swallow genuine edits."""
+    _, clone = _fetched_pair_with_new_file(tmp_path, monkeypatch)
+    (clone / "fact.txt").write_text("a genuinely new local draft\n", encoding="utf-8")
+    assert _git(clone, "add", "fact.txt").returncode == 0
+
+    classified = canonical_lock.classify_dirty_entries(clone, "origin/main")
+
+    assert classified["residue"] == []
+    assert [item["path"] for item in classified["real"]] == ["fact.txt"]
+
+
 def test_residue_is_not_cleared_when_any_change_is_real_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

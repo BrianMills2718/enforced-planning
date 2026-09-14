@@ -879,6 +879,34 @@ def _index_blob(repo_root: Path, path: str) -> str | None:
     return fields[1] if done.returncode == 0 and len(fields) >= 2 else None
 
 
+ANCESTOR_HISTORY_LIMIT = 200
+
+
+def _committed_ancestor(repo_root: Path, path: str, blob: str | None) -> str | None:
+    """Return a commit reachable from HEAD whose version of ``path`` is ``blob``.
+
+    Content already committed to this branch's history is recoverable from the
+    object store by definition, so discarding an uncommitted copy of it loses
+    nothing. Bounded to the most recent ANCESTOR_HISTORY_LIMIT commits touching
+    the path so a pathological history cannot stall a freshness sweep.
+    """
+    if not blob:
+        return None
+    done = _git(repo_root, ["log", f"-n{ANCESTOR_HISTORY_LIMIT}", "--format=commit %H", "--raw",
+                            "--no-abbrev", "--no-renames", "HEAD", "--", path])
+    if done.returncode != 0:
+        return None
+    commit = None
+    for line in done.stdout.splitlines():
+        if line.startswith("commit "):
+            commit = line.split()[1]
+        elif line.startswith(":") and commit:
+            fields = line.split("\t", 1)[0].split()
+            if len(fields) >= 4 and fields[3] == blob:  # blob this commit wrote
+                return commit
+    return None
+
+
 def classify_dirty_entries(repo_root: Path, upstream: str) -> dict[str, Any]:
     """Split working-tree changes into upstream residue, benign untracked, and real work.
 
@@ -949,6 +977,21 @@ def classify_dirty_entries(repo_root: Path, upstream: str) -> dict[str, Any]:
             # Residue, but the draft blob is copied out before anything moves.
             result["residue"].append(
                 {"path": path, "code": code, "blob": upstream_blob, "preserve_index_blob": index_blob}
+            )
+        elif (
+            worktree_blob is not None
+            and index_blob in {worktree_blob, head_blob}
+            and (ancestor := _committed_ancestor(repo_root, path, worktree_blob)) is not None
+            and worktree_blob != head_blob
+        ):
+            # The uncommitted copy is byte-identical to an older committed
+            # version of the same file: a stale revert, not new work. Observed
+            # 2026-09-14 in ~/projects/.claude: CLAUDE.md staged and on disk as
+            # the parent commit's version, silently undoing merged PR #37 and
+            # holding the shared instructions 3 commits behind.
+            result["residue"].append(
+                {"path": path, "code": code, "blob": upstream_blob, "ancestor_blob": worktree_blob,
+                 "ancestor_commit": ancestor}
             )
         else:
             result["real"].append({"path": path, "code": code, "why": "content differs from upstream"})

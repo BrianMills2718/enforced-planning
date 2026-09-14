@@ -720,8 +720,11 @@ def _record_touched_repositories(
 # `--no-closeout` flag would make the command six tokens and report delivery
 # unavailable all over again. The toggle therefore lives beside the claims
 # registry rather than on the command line.
-CLOSEOUT_GATE_DISABLE_MARKER = (
-    Path.home() / ".claude" / "coordination" / "closeout-gate-disabled"
+CLOSEOUT_GATE_DISABLE_MARKER = Path(
+    # Override for subprocess tests: a host whose real marker disables the gate
+    # otherwise makes gate tests pass or fail by machine, not by code.
+    os.environ.get("ENFORCED_PLANNING_CLOSEOUT_GATE_DISABLE_MARKER")
+    or Path.home() / ".claude" / "coordination" / "closeout-gate-disabled"
 )
 
 

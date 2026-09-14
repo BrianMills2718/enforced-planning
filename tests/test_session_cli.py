@@ -4355,6 +4355,109 @@ def test_close_session_reconciles_exact_session_ended_missing_worktree(
     assert session_contracts.read_session_tracker(tracker)["tracker"]["current_phase"] == "closed"
 
 
+def _trackerless_session_ended_lane_without_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, merged: bool
+) -> tuple[Path, Path, str]:
+    """A direct --claim lane: no session tracker, runtime ended, worktree removed first."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+    claim["tracker_path"] = None
+    claim_file.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    if merged:
+        _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    session_lifecycle.end_runtime_session(
+        agent="codex",
+        session_id="codex:test-session",
+        reason="runtime ended before physical closeout",
+        claims_dir=claims_dir,
+    )
+    _git(repo_root, "worktree", "remove", str(worktree))
+    return claim_file, worktree, branch
+
+
+def test_close_session_reconciles_trackerless_merged_missing_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lane that never had a tracker is not stranded once its branch is merged.
+
+    Observed 2026-09-14: a direct --claim lane whose worktree was removed before
+    session-close could not be released, reconciled, or resumed, and blocked
+    every later claim by the same session in that project.
+    """
+
+    claim_file, worktree, branch = _trackerless_session_ended_lane_without_worktree(
+        tmp_path, monkeypatch, merged=True
+    )
+    digest = session_lifecycle._claim_sha256(claim_file)
+
+    payload = _close_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope=branch,
+        reconcile_missing_worktree=True,
+        expected_claim_sha256=digest,
+    )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "not_attempted_absent_recorded_worktree"
+    assert payload["missing_worktree_reconciliation"] == {
+        "schema_version": "1.0",
+        "claim_status_before": "session_ended",
+        "recorded_worktree_path": str(worktree),
+        "tracker_path": None,
+        "tracker_sha256": None,
+        "claim_sha256": digest,
+        "filesystem_action": "not_attempted_absent_recorded_worktree",
+        "merge_evidence": "branch_ancestor",
+        "merge_commit": "none",
+    }
+    assert not claim_file.exists()
+
+
+@pytest.mark.parametrize(("merged", "digest_ok", "message"), [
+    (True, False, "claim digest mismatch"),
+    (False, True, "not integrated"),
+])
+def test_close_session_trackerless_missing_worktree_rejects_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    merged: bool,
+    digest_ok: bool,
+    message: str,
+) -> None:
+    """Without a tracker, the exact claim bytes and ordinary merge proof still gate closeout."""
+
+    claim_file, _worktree, branch = _trackerless_session_ended_lane_without_worktree(
+        tmp_path, monkeypatch, merged=merged
+    )
+    before = claim_file.read_bytes()
+    digest = session_lifecycle._claim_sha256(claim_file) if digest_ok else "0" * 64
+
+    with pytest.raises(ValueError, match=message):
+        _close_session_as_owner(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            reconcile_missing_worktree=True,
+            expected_claim_sha256=digest,
+        )
+    assert claim_file.read_bytes() == before
+
+
 def test_close_session_reconciles_foreign_session_ended_linked_worktree(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

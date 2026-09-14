@@ -5,7 +5,7 @@
 SCRIPTS_META := scripts/meta
 PLANS_DIR := docs/plans
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
-GITHUB_ACCOUNT ?= BrianMills2718
+GITHUB_ACCOUNT ?=
 PR_AUTO_EXPECTED_REPO ?= $(notdir $(shell dirname $$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) 2>/dev/null))
 
 # --- Session Start ---
@@ -52,10 +52,10 @@ pr:  ## Create PR (opens browser)
 	@gh pr create --fill --web
 
 pr-auto-check:  ## Autonomous PR preflight (branch/clean tree/origin/account)
-	@python $(SCRIPTS_META)/pr_auto.py --preflight-only --expected-origin-repo $(PR_AUTO_EXPECTED_REPO) --account $(GITHUB_ACCOUNT)
+	@python $(SCRIPTS_META)/pr_auto.py --preflight-only --expected-origin-repo $(PR_AUTO_EXPECTED_REPO) $(if $(GITHUB_ACCOUNT),--account $(GITHUB_ACCOUNT),)
 
 pr-auto:  ## Autonomous PR create + auto-merge request (non-interactive)
-	@python $(SCRIPTS_META)/pr_auto.py --expected-origin-repo $(PR_AUTO_EXPECTED_REPO) --account $(GITHUB_ACCOUNT) --fill --auto-merge
+	@python $(SCRIPTS_META)/pr_auto.py --expected-origin-repo $(PR_AUTO_EXPECTED_REPO) $(if $(GITHUB_ACCOUNT),--account $(GITHUB_ACCOUNT),) --fill --auto-merge
 
 push-check:  ## Validate branch push safety against default-branch and coordination state
 	@python $(SCRIPTS_META)/check_push_safety.py

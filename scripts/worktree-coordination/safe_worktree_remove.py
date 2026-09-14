@@ -13,6 +13,8 @@ Usage:
 """
 
 import argparse
+import hashlib
+import json
 import os
 import stat
 import subprocess
@@ -50,6 +52,7 @@ from enforced_planning import coordination_claims  # noqa: E402
 # Session marker settings
 SESSION_MARKER_FILE = ".claude_session"
 SESSION_STALENESS_HOURS = 24  # Block removal if marker is newer than this
+PROVISIONING_MARKER_PREFIX = ".worktree-provisioning-"
 
 
 def run_cmd(cmd: list[str], cwd: str | None = None) -> tuple[bool, str]:
@@ -66,6 +69,22 @@ def run_cmd(cmd: list[str], cwd: str | None = None) -> tuple[bool, str]:
         return result.returncode == 0, output
     except Exception as e:
         return False, str(e)
+
+
+def find_provisioning_marker(worktree_path: str) -> Path | None:
+    """Return the live creation marker for this exact target, if present."""
+    target = Path(worktree_path).expanduser().resolve()
+    digest = hashlib.sha256(str(target).encode("utf-8")).hexdigest()
+    marker = target.parent / f"{PROVISIONING_MARKER_PREFIX}{digest}.json"
+    if not marker.is_file():
+        return None
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return marker
+    if payload.get("target_worktree_path") == str(target):
+        return marker
+    return None
 
 
 def has_uncommitted_changes(worktree_path: str) -> tuple[bool, str]:
@@ -303,6 +322,10 @@ def should_block_removal(
         - reason: "ownership", "claim", "session_marker", or "" if not blocked
         - info: claim dict or session marker info
     """
+    provisioning_marker = find_provisioning_marker(worktree_path)
+    if provisioning_marker is not None:
+        return True, "provisioning", {"marker_path": str(provisioning_marker)}
+
     # Get current CC identity for ownership comparison
     if my_identity is None:
         my_identity = get_current_cc_identity()
@@ -376,6 +399,12 @@ def remove_worktree(worktree_path: str, force: bool = False) -> bool:
     block, reason, info = should_block_removal(worktree_path, force)
 
     # Ownership block is the strongest - you should NEVER remove someone else's worktree
+    if block and reason == "provisioning" and info:
+        print("❌ BLOCKED: Worktree creation is still provisioning!")
+        print(f"   Marker: {info['marker_path']}")
+        print("   Wait for the sanctioned creation command to finish or reconcile a proven-stale marker.")
+        return False
+
     if block and reason == "ownership" and info:
         cc_id = info.get("cc_id", "unknown")
         task = info.get("task", "")[:50]

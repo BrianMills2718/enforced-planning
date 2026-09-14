@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -177,3 +179,19 @@ def test_remove_worktree_restores_readonly_modes_after_git_failure(
     assert module.remove_worktree(str(worktree)) is False  # type: ignore[attr-defined]
     assert readonly.stat().st_mode & 0o777 == 0o555
     assert "permission denied" in capsys.readouterr().out
+
+
+def test_provisioning_marker_blocks_removal_even_in_force_mode(tmp_path: Path) -> None:
+    """A partially populated worktree must never be mistaken for disposable residue."""
+    module = _load()
+    target = tmp_path / "worktrees" / "provisioning-lane"
+    target.mkdir(parents=True)
+    digest = hashlib.sha256(str(target.resolve()).encode("utf-8")).hexdigest()
+    marker = target.parent / f".worktree-provisioning-{digest}.json"
+    marker.write_text(json.dumps({"target_worktree_path": str(target.resolve())}), encoding="utf-8")
+
+    blocked, reason, info = module.should_block_removal(str(target), force=True)
+
+    assert blocked
+    assert reason == "provisioning"
+    assert info == {"marker_path": str(marker)}

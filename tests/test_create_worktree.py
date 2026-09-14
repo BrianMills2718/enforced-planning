@@ -137,6 +137,55 @@ def test_create_worktree_creates_clean_temp_repo_worktree(tmp_path: Path) -> Non
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 
+def test_provisioning_marker_is_discoverable_and_removed(tmp_path: Path) -> None:
+    """A partially-created target has a sibling marker until creation terminates."""
+    module = _load_module()
+    target = tmp_path / "worktrees" / "provisioning-lane"
+    target.parent.mkdir()
+
+    marker = module.write_provisioning_marker(worktree_path=target, branch="provisioning-lane")
+
+    assert marker.is_file()
+    assert module.provisioning_marker_path(target) == marker
+    assert '"target_worktree_path"' in marker.read_text(encoding="utf-8")
+
+    module.clear_provisioning_marker(marker)
+
+    assert not marker.exists()
+
+
+def test_cli_clears_provisioning_marker_after_a_clean_creation(tmp_path: Path) -> None:
+    """The sanctioned CLI does not strand a marker after its terminal receipt."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    target = tmp_path / "worktrees" / "cli-lane"
+    _init_temp_repo(repo_root)
+
+    exit_code = module.main(
+        [
+            "--repo-root",
+            str(repo_root),
+            "--path",
+            str(target),
+            "--branch",
+            "cli-lane",
+            "--start-point",
+            "HEAD",
+            "--allow-stale-start-point",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 0
+    assert target.exists()
+    assert not module.provisioning_marker_path(target).exists()
+
+    cleanup_result = _run_git(repo_root, "worktree", "remove", "--force", str(target))
+    assert cleanup_result.returncode == 0, cleanup_result.stdout + cleanup_result.stderr
+    delete_branch = _run_git(repo_root, "branch", "-D", "cli-lane")
+    assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
+
+
 def test_create_worktree_reports_recent_history_of_claimed_write_paths(tmp_path: Path) -> None:
     """Regression for the exact miss this exists to prevent: a session started
     writing a fix to README.md without checking it had already been touched.

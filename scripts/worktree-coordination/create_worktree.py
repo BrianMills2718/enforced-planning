@@ -17,8 +17,10 @@ created. Narrow ``write`` claims and bounded ``program`` claims with exact
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -29,6 +31,7 @@ from typing import Any
 
 DEFAULT_WORKTREE_EXCLUDE = "/worktrees/"
 WRITE_AUTHORIZING_CLAIM_TYPES = frozenset({"write", "program"})
+PROVISIONING_MARKER_PREFIX = ".worktree-provisioning-"
 
 
 @dataclass(frozen=True)
@@ -173,6 +176,37 @@ def run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def provisioning_marker_path(worktree_path: Path) -> Path:
+    """Return the collision-resistant sibling marker for one target path."""
+    digest = hashlib.sha256(str(worktree_path.resolve()).encode("utf-8")).hexdigest()
+    return worktree_path.parent / f"{PROVISIONING_MARKER_PREFIX}{digest}.json"
+
+
+def write_provisioning_marker(*, worktree_path: Path, branch: str) -> Path:
+    """Make an in-progress worktree creation discoverable before Git mutates it."""
+    marker = provisioning_marker_path(worktree_path)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "branch": branch,
+        "pid": os.getpid(),
+        "target_worktree_path": str(worktree_path.resolve()),
+    }
+    try:
+        with marker.open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle, sort_keys=True)
+            handle.write("\n")
+    except FileExistsError as exc:
+        raise ValueError(
+            f"Worktree provisioning is already active or was not reconciled: {marker}"
+        ) from exc
+    return marker
+
+
+def clear_provisioning_marker(marker: Path) -> None:
+    """Remove the marker only after creation has reached a terminal result."""
+    marker.unlink(missing_ok=True)
 
 
 def branch_exists(repo_root: Path, branch: str) -> bool:
@@ -1073,7 +1107,9 @@ def main(argv: list[str] | None = None) -> int:
 
     worktree_path = Path(args.path).expanduser().resolve()
     claims_dir = Path(args.claims_dir).expanduser().resolve() if args.claims_dir else None
+    marker: Path | None = None
     try:
+        marker = write_provisioning_marker(worktree_path=worktree_path, branch=args.branch)
         result = create_worktree(
             repo_root=repo_root,
             worktree_path=worktree_path,
@@ -1109,6 +1145,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _print_human(error_result)
         return 1
+    finally:
+        if marker is not None:
+            clear_provisioning_marker(marker)
 
     if args.json:
         print(json.dumps(asdict(result), indent=2))

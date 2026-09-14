@@ -1,11 +1,11 @@
 # Enforced Planning
 
 <!-- GENERATED FILE: DO NOT EDIT DIRECTLY -->
-<!-- generated_by: scripts/render_agents_md.py -->
+<!-- generated_by: scripts/meta/render_agents_md.py -->
 <!-- canonical_claude: CLAUDE.md -->
 <!-- canonical_relationships: scripts/relationships.yaml -->
 <!-- canonical_relationships_sha256: 6d327667b0b7 -->
-<!-- sync_check: python scripts/check_agents_sync.py --check -->
+<!-- sync_check: python scripts/meta/check_agents_sync.py --check -->
 
 This file is a generated Codex-oriented projection of repo governance.
 Edit the canonical sources instead of editing this file directly.

@@ -13,6 +13,7 @@ from enforced_planning import (
     claim_mutation_receipts,
     concern_routing,
     coordination_claims,
+    coordination_messages,
     push_safety,
 )
 
@@ -190,6 +191,21 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
             },
         )
 
+    sent_calls: list[dict] = []
+
+    def _fake_route_concern(**kwargs: object) -> dict:
+        sent_calls.append(kwargs)
+        return {
+            "ok": True,
+            "route": "coordination_mailbox",
+            "destination": "fake/message/path.json",
+            "target_branch": kwargs["target_branch"],
+            "recipient": kwargs.get("recipient"),
+            "evidence_state": "persisted",
+        }
+
+    monkeypatch.setattr(concern_routing, "route_concern", _fake_route_concern)
+
     payload = push_safety.evaluate_push_safety(repo_root)
 
     assert not payload["ok"]
@@ -206,6 +222,24 @@ def test_push_check_detects_overlapping_live_write_owned_claim(
             "Split or defer the blocked paths, publish a claim-compatible checkpoint, "
             "and continue another authorized ready work unit."
         ),
+    }
+
+    # The colliding lane's owner is actually notified, not just detected.
+    assert len(sent_calls) == 1
+    call = sent_calls[0]
+    assert call["target_branch"] == "plan-99-other"
+    assert call["recipient"] == "claude-code:session-1"
+    assert call["project"] == "demo"
+    assert call["agent"] == "codex"
+    assert "feature.py" in call["content"]
+    assert call["idempotency_key"] == "overlapping_write_claim:plan-42-demo|reviewed-scope|feature.py"
+
+    finding = next(item for item in payload["issues"] if item["code"] == "overlapping_write_claim")
+    assert finding["details"]["notification"] == {
+        "attempted": True,
+        "ok": True,
+        "route": "coordination_mailbox",
+        "destination": "fake/message/path.json",
     }
 
 
@@ -283,6 +317,11 @@ def test_push_check_warns_instead_of_blocking_a_predicted_clean_overlap(
         },
     )
 
+    def _fail_if_called(**_kwargs: object) -> dict:
+        raise AssertionError("route_concern must not fire for a predicted-clean overlap")
+
+    monkeypatch.setattr(concern_routing, "route_concern", _fail_if_called)
+
     payload = push_safety.evaluate_push_safety(repo_root)
 
     assert payload["ok"]
@@ -290,6 +329,83 @@ def test_push_check_warns_instead_of_blocking_a_predicted_clean_overlap(
     assert any(
         item["code"] == "overlapping_write_claim_predicted_clean" for item in payload["warnings"]
     )
+
+
+def test_push_check_overlapping_write_claim_survives_notify_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A notification delivery failure never changes whether the push blocks."""
+
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    other_worktree = tmp_path / "demo_worktrees" / "plan-99-other"
+    other_worktree.mkdir(parents=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-99-other"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.py").write_text("print('a genuinely different version')\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "other lane's divergent feature.py"], check=True, capture_output=True, text=True)
+
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "-b", "plan-42-demo"], check=True, capture_output=True, text=True)
+    (repo_root / "feature.py").write_text("print('hi')\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.py"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "feature"], check=True, capture_output=True, text=True)
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(push_safety, "load_active_decisions", lambda project, limit=5: [])
+    _write_claim(
+        claims_dir,
+        "current.yaml",
+        {
+            "agent": "codex",
+            "claimed_at": "2026-04-09T10:00:00+00:00",
+            "expires_at": "2099-04-09T11:00:00+00:00",
+            "projects": ["demo"],
+            "scope": "plan-42-demo",
+            "intent": "Own current branch",
+            "claim_type": "program",
+            "plan_ref": "UNPLANNED",
+            "branch": "plan-42-demo",
+            "worktree_path": str(repo_root),
+            "session_id": "codex:thread-1",
+            "session_name": "current-branch-owner",
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
+        },
+    )
+    _write_claim(
+        claims_dir,
+        "other.yaml",
+        {
+            "agent": "claude-code",
+            "claimed_at": "2026-04-09T10:05:00+00:00",
+            "expires_at": "2099-04-09T11:05:00+00:00",
+            "projects": ["demo"],
+            "scope": "reviewed-scope",
+            "intent": "Touch feature file",
+            "claim_type": "write",
+            "write_paths": ["feature.py"],
+            "branch": "plan-99-other",
+            "worktree_path": str(other_worktree),
+            "session_id": "claude-code:session-1",
+            "status": "active",
+        },
+    )
+
+    def _raise(**_kwargs: object) -> dict:
+        raise coordination_messages.UnknownSessionError("recipient session is stale")
+
+    monkeypatch.setattr(concern_routing, "route_concern", _raise)
+
+    payload = push_safety.evaluate_push_safety(repo_root)
+
+    assert not payload["ok"]
+    finding = next(item for item in payload["issues"] if item["code"] == "overlapping_write_claim")
+    assert finding["details"]["notification"]["attempted"] is True
+    assert finding["details"]["notification"]["ok"] is False
+    assert "UnknownSessionError" in finding["details"]["notification"]["error"]
 
 
 @pytest.mark.parametrize(

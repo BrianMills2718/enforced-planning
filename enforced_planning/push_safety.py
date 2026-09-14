@@ -7,6 +7,7 @@ coordination context for human review before shared state changes.
 
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 from dataclasses import asdict, dataclass
@@ -527,6 +528,68 @@ def evaluate_push_safety(
                 overlap.split(" <-> ", 1)[0] for overlap in overlaps
             )
             integration_owners.add((claim.agent, claim.scope))
+            # A real predicted conflict lands here with the colliding
+            # ClaimRecord already in hand -- session_id and branch included.
+            # Blocking the pusher without telling the other lane's owner is
+            # only half the fix: they cannot act on a conflict they never
+            # hear about. `concern_routing.route_concern` already does this
+            # exact delivery (PR comment if one exists, else the durable
+            # coordination mailbox) and needs only the identifiers this loop
+            # already has. This must never change whether the push blocks --
+            # a delivery failure (stale recipient past the mailbox's 24h
+            # reachability window, a transient `gh`/filesystem error) is
+            # recorded on the finding and swallowed, not raised.
+            notification: dict[str, Any] = {"attempted": False}
+            if claim.branch and branch_claims:
+                notification["attempted"] = True
+                try:
+                    # Imported by module name, not `from enforced_planning
+                    # import concern_routing`: concern_routing.py ships only
+                    # in the broader COORDINATION_MESSAGES installer profile,
+                    # not the narrower CLAIM_PROJECTION one that also ships
+                    # this file. A literal import statement would make
+                    # scripts/check_facade_sync_completeness.py's static
+                    # import-graph walk treat it as a hard requirement of
+                    # every profile shipping push_safety.py; this is a
+                    # best-effort capability instead, and the except clause
+                    # below already covers it being absent (ModuleNotFoundError).
+                    concern_routing = importlib.import_module(
+                        "enforced_planning.concern_routing"
+                    )
+
+                    overlapping_paths = sorted(
+                        overlap.split(" <-> ", 1)[0] for overlap in overlaps
+                    )
+                    pusher_claim = branch_claims[0]
+                    route = concern_routing.route_concern(
+                        repo_root=resolved_repo_root,
+                        agent=pusher_claim.agent,
+                        project=resolved_project,
+                        target_branch=claim.branch,
+                        recipient=claim.session_id,
+                        subject=(
+                            f"Push blocked: `{resolved_branch}` overlaps your claim "
+                            f"`{claim.scope}` on `{claim.branch}`"
+                        ),
+                        content=(
+                            f"Branch `{resolved_branch}` (claim `{pusher_claim.scope}`, "
+                            f"session `{pusher_claim.session_id}`) tried to push changes "
+                            "overlapping your live write claim on:\n"
+                            + "\n".join(f"- {path}" for path in overlapping_paths)
+                            + "\n\nThe push was blocked pending resolution."
+                        ),
+                        idempotency_key=(
+                            "overlapping_write_claim:"
+                            + "|".join([resolved_branch, claim.scope, *overlapping_paths])
+                        ),
+                    )
+                    notification["ok"] = True
+                    notification["route"] = route.get("route")
+                    notification["destination"] = route.get("destination")
+                except Exception as exc:  # noqa: BLE001 - notify best-effort, block always stands
+                    notification["ok"] = False
+                    notification["error"] = f"{type(exc).__name__}: {exc}"
+            claim_details["notification"] = notification
             issues.append(
                 PushCheckFinding(
                     code="overlapping_write_claim",

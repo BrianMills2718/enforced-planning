@@ -291,6 +291,7 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/concurrent_writers.py": "enforced_planning/concurrent_writers.py",
+    "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py": "enforced_planning/outcome_admission.py",
@@ -334,10 +335,18 @@ CLAIM_PROJECTION_SHARED_FILES: dict[str, str] = {
 # Lifecycle mutation and projection refresh are one import/runtime boundary. Keep
 # the complete local dependency closure compatible while leaving hook wiring and
 # mailbox client configuration outside this bounded installer profile.
+# concern_routing.py (push_safety.py's best-effort, dynamically-imported
+# conflict-notification helper) is excluded the same way: push_safety.py
+# degrades gracefully without it (see its ModuleNotFoundError handling), and
+# this profile stays free of the mailbox-notification surface on purpose.
 CLAIM_PROJECTION_LOCAL_PACKAGE_FILES: dict[str, str] = {
     target: source
     for target, source in COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES.items()
-    if target != "enforced_planning/outcome_completion.py"
+    if target
+    not in {
+        "enforced_planning/outcome_completion.py",
+        "enforced_planning/concern_routing.py",
+    }
 }
 
 COORDINATION_CLAIMS_SHARED_FILES: dict[str, str] = {

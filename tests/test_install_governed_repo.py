@@ -79,6 +79,7 @@ MAILBOX_ROLLOUT_PATHS = MAILBOX_COMMON_ROLLOUT_PATHS | {
     "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py",
     "enforced_planning/concurrent_writers.py",
+    "enforced_planning/concern_routing.py",
     "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py",
     "enforced_planning/outcome_admission.py",

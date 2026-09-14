@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.1",
+  "record_type": "roadmap_goal_handoff",
+  "handoff_id": "roadmap-goal:correction-mode-contest-gate:design-contest-rebuttal-loop:111cda6",
+  "project_id": "correction-mode-contest-gate",
+  "goal_id": "design-contest-rebuttal-loop",
+  "project_roadmap_ref": {
+    "path": "docs/plans/135_correction_learning_gate.md",
+    "revision": "111cda6",
+    "concern": "Correction-Aware Learning Gate: outcome, prior rejected-classifier evidence, and reassessment contract"
+  },
+  "objective": "A Claude Code or Codex agent that leaves a self-noticed or user-flagged correction unrecorded is prevented from ending its turn until it either records the correction through the learned skill or successfully contests the finding, without requiring a new user message to force a retry.",
+  "objective_sha256": "a1b6fac3704d6c98c6eab9243e8bed4dde389f4d508bef0c197e3625ab933b2e",
+  "audience_or_actor": "Brian, as sole operator of the personal agent ecosystem, and every Claude Code/Codex agent session working under enforced-planning-governed repos",
+  "current_state_ref": {
+    "path": "scripts/learning_capture_hook.py",
+    "revision": "5ae1ce1",
+    "concern": "Existing --correction-mode block path: reads a CorrectionAuditReceiptV1, hard-blocks the Stop event on status=correction_unresolved, tested, but left off by default because the classifier that would populate the receipt (correction_learning_audit.py) was rejected on real native-corpus recall/precision evidence (Plan #135) and has no way for the agent to contest a wrong verdict"
+  },
+  "desired_outcome": "Turning on the existing correction-mode hard block no longer risks silently stalling a session on a wrong classifier verdict, because the blocked agent has a real path to either comply or be released after a successful contest, and this is proven end to end on at least one real recorded instance from an actual session.",
+  "success_or_readout": "Pass: a synthetic and one real (or realistic replay) blocked-turn case each show (a) a genuine unresolved correction stays blocked until the learning is recorded, and (b) a genuine non-correction, once contested, is released without requiring the agent to fabricate an unwanted learning entry -- with no case requiring a human to manually intervene to unstick the session. Fail: any case where a correct contest is not released, or an incorrect contest is released, within the frozen test set.",
+  "evidence_target": {
+    "claim": "The correction-mode block-or-contest loop can run unattended on a real Stop event without a human clearing a stuck session",
+    "evidence_class": "test"
+  },
+  "owner_or_owner_decision": {
+    "kind": "owner",
+    "owner_role": "brian"
+  },
+  "capability_adoptions": [
+    {
+      "capability_ref": {
+        "path": "scripts/learning_capture_hook.py",
+        "revision": "5ae1ce1",
+        "concern": "Stop-event hard block on an unresolved-correction receipt"
+      },
+      "disposition": "extend",
+      "canonical_seam": "learning_capture_hook.py:main() correction-mode block branch (decision = 'block_unresolved_correction')",
+      "intended_consumer": "Every Claude Code/Codex Stop event in a repo with this hook installed",
+      "adoption_proof": {
+        "claim": "The extended hook still blocks a genuine unresolved correction and now also accepts a resolving contest verdict",
+        "evidence_class": "test"
+      }
+    },
+    {
+      "capability_ref": {
+        "path": "scripts/correction_learning_audit.py",
+        "revision": "7af0caf",
+        "concern": "LLM-based correction classifier over transcript exchanges, rejected for autonomous blocking use on native-corpus recall/precision evidence"
+      },
+      "disposition": "extend",
+      "canonical_seam": "correction_learning_audit.py CLI + enforced_planning/correction_learning.py CorrectionClassification/audit_exchanges",
+      "intended_consumer": "The new contest-adjudication step: re-runs classification specifically on the agent's rebuttal text, not on raw multi-turn transcript",
+      "adoption_proof": {
+        "claim": "Re-judging one bounded rebuttal exchange achieves materially better precision/recall than the rejected whole-transcript classifier, on a frozen held-out set",
+        "evidence_class": "schema_validated"
+      }
+    },
+    {
+      "capability_ref": {
+        "path": "scripts/coordination_messages.py",
+        "revision": "fab3e56",
+        "concern": "Durable cross-client coordination messages: send/poll/status/acknowledge, addressed by session"
+      },
+      "disposition": "reuse",
+      "canonical_seam": "coordination_messages.py send/poll subcommands",
+      "intended_consumer": "Optional: a durable record of the block reason and the agent's contest, visible outside the blocked turn itself",
+      "adoption_proof": {
+        "claim": "A block-and-contest exchange is durably recorded and pollable by another session or by Brian, not only visible inside the blocked turn's own transcript",
+        "evidence_class": "observed"
+      }
+    }
+  ],
+  "required_capability_refs": [
+    {
+      "path": "scripts/learning_capture_hook.py",
+      "revision": "5ae1ce1",
+      "concern": "Stop-event hard block on an unresolved-correction receipt"
+    },
+    {
+      "path": "scripts/correction_learning_audit.py",
+      "revision": "7af0caf",
+      "concern": "LLM-based correction classifier over transcript exchanges, rejected for autonomous blocking use on native-corpus recall/precision evidence"
+    },
+    {
+      "path": "scripts/coordination_messages.py",
+      "revision": "fab3e56",
+      "concern": "Durable cross-client coordination messages: send/poll/status/acknowledge, addressed by session"
+    }
+  ],
+  "typed_dependencies": [
+    {
+      "dependency_type": "requires_proof",
+      "target_ref": {
+        "path": "docs/plans/135_correction_learning_gate.md",
+        "revision": "111cda6",
+        "concern": "Reassessment contract's stated human-decision triggers (precision threshold, per-audit budget)"
+      },
+      "condition": "Brian has now supplied the human decision Plan #135's own reassessment contract required (accept a materially lower per-call precision bar because the contest path bounds the cost of a wrong call); this design must state that explicitly rather than silently reopening the same rejected bar"
+    }
+  ],
+  "material_unknowns": [
+    {
+      "unknown_id": "contest-adjudication-model-and-cost",
+      "question": "Should the contest-adjudication re-check reuse the same model tier as the original classifier (Sonnet, per Plan #135's evidence), or is a materially more expensive/careful pass justified now that Brian has said he will pay for reliability, and what does that cost per blocked turn look like in practice?",
+      "treatment": "investigate"
+    },
+    {
+      "unknown_id": "circuit-breaker-bound",
+      "question": "What exact retry/loop bound prevents an agent and the reviewer from cycling indefinitely on a genuinely ambiguous case, and what happens when that bound is hit (escalate to Brian via the mailbox, or fail open)?",
+      "treatment": "human_decision"
+    },
+    {
+      "unknown_id": "receipt-schema-new-status",
+      "question": "Exact new CorrectionAuditReceiptV1 status value(s) and fields needed to represent 'contested, accepted' versus 'contested, rejected, blocked again' distinctly from today's four-state enum",
+      "treatment": "investigate"
+    }
+  ],
+  "non_claims": [
+    "This does not claim the underlying classifier's raw recall/precision has improved over Plan #135's measured numbers -- it claims the contest path makes those numbers tolerable for blocking use, which is a different claim",
+    "This does not claim readiness for Codex specifically without its own native-format replay, given Plan #135 measured materially worse Codex recall than Claude Code recall"
+  ],
+  "non_goals": [
+    "Reviving whole-transcript semantic classification as the sole detector; the mechanical/marker-based detection path for closing-format violations stays as-is and is out of scope here",
+    "Building a general-purpose agent-to-agent negotiation protocol beyond this one gate"
+  ],
+  "recommended_design_profile": "standard",
+  "recommended_overlays": [
+    "runtime_state"
+  ],
+  "selected_at": "2026-09-14T16:55:00Z",
+  "selection_purpose": "execution_frontier"
+}

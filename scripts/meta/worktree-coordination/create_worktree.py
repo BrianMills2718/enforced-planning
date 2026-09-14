@@ -67,6 +67,7 @@ class WorktreeCreationResult:
     coordination_checked: bool
     coordination_message: str | None
     import_provenance_warning: str | None = None
+    write_path_recent_history: str | None = None
 
 
 @dataclass(frozen=True)
@@ -819,6 +820,7 @@ def create_worktree(
             coordination_checked=coordination_checked,
             coordination_message=coordination_message,
             import_provenance_warning=_import_provenance_warning(worktree_path),
+            write_path_recent_history=_recent_write_path_history(worktree_path, claim_write_paths or []),
         )
 
     cleanup_performed = False
@@ -855,6 +857,31 @@ def create_worktree(
         coordination_message=coordination_message,
     )
 
+
+
+def _recent_write_path_history(worktree_path: Path, write_paths: list[str], *, limit: int = 3) -> str | None:
+    """One-line-per-commit recent history for each claimed write path, read at
+    this worktree's own fresh HEAD -- so a diagnosis formed before the
+    worktree existed doesn't go stale before the first edit.
+
+    A coordination claim answers "is anyone else about to write here." It
+    never answers "has someone already written this." Found 2026-09-14: a
+    session diagnosed a bug, claimed a worktree, and started writing the fix
+    -- discovering only when an Edit call's old_string failed to match that
+    commit 831e09fa5a8 had already shipped the identical fix minutes earlier.
+    The claim was clean; the content had simply moved. Printing each claimed
+    path's last few commits, unprompted, right after worktree creation, puts
+    exactly that fact in front of the agent before it writes anything.
+    """
+    if not write_paths:
+        return None
+    lines: list[str] = []
+    for path in write_paths:
+        result = run_git(["log", f"-{limit}", "--oneline", "--", path], cwd=worktree_path)
+        if result.returncode == 0 and result.stdout.strip():
+            lines.append(f"{path}:")
+            lines.extend(f"  {line}" for line in result.stdout.strip().splitlines())
+    return "\n".join(lines) if lines else None
 
 
 def _import_provenance_warning(worktree_path: Path) -> str | None:
@@ -904,6 +931,14 @@ def _print_human(result: WorktreeCreationResult) -> None:
             f"untracked={result.status.untracked_count} "
             f"entries={len(result.status.entries)}"
         )
+    if result.write_path_recent_history:
+        print(
+            "\nRecent history of claimed write paths -- read this before your "
+            "first edit, not just before merging. A coordination claim answers "
+            "who else is about to write here; it does not answer whether "
+            "someone already has:"
+        )
+        print(result.write_path_recent_history)
     if result.import_provenance_warning:
         # stdout is block-buffered when piped; without the flush this warning
         # lands above the lane summary it qualifies.

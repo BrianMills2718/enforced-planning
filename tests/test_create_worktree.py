@@ -137,6 +137,59 @@ def test_create_worktree_creates_clean_temp_repo_worktree(tmp_path: Path) -> Non
     assert delete_branch.returncode == 0, delete_branch.stdout + delete_branch.stderr
 
 
+def test_create_worktree_reports_recent_history_of_claimed_write_paths(tmp_path: Path) -> None:
+    """Regression for the exact miss this exists to prevent: a session started
+    writing a fix to README.md without checking it had already been touched.
+    The claimed write path's own recent commits must surface unprompted right
+    after worktree creation, not only be discoverable by someone who happens
+    to think to run `git log` themselves."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo-worktrees" / "plan-history-test"
+    _init_temp_repo(repo_root)
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="plan-history-test",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+        claim_write_paths=["README.md"],
+    )
+
+    assert result.ok, result.message
+    assert result.write_path_recent_history is not None
+    assert "README.md:" in result.write_path_recent_history
+    assert "init" in result.write_path_recent_history
+
+    _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path))
+    _run_git(repo_root, "branch", "-D", "plan-history-test")
+
+
+def test_create_worktree_omits_history_when_no_write_paths_claimed(tmp_path: Path) -> None:
+    """Positive control: no claimed paths means nothing to report, not a crash."""
+    module = _load_module()
+    repo_root = tmp_path / "repo"
+    worktree_path = tmp_path / "repo-worktrees" / "plan-no-claim-test"
+    _init_temp_repo(repo_root)
+
+    result = module.create_worktree(
+        repo_root=repo_root,
+        worktree_path=worktree_path,
+        branch="plan-no-claim-test",
+        start_point="HEAD",
+        split_brain_threshold=5,
+        keep_failed_worktree=False,
+    )
+
+    assert result.ok, result.message
+    assert result.write_path_recent_history is None
+
+    _run_git(repo_root, "worktree", "remove", "--force", str(worktree_path))
+    _run_git(repo_root, "branch", "-D", "plan-no-claim-test")
+
+
 def _init_repo_with_stale_origin(tmp_path: Path) -> Path:
     """Build a repo whose local main is behind its origin/main, for staleness tests."""
     origin_root = tmp_path / "origin"

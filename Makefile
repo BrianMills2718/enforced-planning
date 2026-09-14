@@ -432,7 +432,7 @@ ifndef WORKTREE_AGENT
 endif
 	@$(PYTHON) scripts/claim_bootstrap.py --request-json $(GOAL_REQUEST_ARG)
 
-maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH (other maintenance metadata has safe defaults)
+maintenance-worktree:  ## Claimed light maintenance worktree; needs BRANCH and SESSION_WRITE_PATHS (other maintenance metadata has safe defaults)
 ifneq ($(strip $(PLAN)),)
 	$(error maintenance-worktree is only for explicitly unplanned light maintenance; use make worktree PLAN=N for plan-owned work)
 endif

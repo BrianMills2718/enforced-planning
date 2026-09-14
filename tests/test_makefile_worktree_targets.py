@@ -62,6 +62,8 @@ def test_finish_target_requires_and_forwards_external_review_spec() -> None:
         "BRANCH=feature",
         "PR=42",
         "REVIEW_SPEC=/tmp/review-spec.json",
+        # WORKTREE_AGENT is otherwise derived from the ambient runtime's env.
+        "WORKTREE_AGENT=codex",
     )
 
     assert 'scripts/worktree-coordination/finish_pr.py" --agent "codex"' in output
@@ -139,17 +141,30 @@ def test_maintenance_worktree_claim_declares_unplanned_ownership() -> None:
     Without this the claim is created planless, and the planless-claim guard
     rejects the very entrypoint it is meant to govern.
     """
-    # A later command-line assignment wins, so this clears the SESSION_WRITE_PATHS
-    # that _COMMON_MAKE_VARS supplies and exercises the undeclared-scope default.
-    request = _maintenance_request(
-        _dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned", "SESSION_WRITE_PATHS=")
-    )
+    request = _maintenance_request(_dry_run_make("maintenance-worktree", "BRANCH=probe-unplanned"))
 
     assert request["operation"] == "maintenance_worktree"
     assert request["scope"] == "probe-unplanned"
     assert request["branch"] == "probe-unplanned"
     assert request["claim_type"] == "program"
-    assert request["write_paths"] == ["."]
+    assert request["write_paths"] == ["README.md"]
+
+
+def test_source_maintenance_worktree_refuses_an_undeclared_write_scope() -> None:
+    """Since 2026-09-08 the source Makefile refuses to default the scope to ".".
+
+    A later command-line assignment wins, so this clears the SESSION_WRITE_PATHS
+    that _COMMON_MAKE_VARS supplies.
+    """
+    result = subprocess.run(
+        ["make", "-n", "maintenance-worktree", *_COMMON_MAKE_VARS, "BRANCH=probe-unplanned", "SESSION_WRITE_PATHS="],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "SESSION_WRITE_PATHS is required" in result.stdout + result.stderr
 
 
 def test_maintenance_worktree_keeps_an_explicitly_declared_write_scope() -> None:
@@ -383,8 +398,9 @@ def test_consumer_template_session_start_keeps_plan_binding_conditional() -> Non
     """Plan-bound expansion in the template must stay the qualified plan id."""
     recipe = _template_recipe("session-start")
 
-    assert '$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",)' in recipe
-    assert "--plan UNPLANNED" not in recipe
+    # UNPLANNED appears only as the ALLOW_UNPLANNED fallback, never on a plan-bound lane.
+    assert '$(if $(PLAN),--plan "$(PLAN_PROJECT)#$(PLAN)",$(if $(ALLOW_UNPLANNED),--plan UNPLANNED,))' in recipe
+    assert recipe.count("--plan UNPLANNED") == recipe.count("$(if $(ALLOW_UNPLANNED),--plan UNPLANNED,)")
 
 
 def test_session_narrow_make_target_forwards_only_exact_owner_and_paths() -> None:

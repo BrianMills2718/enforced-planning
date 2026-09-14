@@ -123,6 +123,23 @@ def test_post_edit_quiz_stays_quiet_on_deliberate_not_configured_exit(tmp_path: 
     assert result.stdout == ""
 
 
+def test_canonical_lock_hook_reports_a_script_that_cannot_start(tmp_path: Path) -> None:
+    """canonical_lock.py reports its own runtime errors, but an import-time crash was hidden by 2>/dev/null || true."""
+    repo = tmp_path / "repo"
+    (repo / ".claude" / "hooks").mkdir(parents=True)
+    (repo / "scripts" / "worktree-coordination").mkdir(parents=True)
+    shutil.copy2(
+        HOOKS / "worktree-coordination" / "reconcile-canonical-locks.sh",
+        repo / ".claude" / "hooks" / "reconcile-canonical-locks.sh",
+    )
+    (repo / "scripts" / "worktree-coordination" / "canonical_lock.py").write_text(CRASH, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    result = _run(repo, "reconcile-canonical-locks.sh", {"hook_event_name": "SessionStart"})
+    assert result.returncode == 0
+    body = json.loads(result.stdout)
+    assert "demo-crash-marker" in body["systemMessage"]
+
+
 def test_hook_enabled_helper_still_reports_disabled_without_a_crash(tmp_path: Path) -> None:
     """Negative control: a deliberate exit 1 from the config reader still means disabled."""
     repo = _repo(tmp_path, "check-hook-enabled.sh")

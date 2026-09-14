@@ -24,7 +24,11 @@ def test_help_text_promises_a_self_sufficient_bootstrap(surface):
         if l.startswith("maintenance-worktree:")
     )
     assert "needs BRANCH" in line
-    assert "SESSION_WRITE_PATHS" not in line
+    if surface == REPO_ROOT / "Makefile":
+        # The source Makefile refuses an undeclared scope, so its help must say so.
+        assert "SESSION_WRITE_PATHS" in line
+    else:
+        assert "SESSION_WRITE_PATHS" not in line
 
 
 @pytest.mark.parametrize(
@@ -40,9 +44,15 @@ def test_bootstrap_scope_is_declared_by_the_maintainer_surface(surface):
     SESSION_WRITE_PATHS must win over the default.
     """
     text = surface.read_text(encoding="utf-8")
+    fallback = (
+        "$(error SESSION_WRITE_PATHS is required."
+        if surface == REPO_ROOT / "Makefile"
+        # Installed consumers still default an undeclared scope to the repo root.
+        else "."
+    )
     assert (
         "MAINTENANCE_BOOTSTRAP_WRITE_PATHS = "
-        "$(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS),.)"
+        "$(if $(strip $(SESSION_WRITE_PATHS)),$(SESSION_WRITE_PATHS)," + fallback
     ) in text
     assert '"write_paths":sys.argv[5:]' in text
     expected_script = (

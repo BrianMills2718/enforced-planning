@@ -218,6 +218,11 @@ adoption.
 - `AGENTS.md` is a generated mirror, not a second authority.
 - Historical sprint notes under `docs/ops/` are evidence artifacts, not the
   active planning queue.
+- `session_end.py`, `juice_checkpoint_hook.py`, `evidence_sample_launcher.sh`,
+  and `learning_capture_hook.py` declare `scope: global_by_design` to
+  consuming repos' `hooks/audit_hook_surface.py` (agent-skills): session
+  lifecycle, the advisory pace pulse, evidence-sample dispatch, and the
+  learning-disposition adapter are machine/session-wide, not per-project.
 
 ## Principles
 

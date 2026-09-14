@@ -393,6 +393,21 @@ strictly recognized legacy staging files in the registry; unrelated files are
 left untouched. Session resume, handoff, abandon, and finish update the claim
 and refresh the pre-write projection in the same locked mutation.
 
+`session_lifecycle._write_claim_and_refresh_projection` -- the ordinary path
+behind claim create/update/close, not only the restart-safe outcome-transfer
+path above -- delegates to
+`coordination_claims._replace_claim_and_refresh_projection_fail_atomic` for
+this same guarantee: if the projection refresh fails (most concretely,
+because some OTHER claim file in the registry is malformed and the refresh's
+own fail-loud parse is doing its job), the claim write is rolled back to its
+exact preflight bytes, or removed if it did not exist before the call, rather
+than left mutated to a status the caller never intended to be final. Fixed
+2026-09-14 after exactly this left a `session-close` call's own claim
+permanently stuck at a non-terminal `status: closing` when an unrelated,
+concurrently-live session's claim file was malformed elsewhere in the
+registry -- see the fix's own docstring and regression tests in
+`tests/test_session_lifecycle.py`.
+
 ## Default Flow
 
 1. Keep the canonical repo checkout clean and on its canonical default branch,

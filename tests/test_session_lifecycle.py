@@ -478,3 +478,91 @@ def test_bootstrap_closeout_resolves_real_target_instead_of_authority_sentinel(
     assert claim.worktree_path == str(target)
     assert session_lifecycle._resolve_closeout_worktree_path(claim, None) == target
     assert session_lifecycle._resolve_closeout_worktree_path(claim, str(target)) == target
+
+
+def test_write_claim_and_refresh_projection_restores_claim_on_refresh_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression for the 2026-09-14 stranded-claim incident.
+
+    An unrelated OTHER claim's malformed YAML made
+    refresh_prewrite_authority_projection fail loud (by design). Before this
+    fix, _write_claim_and_refresh_projection had already written the new
+    payload to disk by that point, so the claim was left permanently mutated
+    to a status a caller like close_session never intended to be final --
+    with no sanctioned recovery command for that exact intermediate state.
+    """
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    claim_path = claims_dir / "claude-code_demo_stranded-repro.yaml"
+    original_payload = {"status": "active", "scope": "stranded-repro"}
+    claim_path.write_text(yaml.safe_dump(original_payload, sort_keys=False), encoding="utf-8")
+    original_bytes = claim_path.read_bytes()
+
+    def fail_refresh(_claims_dir: Path | None = None) -> tuple[str, str]:
+        raise ValueError("Cannot parse claim /some/other/claim.yaml: injected failure")
+
+    monkeypatch.setattr(coordination_claims, "refresh_prewrite_authority_projection", fail_refresh)
+
+    with pytest.raises(ValueError, match="injected failure"):
+        session_lifecycle._write_claim_and_refresh_projection(
+            claim_path,
+            {"status": "closing", "scope": "stranded-repro"},
+            claims_dir=claims_dir,
+        )
+
+    assert claim_path.read_bytes() == original_bytes, (
+        "claim must be rolled back to its pre-call bytes when projection refresh fails, "
+        "not left mutated to the never-completed intermediate status"
+    )
+
+
+def test_write_claim_and_refresh_projection_removes_new_claim_on_refresh_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The no-prior-file case: a brand-new claim must not survive a failed refresh either."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    claim_path = claims_dir / "claude-code_demo_new-claim.yaml"
+    assert not claim_path.exists()
+
+    def fail_refresh(_claims_dir: Path | None = None) -> tuple[str, str]:
+        raise ValueError("injected failure")
+
+    monkeypatch.setattr(coordination_claims, "refresh_prewrite_authority_projection", fail_refresh)
+
+    with pytest.raises(ValueError, match="injected failure"):
+        session_lifecycle._write_claim_and_refresh_projection(
+            claim_path,
+            {"status": "active", "scope": "new-claim"},
+            claims_dir=claims_dir,
+        )
+
+    assert not claim_path.exists(), "a brand-new claim must be removed, not left half-created"
+
+
+def test_write_claim_and_refresh_projection_succeeds_when_refresh_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Positive control: the ordinary success path still writes and returns normally."""
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    claim_path = claims_dir / "claude-code_demo_ok.yaml"
+
+    def succeed_refresh(_claims_dir: Path | None = None) -> tuple[str, str]:
+        return (str(claims_dir / "prewrite-authority-v1.json"), "digest-123")
+
+    monkeypatch.setattr(coordination_claims, "refresh_prewrite_authority_projection", succeed_refresh)
+
+    projection_path, projection_digest = session_lifecycle._write_claim_and_refresh_projection(
+        claim_path,
+        {"status": "active", "scope": "ok"},
+        claims_dir=claims_dir,
+    )
+
+    assert projection_digest == "digest-123"
+    written = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert written == {"status": "active", "scope": "ok"}

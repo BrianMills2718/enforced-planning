@@ -942,9 +942,16 @@ def classify_dirty_entries(repo_root: Path, upstream: str) -> dict[str, Any]:
         index_matches = index_blob in {head_blob, upstream_blob}
         if content_matches and index_matches:
             result["residue"].append({"path": path, "code": code, "blob": upstream_blob})
+        elif content_matches and index_blob is not None:
+            # The working file already equals upstream; the index holds an
+            # earlier staged draft the same writer later superseded (observed
+            # on the 2026-09-14 project-meta incident: `MM` on a policy JSON).
+            # Residue, but the draft blob is copied out before anything moves.
+            result["residue"].append(
+                {"path": path, "code": code, "blob": upstream_blob, "preserve_index_blob": index_blob}
+            )
         else:
-            why = "content differs from upstream" if not content_matches else "staged content differs"
-            result["real"].append({"path": path, "code": code, "why": why})
+            result["real"].append({"path": path, "code": code, "why": "content differs from upstream"})
     return result
 
 
@@ -999,6 +1006,21 @@ def clear_upstream_residue(repo_root: Path, *, upstream: str | None = None) -> d
     RESIDUE_RECEIPT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     receipt_file = RESIDUE_RECEIPT_DIR / f"{repo_root.name}-{stamp}.json"
+    drafts_dir = RESIDUE_RECEIPT_DIR / f"{repo_root.name}-{stamp}-staged-drafts"
+    for item in residue:
+        blob = item.get("preserve_index_blob")
+        if not blob:
+            continue
+        content = subprocess.run(
+            ["git", "-C", str(repo_root), "cat-file", "blob", blob], capture_output=True, check=False
+        )
+        if content.returncode != 0:
+            return {**base, "ok": False, "action": "residue_not_cleared", "cleared": [],
+                    "reason": f"could not preserve staged draft {blob} for {item['path']}; nothing touched"}
+        saved = drafts_dir / item["path"]
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_bytes(content.stdout)
+        item["preserved_at"] = str(saved)
     head = _git(repo_root, ["rev-parse", "HEAD"]).stdout.strip()
     receipt_file.write_text(json.dumps({
         "schema_version": 1, "repo_root": str(repo_root), "head": head, "upstream": upstream,

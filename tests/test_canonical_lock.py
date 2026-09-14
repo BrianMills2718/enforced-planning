@@ -288,6 +288,26 @@ def test_sync_clears_merged_residue_identical_to_upstream_and_advances_locked_ch
         canonical_lock.unlock_repo(clone)
 
 
+def test_superseded_staged_draft_is_preserved_then_cleared(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exact shape of the live project-meta incident (2026-09-14): `MM` on a file
+    whose working copy equals upstream while the index holds an earlier draft.
+    The first residue release refused it; the draft is now copied out first."""
+    _, clone = _fetched_pair_with_new_file(tmp_path, monkeypatch)
+    (clone / "fact.txt").write_text("intermediate draft\n", encoding="utf-8")
+    assert _git(clone, "add", "fact.txt").returncode == 0
+    (clone / "fact.txt").write_text("new\n", encoding="utf-8")  # final == upstream
+    assert _git(clone, "status", "--porcelain").stdout.startswith("MM fact.txt")
+
+    result = canonical_lock.clear_upstream_residue(clone)
+
+    assert result["ok"] is True, result
+    [item] = result["cleared"]
+    assert Path(item["preserved_at"]).read_text(encoding="utf-8") == "intermediate draft\n"
+    assert _git(clone, "status", "--porcelain").stdout.strip() == ""
+
+
 def test_residue_is_not_cleared_when_any_change_is_real_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

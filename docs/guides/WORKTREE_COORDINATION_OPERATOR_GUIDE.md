@@ -972,7 +972,13 @@ Stale outranks weak. A stale claim should be cleaned up, not merely tolerated.
 **Checking this is read-only; cleaning it up is not.** Both `--list --json`
 (every claim's `health_status`/`liveness_issues`) and the dedicated
 `--list-stale [--json]` compute these same diagnostics without deleting
-anything. `--prune-stale` is the only command that mutates on this signal, and
+anything -- `--list-stale` combines `claim_lifecycle_issues()` with the
+proven entries of `claim_liveness_issues()`, the exact filter `--prune-stale`
+applies, so a claim missing its worktree/branch on disk shows up here just as
+reliably as a stale heartbeat does; a real gap between the two (heartbeat-only
+coverage that missed a `missing_worktree_on_disk` case `--prune-stale` still
+caught) was found and closed the same day this table was written.
+`--prune-stale` is the only command that mutates on this signal, and
 it deletes the matching claim files as it reports them -- that conflates
 *checking whether another agent's claimed work is still covered* with
 *discarding the record that it was ever claimed*. Before assuming a claim is

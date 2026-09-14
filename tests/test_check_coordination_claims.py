@@ -5289,10 +5289,20 @@ def test_list_stale_reports_only_claims_with_liveness_issues_and_deletes_nothing
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """--list-stale surfaces the same diagnostic --prune-stale acts on,
+    """--list-stale surfaces the same diagnostics --prune-stale acts on,
     read-only: the stale claim is reported and its file is left on disk,
-    and a genuinely fresh claim is not reported at all."""
+    and a genuinely fresh claim -- real worktree, real branch, fresh
+    heartbeat -- is not reported at all."""
     module = _load_module()
+    repo_root = tmp_path / "project-meta"
+    _init_git_repo(repo_root)
+    worktrees_dir = tmp_path / "project-meta_worktrees"
+    for branch in ("plan-95-stale-session", "plan-96-fresh-session"):
+        subprocess.run(
+            ["git", "-C", str(repo_root), "branch", branch], check=True, capture_output=True, text=True
+        )
+        (worktrees_dir / branch).mkdir(parents=True)
+
     claims_dir = tmp_path / "claims"
     monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
     monkeypatch.setenv("COORDINATION_HEARTBEAT_STALE_MINUTES", "30")
@@ -5314,7 +5324,7 @@ def test_list_stale_reports_only_claims_with_liveness_issues_and_deletes_nothing
             "agent": "codex",
             "scope": "stale-session",
             "branch": "plan-95-stale-session",
-            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-95-stale-session"),
+            "worktree_path": str(worktrees_dir / "plan-95-stale-session"),
             "session_id": "codex:thread-old",
             "heartbeat_at": "2026-04-05T08:00:00+00:00",
         },
@@ -5331,7 +5341,7 @@ def test_list_stale_reports_only_claims_with_liveness_issues_and_deletes_nothing
             "agent": "claude-code",
             "scope": "fresh-session",
             "branch": "plan-96-fresh-session",
-            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-96-fresh-session"),
+            "worktree_path": str(worktrees_dir / "plan-96-fresh-session"),
             "session_id": "claude-code:thread-new",
             "heartbeat_at": fresh_heartbeat,
         },
@@ -5348,6 +5358,53 @@ def test_list_stale_reports_only_claims_with_liveness_issues_and_deletes_nothing
     # Read-only: unlike --prune-stale, neither claim file is removed.
     assert (claims_dir / "stale-session.yaml").is_file()
     assert (claims_dir / "fresh-session.yaml").is_file()
+
+
+def test_list_stale_also_reports_lifecycle_issues_not_just_heartbeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--list-stale must match --prune-stale's actual staleness definition:
+    prune_stale() removes a claim when EITHER claim_lifecycle_issues() OR a
+    proven claim_liveness_issues() entry fires, not heartbeat staleness alone.
+    A claim with a fresh heartbeat but a missing worktree on disk is exactly
+    the gap where the two diverged before this test: --list-stale said
+    healthy while --prune-stale would still remove it."""
+    module = _load_module()
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    fresh_heartbeat = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+    _write_claim(
+        claims_dir,
+        "orphaned-worktree.yaml",
+        {
+            "claimed_at": "2026-04-05T08:00:00+00:00",
+            "expires_at": "2099-04-05T13:00:00+00:00",
+            "projects": ["project-meta"],
+            "intent": "Test list-stale lifecycle issue",
+            "claim_type": "write",
+            "plan_ref": "UNPLANNED",
+            "write_paths": ["README.md"],
+            "status": "active",
+            "agent": "codex",
+            "scope": "orphaned-worktree",
+            "branch": "plan-97-orphaned-worktree",
+            "worktree_path": str(tmp_path / "project-meta_worktrees" / "plan-97-orphaned-worktree"),
+            "session_id": "codex:thread-orphan",
+            "heartbeat_at": fresh_heartbeat,
+        },
+    )
+
+    exit_code = module.main(["--list-stale", "--json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert len(payload) == 1
+    assert payload[0]["scope"] == "orphaned-worktree"
+    assert payload[0]["issues"] == ["missing_worktree_on_disk"]
+    assert (claims_dir / "orphaned-worktree.yaml").is_file()
 
 
 def test_unregistered_format_claim_files_surface_in_list(

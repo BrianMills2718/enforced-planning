@@ -219,6 +219,30 @@ def _claim_overlap_for_paths(
     return sorted(set(overlaps))
 
 
+def _predicts_clean_merge(repo_root: Path, ref_a: str, ref_b: str) -> bool | None:
+    """Predict whether the eventual integration of ref_a and ref_b would conflict.
+
+    `git merge-tree --write-tree` simulates a three-way merge with no side
+    effects (no working-tree change, no new commit, no ref update), so this is
+    safe to run purely for prediction. Returns True for a clean predicted
+    merge, False for a predicted real conflict, and None when the prediction
+    itself could not be made (for example `ref_b` no longer resolves, because
+    its owning worktree/branch was removed). Callers must treat None as
+    "unknown," not as license to relax the existing conservative behavior --
+    fail closed on the unknown case, exactly as an unresolved-details case
+    elsewhere in this module keeps blocking rather than guessing.
+    """
+
+    if _run_git(repo_root, ["rev-parse", "--verify", "--quiet", ref_b]).returncode != 0:
+        return None
+    result = _run_git(repo_root, ["merge-tree", "--write-tree", ref_a, ref_b])
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    return None
+
+
 def _is_overbroad_undeclared_claim(claim: "coordination_claims.ClaimRecord") -> bool:
     """True when a claim holds the whole repository without deliberately reserving it.
 
@@ -457,6 +481,48 @@ def evaluate_push_safety(
                     )
                 )
                 continue
+            # A declared write_paths overlap is a metadata-level signal, not
+            # proof the two branches actually collide: two lanes can each
+            # append a different, non-overlapping line to the same file (a
+            # table, a log) and integrate cleanly. `git merge-tree` simulates
+            # the eventual three-way merge with no side effects and tells us
+            # whether it would really conflict. Predicted-clean overlaps warn
+            # instead of blocking, so a real conflict is not serialized away
+            # to something git itself would reconcile without help.
+            #
+            # Scoped to non-default-branch pushes only. A default-branch push
+            # is a real integration, and an overlapping claim there is an
+            # ownership/identity question (who is allowed to publish this),
+            # not a content-conflict question -- see
+            # _is_same_session_default_integration just above, which already
+            # owns that case. Predicting a merge between HEAD and a claim's
+            # branch is also close to tautological once that branch is an
+            # ancestor of the current default-branch HEAD (the common case
+            # here): it is trivially "clean" by construction, which would
+            # silently defeat the ownership check this exists to preserve
+            # rather than duplicate.
+            #
+            # A claim with no branch, or whose branch no longer resolves,
+            # cannot be simulated -- that stays a hard block, the same
+            # conservative default as before this check existed.
+            if resolved_branch != default_branch and claim.branch:
+                predicted_clean = _predicts_clean_merge(
+                    resolved_repo_root, resolved_branch, claim.branch
+                )
+                if predicted_clean:
+                    warnings.append(
+                        PushCheckFinding(
+                            code="overlapping_write_claim_predicted_clean",
+                            message=(
+                                "Changed files overlap another live claim's declared write ownership, "
+                                "but a merge-tree simulation predicts no actual content conflict. "
+                                "Warning instead of blocking; re-check if the other lane's content "
+                                "changes before you integrate."
+                            ),
+                            details=claim_details,
+                        )
+                    )
+                    continue
             live_write_overlap_paths.update(
                 overlap.split(" <-> ", 1)[0] for overlap in overlaps
             )

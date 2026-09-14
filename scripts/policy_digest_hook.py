@@ -19,6 +19,11 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+try:
+    from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+except ModuleNotFoundError:  # package-style tests import scripts.policy_digest_hook
+    from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+
 DEFAULT_PROPOSALS_DIR = Path("~/code/active/project-meta/policy/proposals")
 DEFAULT_STATE_DIR = Path("~/.claude/coordination/policy-digests-v1")
 DEFAULT_COOLDOWN_HOURS = 24
@@ -54,6 +59,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--today", type=date.fromisoformat)
     parser.add_argument("--now-epoch", type=float)
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--hook-receipt-dir", type=Path, default=DEFAULT_RECEIPT_ROOT)
     return parser.parse_args(argv)
 
 
@@ -237,11 +243,22 @@ def render(agent: str, message: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    invocation: HookInvocation | None = None
+    decision = "error"
+    reason_code = "unhandled_exception"
     try:
         payload = json.loads(sys.stdin.read() or "{}")
         if not isinstance(payload, dict):
             raise TypeError("hook payload must be an object")
+        invocation = start_hook_invocation(
+            hook_name="policy-digest",
+            hook_version="1",
+            script_path=Path(__file__).resolve(),
+            payload=payload,
+            receipt_root=args.hook_receipt_dir,
+        )
         if payload.get("hook_event_name") != "SessionStart":
+            decision, reason_code = "skip", "not_session_start"
             return 0
         cwd = str(payload.get("cwd") or os.getcwd())
         project = _project_for_cwd(cwd)
@@ -249,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         pending, unreadable = load_pending(args.proposals_dir.expanduser().resolve())
         relevant = [proposal for proposal in pending if is_relevant(proposal, project)]
         if not relevant and not unreadable:
+            decision, reason_code = "skip", "no_relevant_or_unreadable_proposals"
             return 0
         relevant.sort(
             key=lambda proposal: (
@@ -268,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
             cooldown_hours=args.cooldown_hours,
             force=args.force,
         ):
+            decision, reason_code = "skip", "cooldown_active"
             return 0
         _record_emit(state_path, fingerprint=fingerprint, now_epoch=now_epoch)
         ages = [
@@ -286,8 +305,14 @@ def main(argv: list[str] | None = None) -> int:
         if unreadable:
             message += f" Also: {len(unreadable)} proposal file(s) could not be parsed."
         print(render(args.agent, message))
+        decision = "emit"
+        reason_code = "digest_emitted_with_unreadable" if unreadable else "digest_emitted"
     except (OSError, subprocess.SubprocessError, TypeError, ValueError, json.JSONDecodeError) as exc:
         print(render(args.agent, f"Policy digest unavailable (non-blocking): {type(exc).__name__}: {exc}"))
+        decision, reason_code = "error", "digest_unavailable"
+    finally:
+        if invocation is not None:
+            invocation.complete(decision=decision, reason_code=reason_code, exit_status=0)
     return 0
 
 

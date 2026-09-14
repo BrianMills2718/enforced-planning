@@ -56,12 +56,14 @@ def _invoke(
     proposals: Path,
     state: Path,
     now: int,
+    receipts: Path | None = None,
 ) -> tuple[int, str]:
     monkeypatch.setattr(
         sys,
         "stdin",
         StringIO(json.dumps({"session_id": "s1", "hook_event_name": "SessionStart", "cwd": str(cwd)})),
     )
+    receipt_dir = receipts if receipts is not None else state.parent / "hook-receipts"
     code = policy_digest_hook.main(
         [
             "--agent",
@@ -74,9 +76,16 @@ def _invoke(
             "2026-08-28",
             "--now-epoch",
             str(now),
+            "--hook-receipt-dir",
+            str(receipt_dir),
         ]
     )
     return code, capsys.readouterr().out
+
+
+def _completed_receipts(receipt_dir: Path) -> list[dict]:
+    receipts = [json.loads(path.read_text(encoding="utf-8")) for path in receipt_dir.rglob("completed.json")]
+    return sorted(receipts, key=lambda receipt: receipt["observed_at"])
 
 
 def test_digest_is_project_scoped_compact_and_advisory(tmp_path, monkeypatch, capsys) -> None:
@@ -177,6 +186,38 @@ def test_non_session_event_is_silent(tmp_path, monkeypatch, capsys) -> None:
         "stdin",
         StringIO(json.dumps({"session_id": "s1", "hook_event_name": "UserPromptSubmit", "cwd": str(tmp_path)})),
     )
+    receipts = tmp_path / "hook-receipts"
 
-    assert policy_digest_hook.main(["--agent", "claude-code"]) == 0
+    assert policy_digest_hook.main(["--agent", "claude-code", "--hook-receipt-dir", str(receipts)]) == 0
+
+    [receipt] = _completed_receipts(receipts)
+    assert receipt["decision"] == "skip"
+    assert receipt["reason_code"] == "not_session_start"
+
+
+def test_receipt_records_emit_and_skip_decisions(tmp_path, monkeypatch, capsys) -> None:
+    repo = _repo(tmp_path)
+    proposals = tmp_path / "proposals"
+    proposals.mkdir()
+    state = tmp_path / "state"
+    receipts = tmp_path / "hook-receipts"
+    _proposal(proposals, "first", scope="all projects")
+
+    emitted_code, emitted_output = _invoke(
+        monkeypatch, capsys, cwd=repo, proposals=proposals, state=state, now=1_000, receipts=receipts
+    )
+    assert emitted_code == 0
+    assert emitted_output
+
+    cooled_code, cooled_output = _invoke(
+        monkeypatch, capsys, cwd=repo, proposals=proposals, state=state, now=1_100, receipts=receipts
+    )
+    assert cooled_code == 0
+    assert cooled_output == ""
+
+    receipts_in_order = _completed_receipts(receipts)
+    assert [r["decision"] for r in receipts_in_order] == ["emit", "skip"]
+    assert [r["reason_code"] for r in receipts_in_order] == ["digest_emitted", "cooldown_active"]
+    assert all(r["hook_name"] == "policy-digest" for r in receipts_in_order)
+    assert all(r["exit_status"] == 0 for r in receipts_in_order)
     assert capsys.readouterr().out == ""

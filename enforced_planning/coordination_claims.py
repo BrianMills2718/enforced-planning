@@ -5122,6 +5122,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.claim:
         if not all([args.agent, args.project, args.scope, args.intent]):
             raise SystemExit("--claim requires --agent, --project, --scope, --intent")
+        if args.worktree_path and not Path(args.worktree_path).expanduser().is_absolute():
+            # Claim consumers check this path from their own working directory, so a relative
+            # path silently reads as "missing worktree" and blocks every later push of the lane.
+            base = Path(args.repo_root).expanduser() if args.repo_root else Path.cwd()
+            args.worktree_path = str((base / args.worktree_path).resolve())
         try:
             ok, msg = create_claim(
                 args.agent,

@@ -513,7 +513,9 @@ registry -- see the fix's own docstring and regression tests in
      `goal:<outcome-id>` authority, or `UNPLANNED` only through the explicit
      maintenance path)
    - `branch`
-   - `worktree_path`
+   - `worktree_path` (a relative `--worktree-path` is resolved against
+     `--repo-root`, or the current directory, and stored absolute; lifecycle
+     and push checks read it from their own working directory)
    - `session_id`
    - `session_name` (the durable broader-goal name when it differs from the runtime ID)
    - narrow `write_paths` for write claims

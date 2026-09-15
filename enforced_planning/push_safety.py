@@ -361,12 +361,25 @@ def evaluate_push_safety(
             )
         )
     elif not _healthy_branch_claims(branch_claims):
+        causes = sorted(
+            {
+                issue
+                for claim in branch_claims
+                for issue in (
+                    coordination_claims.claim_lifecycle_issues(claim)
+                    + coordination_claims.claim_health_issues(claim)
+                    + coordination_claims.claim_liveness_issues(claim)
+                    + coordination_claims.claim_progress_issues(claim)
+                )
+            }
+        )
         issues.append(
             PushCheckFinding(
                 code="no_healthy_branch_claim",
                 message=(
                     "The current branch has no healthy or report-only stalled canonical "
                     "claim with complete session identity. Resume or recreate the lane before pushing."
+                    + (f" Claim issues: {', '.join(causes)}." if causes else "")
                 ),
                 details={
                     "branch": resolved_branch,
@@ -376,6 +389,7 @@ def evaluate_push_safety(
                             "scope": claim.scope,
                             "session_id": claim.session_id,
                             "session_name": claim.session_name,
+                            "lifecycle_issues": coordination_claims.claim_lifecycle_issues(claim),
                             "health_issues": coordination_claims.claim_health_issues(claim),
                             "liveness_issues": coordination_claims.claim_liveness_issues(claim),
                             "progress_issues": coordination_claims.claim_progress_issues(claim),

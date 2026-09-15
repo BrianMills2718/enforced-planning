@@ -6,6 +6,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import dataclasses
 import os
 import shutil
 import subprocess
@@ -7037,6 +7038,69 @@ def test_abandon_session_removes_lane_from_live_status(
     assert status_payload["session_count"] == 0
     assert tracker_payload["tracker"]["current_phase"] == "abandoned"
     assert prewrite_claim_projection.projection_is_current(claims_dir=claims_dir)
+
+
+def test_abandon_session_disposes_of_a_session_ended_lane_that_blocks_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #548: a preserved session-ended lane blocked every replacement lane on
+    its paths, and abandon refused it because it was no longer live."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+
+    session_lifecycle.start_session(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        intent="implement plan-bound session lifecycle",
+        repo_root="~/projects/enforced-planning",
+        worktree_path=str(worktree),
+        branch="plan-37-session-recovery",
+        broader_goal="Plan Bound Session Recovery",
+        current_phase="mid-implementation",
+        plan_ref="Plan #37",
+        session_id="codex:test-session",
+        tracker_dir=trackers_dir,
+    )
+    with _native_actor("codex", "codex:test-session"):
+        ended, *_rest = coordination_claims.end_session_claims(agent="codex", session_id="codex:test-session")
+    assert ended == 1
+    ended_claim, _payload, _path = session_lifecycle._claim_record_any_status(
+        agent="codex", project="enforced-planning", scope="plan-37-session-recovery"
+    )
+    assert ended_claim.status == coordination_claims.SESSION_ENDED_STATUS
+    replacement = dataclasses.replace(ended_claim, scope="plan-37-replacement", session_id="codex:other", status="active")
+    with pytest.raises(ValueError, match="Preserved session-ended lane"):
+        coordination_claims.validate_no_preserved_lane_conflict(
+            replacement, claims=coordination_claims.list_claims(include_inactive=True)
+        )
+
+    with pytest.raises(ValueError, match="belongs to session"):
+        with _native_actor("codex", "codex:someone-else"):
+            session_lifecycle.abandon_session(
+                agent="codex",
+                project="enforced-planning",
+                scope="plan-37-session-recovery",
+                note="not the owner",
+                actor_session_id="codex:someone-else",
+            )
+
+    payload = _abandon_session_as_owner(
+        agent="codex",
+        project="enforced-planning",
+        scope="plan-37-session-recovery",
+        note="lane cannot be resumed; its commit is kept on a branch",
+    )
+
+    assert payload["action"] == "abandoned"
+    coordination_claims.validate_no_preserved_lane_conflict(
+        replacement, claims=coordination_claims.list_claims(include_inactive=True)
+    )
 
 
 def test_start_session_auto_resolves_codex_runtime_session_id(

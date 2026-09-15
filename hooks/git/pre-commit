@@ -456,6 +456,30 @@ if [[ -n "$STATUS_TRANSITIONS" ]]; then
     fi
 fi
 
+# 7c. Plan dependency contract (project-meta Plan #289, if installed).
+# Every staged open plan in the five plan directories must carry frontmatter
+# plan_id and dependencies (with evidence; [] needs dependencies_reviewed), and
+# its ids must resolve and stay acyclic across the whole PROJECT_GRAPH corpus.
+# There is deliberately no status-only or whitespace-only skip: a status edit is
+# exactly when an unconverted open plan gets touched, and exempting it would let
+# the corpus stay unconverted forever. The validator itself decides which staged
+# paths are plans. Warn by default like the other checks; a converted repository
+# refuses violations by declaring `plan dependency check: block` under
+# quality.hook_modes in meta-process.yaml.
+PLAN_DEPENDENCIES=$(find_script "validate_plan_dependencies.py")
+if [[ -n "$PLAN_DEPENDENCIES" ]]; then
+    STAGED_PLAN_DOCS=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(docs/plans|plans|plan|docs/planning|claude_code_planning)/.*\.md$' || true)
+    if [[ -n "$STAGED_PLAN_DOCS" ]]; then
+        echo "Checking plan dependency contract..."
+        if ! "$PYTHON_BIN" "$PLAN_DEPENDENCIES" --repo "$REPO_ROOT" --staged; then
+            echo ""
+            echo "Plan dependency contract failed (see errors above)."
+            echo ""
+            handle_failure "plan dependency check" || exit 1
+        fi
+    fi
+fi
+
 # 8. Dead code check (the script itself honors meta-process.yaml enablement)
 DEAD_CODE=$(find_script "check_dead_code.py")
 if [[ -n "$DEAD_CODE" ]] && [[ -n "$STAGED_PY" ]]; then

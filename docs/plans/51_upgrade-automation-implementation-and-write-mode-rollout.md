@@ -1,3 +1,10 @@
+---
+plan_id: "enforced-planning#51"
+dependencies: ["enforced-planning#20"]
+dependency_evidence:
+  "enforced-planning#20": "**Blocked By:** Plan #20 (design)"
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #51: Upgrade Automation Implementation and Write-Mode Rollout
 
 **Status:** 🟡 Partial (dry-run shipped; safe claimed-worktree write mode implemented and verified against real repos 2026-09-02; an 18-repo fleet attempt the same day found 0/18 succeeding for several distinct, now-catalogued reasons, one already fixed at the source (PR #388); fleet-wide rollout not yet run)

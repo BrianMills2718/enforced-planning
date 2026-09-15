@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#111"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #111: Portable Ecosystem Feedback Loop
 
 **Status:** In Progress — EF-01 accepted; EF-02 ready

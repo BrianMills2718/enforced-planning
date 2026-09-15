@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#66"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #66: Evidence-Bound Semantic Document Lifecycle Assessment
 
 **Status:** Design complete; awaiting human mockup disposition; no implementation authority

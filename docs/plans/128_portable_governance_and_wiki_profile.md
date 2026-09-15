@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#128"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #128: Portable Governance And Wiki Profile
 
 **Status:** In Progress — effective-profile resolver implemented; native runtime consumer binding active

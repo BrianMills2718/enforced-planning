@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#133"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #133: Shared-surface change disclosure at closeout
 
 **Status:** Planned

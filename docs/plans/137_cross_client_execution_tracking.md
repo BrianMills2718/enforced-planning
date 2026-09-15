@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#137"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #137: Cross-Client Execution Tracking And Bounded Completion Enforcement
 
 **Status:** In Progress — neutral/Codex and XCET-03R repair accepted; XCET-05 local enforcement was independently rejected after its first merge and now has a verified corrective candidate, while authentic dashboard observation and the Claude adapter remain pending; fleet activation remains excluded

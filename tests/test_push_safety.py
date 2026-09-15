@@ -712,6 +712,7 @@ def test_push_check_rejects_branch_claim_without_complete_session_identity(
     assert not payload["ok"]
     finding = next(item for item in payload["issues"] if item["code"] == "no_healthy_branch_claim")
     assert finding["details"]["claims"][0]["health_issues"] == ["missing_session_name"]
+    assert "missing_session_name" in finding["message"]
     assert coordination_claims.claim_runtime_status(
         coordination_claims.check_claims("demo")[0]
     ) == "weak"

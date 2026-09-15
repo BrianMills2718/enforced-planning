@@ -7500,3 +7500,42 @@ def test_lease_renewal_only_ever_extends_never_shortens(
         claims_dir=claims_dir,
     )
     assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["expires_at"] == far_future
+
+
+def test_claim_cli_stores_relative_worktree_path_as_absolute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A relative --worktree-path must not be stored verbatim.
+
+    Push and lifecycle checks test the stored path from their own working directory, so a
+    relative path read as a missing worktree and left the lane permanently unpushable.
+    """
+
+    from enforced_planning import claim_mutation_receipts as receipts
+    from enforced_planning import coordination_claims
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(receipts, "DEFAULT_EVENTS_PATH", tmp_path / "events.jsonl")
+    monkeypatch.setattr(
+        receipts, "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH", tmp_path / "completed-claim-archive-v1.jsonl"
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", "relative-path-test")
+    repo_root = tmp_path / "demo"
+    (repo_root / "worktrees" / "lane").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+
+    coordination_claims.main(
+        [
+            "--claim", "--agent", "codex", "--project", "enforced-planning",
+            "--scope", "relative-lane", "--intent", "store an absolute worktree path",
+            "--branch", "relative-lane", "--worktree-path", "worktrees/lane",
+            "--repo-root", str(repo_root), "--session-id", "codex:relative-path-test",
+            "--session-name", "relative-lane", "--plan", "UNPLANNED",
+        ]
+    )
+
+    stored = yaml.safe_load(
+        (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "relative-lane")).read_text()
+    )
+    assert stored["worktree_path"] == str((repo_root / "worktrees" / "lane").resolve())

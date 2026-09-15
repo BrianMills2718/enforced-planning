@@ -210,13 +210,16 @@ adoption.
    tips before new-lane mutation; retain both identities and the exact plan
    digest in the claim/tracker. Never copy a proxy plan into the target. See
    the operator guide's cross-repository plan-authority contract.
-10. A PR no longer needs to be rebased onto the latest `main` before it can
-    merge (the required `hook-contract` check dropped its "must be up to
-    date" requirement, and `allow_auto_merge` is on) -- `main` moves too fast
-    for a manual rebase to keep up (observed: repeated real merges landing
-    within the ~1-2 minutes a single CI run takes). Open the PR and run
-    `gh pr merge --auto --squash`; it merges as soon as its own CI passes,
-    without needing to already be at the current tip. A real merge queue
+10. A PR does not need to be rebased onto the latest `main` before it can
+    merge -- `main` moves too fast for a manual rebase to keep up (observed:
+    repeated real merges landing within the ~1-2 minutes a single CI run
+    takes). As of 2026-09-15 `main` has **no required status checks**: GitHub
+    Actions jobs are refused on the account (billing/spending-limit), so Brian
+    had Actions-backed merge requirements removed. Hosted CI provides no merge
+    signal; run the focused local checks, open the PR, and merge with
+    `gh pr merge --squash`. `finish_pr.py` passes the required-checks gate when
+    the base branch configures none (PR #546). If required checks are
+    restored, `gh pr merge --auto --squash` again waits for them. A real merge queue
     (serialized re-validation against the true tip) would be the stronger
     version of this, but is not available on the current plan tier for this
     repo -- confirmed by testing GitHub's own documented example against

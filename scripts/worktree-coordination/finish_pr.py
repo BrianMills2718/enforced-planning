@@ -361,9 +361,64 @@ def require_all_required_checks(
         check=False, env=gh_env,
     )
     if result.returncode != 0:
+        output = (result.stderr or result.stdout).strip()
+        # `gh pr checks --required` exits 1 with "no checks reported" both when the
+        # base branch requires nothing and when required checks never started.
+        # Only the first is a pass, so ask GitHub what the base branch requires.
+        if result.returncode == 1 and "no checks reported" in output.lower():
+            configured, reason = base_branch_required_checks(pr_number, repo_slug, gh_env)
+            if configured is None:
+                return False, f"required checks are unavailable: {output}; {reason}"
+            if not configured:
+                return True, "OK: base branch requires no status checks"
+            return False, f"required checks have not reported: {', '.join(configured)}"
         state = "pending" if result.returncode == 8 else "failing or unavailable"
-        return False, f"required checks are {state}: {(result.stderr or result.stdout).strip()}"
+        return False, f"required checks are {state}: {output}"
     return True, "OK"
+
+
+def base_branch_required_checks(
+    pr_number: int, repo_slug: str, gh_env: Mapping[str, str]
+) -> tuple[list[str] | None, str]:
+    """Return required check names on the PR base branch, or None when unknowable."""
+    base = run_cmd(
+        ["gh", "pr", "view", str(pr_number), "--repo", repo_slug,
+         "--json", "baseRefName", "--jq", ".baseRefName"],
+        check=False, env=gh_env,
+    )
+    branch = base.stdout.strip()
+    if base.returncode != 0 or not branch:
+        return None, f"cannot resolve PR base branch: {(base.stderr or base.stdout).strip()}"
+    required: list[str] = []
+    classic = run_cmd(
+        ["gh", "api", f"repos/{repo_slug}/branches/{branch}/protection/required_status_checks"],
+        check=False, env=gh_env,
+    )
+    if classic.returncode == 0:
+        data = json.loads(classic.stdout)
+        required.extend(data.get("contexts") or [])
+        required.extend(c["context"] for c in data.get("checks") or [] if c.get("context"))
+    elif not any(
+        marker in (classic.stdout + classic.stderr)
+        for marker in ("Required status checks not enabled", "Branch not protected")
+    ):
+        return None, f"cannot read branch protection: {(classic.stderr or classic.stdout).strip()}"
+    rules = run_cmd(
+        ["gh", "api", f"repos/{repo_slug}/rules/branches/{branch}"],
+        check=False, env=gh_env,
+    )
+    if rules.returncode != 0:
+        return None, f"cannot read branch rules: {(rules.stderr or rules.stdout).strip()}"
+    for rule in json.loads(rules.stdout):
+        if rule.get("type") == "required_status_checks":
+            required.extend(
+                c["context"]
+                for c in (rule.get("parameters") or {}).get("required_status_checks") or []
+                if c.get("context")
+            )
+        elif rule.get("type") == "workflows":
+            required.append("required workflows ruleset")
+    return sorted(set(required)), "OK"
 
 
 def prepare_merge_gate(

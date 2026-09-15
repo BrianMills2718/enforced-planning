@@ -1384,6 +1384,41 @@ def test_split_transcript_into_turns_splits_on_real_user_boundaries(tmp_path: Pa
     assert turns[1][0]["message"]["content"] == "second ask"
 
 
+def test_split_transcript_into_turns_ignores_injected_user_events(tmp_path: Path) -> None:
+    """Stop-hook feedback, peer messages and task notices continue the turn they
+    arrive in; only prompts a person sent start a new one (issue #549)."""
+    from scripts import learning_capture_hook
+
+    hook_feedback = {**_transcript_event("user", "Stop hook feedback: continue automatically"), "isMeta": True}
+    peer = {**_transcript_event("user", "<cross-session-message from=x>hi</cross-session-message>"), "isMeta": True, "origin": {"kind": "peer"}}
+    notice = {**_transcript_event("user", "<task-notification>done</task-notification>"), "origin": {"kind": "task-notification"}}
+    typed = {**_transcript_event("user", "second ask"), "origin": {"kind": "human"}}
+    events = _tool_turn("first ask") + [hook_feedback, peer, notice] + [typed] + _tool_turn("third ask")[1:]
+    transcript = _write_transcript(tmp_path, events)
+
+    turns = learning_capture_hook._split_transcript_into_turns(transcript)
+
+    assert turns is not None
+    assert [turn[0]["message"]["content"] for turn in turns] == ["first ask", "second ask"]
+    assert hook_feedback in turns[0] and peer in turns[0] and notice in turns[0]
+
+
+def test_report_field_accepts_colon_inside_bold_marker() -> None:
+    """``**Learnings:** value`` is the common Markdown form (issue #549)."""
+    from scripts import learning_capture_hook
+
+    for report in (
+        "- **Learnings:** X-VALUE",
+        "- **Learnings** — X-VALUE",
+        "- **Learnings**: X-VALUE",
+        "Learnings: X-VALUE",
+    ):
+        assert learning_capture_hook.report_field(report, "Learnings") == "X-VALUE", report
+    two = "- **Done:** built it\n- **Learnings:** None, nothing reusable"
+    assert learning_capture_hook.report_field(two, "Done") == "built it"
+    assert learning_capture_hook.report_field(two, "Learnings") == "None, nothing reusable"
+
+
 def test_split_transcript_into_turns_none_on_missing_file(tmp_path: Path) -> None:
     from scripts import learning_capture_hook
 

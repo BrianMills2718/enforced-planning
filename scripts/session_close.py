@@ -78,6 +78,8 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
         ("mailbox_note", args.mailbox_note),
         ("actor_session_id", args.session_id),
         ("terminalize_shared_child", args.terminalize_shared_child),
+        ("tracker_absent", args.tracker_absent),
+        ("recovery_archive_dir", args.recovery_archive_dir),
     ):
         if name in supported:
             kwargs[name] = value
@@ -138,6 +140,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Terminally close one exact session-ended linked worktree as the current native "
             "actor without transferring predecessor write custody; requires claim and tracker digests."
         ),
+    )
+    parser.add_argument(
+        "--tracker-absent",
+        action="store_true",
+        help=(
+            "With --reconcile-session-ended: dispose of a session-ended claim whose session tracker "
+            "does not exist (verified). Captures git status, branch head, and a recovery ref first; "
+            "uncommitted changes are also bundled under --recovery-archive-dir and the worktree and "
+            "branch are retained."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-archive-dir",
+        help="Absolute, empty (or new) directory for --tracker-absent capture artifacts.",
     )
     parser.add_argument(
         "--claim-sha256",

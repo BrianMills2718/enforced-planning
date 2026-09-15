@@ -14,6 +14,7 @@ from enforced_planning import (
     claim_mutation_receipts,
     coordination_claims,
     coordination_messages,
+    session_contracts,
     session_lifecycle,
 )
 
@@ -566,3 +567,313 @@ def test_write_claim_and_refresh_projection_succeeds_when_refresh_succeeds(
     assert projection_digest == "digest-123"
     written = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     assert written == {"status": "active", "scope": "ok"}
+
+
+# --- issue #2010: session-ended lane whose tracker never existed ----------------
+
+
+def _trackerless_session_ended_lane_with_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    stage_changes: bool = True,
+    keep_tracker: bool = False,
+) -> tuple[Path, Path, Path, str]:
+    """Replay the real shape: session_ended claim, tracker path that never existed.
+
+    Mirrors the Plan #289 batch A lanes observed 2026-09-15 (project-meta issue
+    #2010): the claim recorded a ``--tracker-path`` pointing at a plan file absent
+    from the checkout, the owning session ended, and the worktree still holds
+    staged conversions.
+    """
+
+    from tests.test_session_cli import (  # noqa: PLC0415
+        _git as _cli_git,
+        _real_repo_with_worktree,
+        _start_real_closeout_claim,
+    )
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_COMPLETED_CLAIM_ARCHIVE_PATH",
+        tmp_path / "completed-claim-archive.jsonl",
+    )
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    if not keep_tracker:
+        Path(claim["tracker_path"]).unlink()
+        claim["tracker_path"] = str(tmp_path / "absent" / "289_plan.md")
+    claim["write_paths"] = ["docs/plans"]
+    claim_file.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    _cli_git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    if stage_changes:
+        (worktree / "feature.txt").write_text("converted work\n", encoding="utf-8")
+        _cli_git(worktree, "add", "feature.txt")
+    session_lifecycle.end_runtime_session(
+        agent="codex",
+        session_id="codex:test-session",
+        reason="runtime ended before the lane could be closed",
+        claims_dir=claims_dir,
+    )
+    return claim_file, repo_root, worktree, branch
+
+
+def _replacement_candidate(project: str = "enforced-planning") -> coordination_claims.ClaimRecord:
+    """A fresh overlapping lane, built exactly as claim creation builds one."""
+
+    candidate = coordination_claims.normalize_claim(
+        {
+            "agent": "claude-code",
+            "projects": [project],
+            "scope": "fresh-conversion-lane",
+            "intent": "convert plans on a fresh lane",
+            "claim_type": "write",
+            "write_paths": ["docs/plans"],
+            "read_paths": [],
+            "session_id": "claude-code:replacement",
+            "status": "active",
+        }
+    )
+    assert candidate is not None
+    return candidate
+
+
+def _assert_preserved_lane_conflict(expected: bool) -> str | None:
+    """Return the conflict message a replacement lane would hit, if any."""
+
+    try:
+        coordination_claims.validate_no_preserved_lane_conflict(
+            _replacement_candidate(),
+            claims=coordination_claims.list_claims(include_inactive=True),
+        )
+    except ValueError as exc:
+        assert expected, f"unexpected preserved-lane conflict: {exc}"
+        return str(exc)
+    assert not expected, "expected a preserved-lane conflict and got none"
+    return None
+
+
+def test_tracker_absent_disposition_unblocks_a_replacement_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stranded lane is dispositioned, its staged work captured, nothing deleted."""
+
+    from tests.test_session_cli import _archived_claim_payload, _native_actor  # noqa: PLC0415
+
+    claim_file, repo_root, worktree, branch = _trackerless_session_ended_lane_with_worktree(
+        tmp_path, monkeypatch
+    )
+    blocked = _assert_preserved_lane_conflict(True)
+    assert blocked is not None and "--tracker-absent" in blocked
+
+    claim_digest = session_lifecycle._claim_sha256(claim_file)
+    archive_dir = tmp_path / "archive" / "lane"
+    with _native_actor("claude-code", "claude-code:reconciler"):
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="claude-code:reconciler",
+            reconcile_session_ended=True,
+            tracker_absent=True,
+            expected_claim_sha256=claim_digest,
+            recovery_archive_dir=str(archive_dir),
+            disposition="superseded",
+            disposition_reason="superseded by fresh lane; conversion diff preserved",
+        )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "retained_uncommitted_state_captured"
+    assert payload["branch_action"] == "retained_uncommitted_state_captured"
+    assert not claim_file.exists()
+    assert worktree.exists()
+    assert session_lifecycle._branch_exists(repo_root, branch)
+
+    capture = payload["lane_state_capture"]
+    assert capture["uncommitted_changes"] is True
+    assert capture["git_status_porcelain"] == ["M  feature.txt"]
+    assert Path(capture["bundle_path"]).is_file()
+    assert "converted work" in (archive_dir / "staged.diff").read_text(encoding="utf-8")
+    # The recovery ref really carries the staged content, not just a commit id.
+    stored = subprocess.run(
+        ["git", "show", f"{capture['recovery_commit']}:feature.txt"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert stored == "converted work\n"
+
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    receipt = archived["session_ended_closeout_reconciliation"]
+    assert receipt["tracker_absent_verified"] is True
+    assert receipt["tracker_path"] is None
+    assert receipt["claim_sha256"] == claim_digest
+    assert archived["disposition"] == "superseded"
+    assert archived["recovery_ref"] == capture["recovery_ref"]
+
+    _assert_preserved_lane_conflict(False)
+
+
+def test_tracker_absent_refuses_when_the_tracker_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An existing tracker means the ordinary digest-bound path must be used."""
+
+    from tests.test_session_cli import _native_actor  # noqa: PLC0415
+
+    claim_file, _repo_root, _worktree, branch = _trackerless_session_ended_lane_with_worktree(
+        tmp_path, monkeypatch, keep_tracker=True
+    )
+    before = claim_file.read_bytes()
+    with _native_actor("claude-code", "claude-code:reconciler"):
+        with pytest.raises(ValueError, match="the recorded tracker exists"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="claude-code:reconciler",
+                reconcile_session_ended=True,
+                tracker_absent=True,
+                expected_claim_sha256=session_lifecycle._claim_sha256(claim_file),
+                recovery_archive_dir=str(tmp_path / "archive" / "lane"),
+                disposition="superseded",
+                disposition_reason="should not apply",
+            )
+    assert claim_file.read_bytes() == before
+    _assert_preserved_lane_conflict(True)
+
+
+def test_tracker_absent_refuses_a_live_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a preserved session_ended lane may be dispositioned this way."""
+
+    from tests.test_session_cli import (  # noqa: PLC0415
+        _native_actor,
+        _real_repo_with_worktree,
+        _start_real_closeout_claim,
+    )
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+    claim["tracker_path"] = str(tmp_path / "absent" / "289_plan.md")
+    claim_file.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    before = claim_file.read_bytes()
+
+    with _native_actor("claude-code", "claude-code:reconciler"):
+        with pytest.raises(ValueError, match="requires an exact session_ended claim"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="claude-code:reconciler",
+                reconcile_session_ended=True,
+                tracker_absent=True,
+                expected_claim_sha256=session_lifecycle._claim_sha256(claim_file),
+                recovery_archive_dir=str(tmp_path / "archive" / "lane"),
+                disposition="superseded",
+                disposition_reason="should not apply",
+            )
+    assert claim_file.read_bytes() == before
+    assert worktree.exists()
+
+
+def test_tracker_absent_capture_failure_leaves_no_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed capture refuses the disposition; the lane stays exactly as it was."""
+
+    from tests.test_session_cli import _native_actor  # noqa: PLC0415
+
+    claim_file, repo_root, worktree, branch = _trackerless_session_ended_lane_with_worktree(
+        tmp_path, monkeypatch
+    )
+    before = claim_file.read_bytes()
+    blocked_archive = tmp_path / "archive-file"
+    blocked_archive.write_text("not a directory\n", encoding="utf-8")
+
+    with _native_actor("claude-code", "claude-code:reconciler"):
+        with pytest.raises(ValueError, match="capture failed creating"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="claude-code:reconciler",
+                reconcile_session_ended=True,
+                tracker_absent=True,
+                expected_claim_sha256=session_lifecycle._claim_sha256(claim_file),
+                recovery_archive_dir=str(blocked_archive),
+                disposition="superseded",
+                disposition_reason="should not apply",
+            )
+
+    assert claim_file.read_bytes() == before
+    assert worktree.exists()
+    assert session_lifecycle._branch_exists(repo_root, branch)
+    assert (worktree / "feature.txt").read_text(encoding="utf-8") == "converted work\n"
+    _assert_preserved_lane_conflict(True)
+
+
+def test_tracker_absent_refuses_untracked_files_it_cannot_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A recovery ref cannot hold untracked files, so capture fails closed."""
+
+    from tests.test_session_cli import _native_actor  # noqa: PLC0415
+
+    claim_file, _repo_root, worktree, branch = _trackerless_session_ended_lane_with_worktree(
+        tmp_path, monkeypatch
+    )
+    (worktree / "scratch-notes.txt").write_text("unsaved analysis\n", encoding="utf-8")
+    before = claim_file.read_bytes()
+
+    with _native_actor("claude-code", "claude-code:reconciler"):
+        with pytest.raises(ValueError, match="refuses untracked files"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="claude-code:reconciler",
+                reconcile_session_ended=True,
+                tracker_absent=True,
+                expected_claim_sha256=session_lifecycle._claim_sha256(claim_file),
+                recovery_archive_dir=str(tmp_path / "archive" / "lane"),
+                disposition="superseded",
+                disposition_reason="should not apply",
+            )
+    assert claim_file.read_bytes() == before
+    assert (worktree / "scratch-notes.txt").is_file()

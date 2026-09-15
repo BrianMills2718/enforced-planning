@@ -2510,6 +2510,42 @@ reconciliation structurally impossible until fixed
 (lrn-20260902T182546895692Z-f56b908b6b), since the acting client can never
 present a native marker belonging to a different tool.
 
+#### Session-ended lane whose tracker never existed
+
+A claim may record a `tracker_path` that was never written (state 2 above). When
+its session ends, every sanctioned route refuses it: `session-resume` needs one
+exact tracker, ordinary `--reconcile-session-ended` needs a tracker digest, and
+the lane blocks every replacement claim on its write paths ("Preserved
+session-ended lane(s) still require disposition"). Add `--tracker-absent` to the
+same entrypoint to dispose of exactly that lane (project-meta issue #2010):
+
+```bash
+python scripts/session_close.py \
+  --agent claude-code --project example --scope example-lane \
+  --session-id "claude-code:$CLAUDE_CODE_SESSION_ID" \
+  --reconcile-session-ended --tracker-absent \
+  --claim-sha256 "$(sha256sum ~/.claude/coordination/claims/claude-code_example_example-lane.yaml | cut -d' ' -f1)" \
+  --recovery-archive-dir ~/archive/<lane>-<date> \
+  --disposition superseded \
+  --disposition-reason "superseded by fresh lane; conversion diff preserved" \
+  --json
+```
+
+Tracker absence is verified, not assumed: the recorded path must not exist and
+no identity-matched tracker may be found. It refuses a live claim, an existing
+tracker, `--tracker-sha256`, and any capture failure, each before mutation.
+
+Before anything changes, the recorded worktree's `git status`, branch head, and
+an independent recovery ref (`refs/recovery/session-ended/...`) are captured.
+When the worktree holds uncommitted or staged work, that exact state is also
+written to `--recovery-archive-dir` as a verified Git bundle plus staged and
+unstaged diffs, and the **worktree and branch are retained** — this path never
+removes unsaved work. Untracked files, which a recovery ref cannot hold, fail
+the capture. The claim then moves to the completed archive with a
+`session_ended_closeout_reconciliation` receipt carrying `tracker_path: null`,
+`tracker_absent_verified: true`, and the `lane_state_capture` record, so a
+replacement lane on the same paths is accepted immediately afterwards.
+
 Explicit archive closeout for an unmerged branch whose exact tip remains on a
 durable remote or tag ref:
 

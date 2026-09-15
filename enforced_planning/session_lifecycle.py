@@ -510,8 +510,13 @@ def _validate_session_ended_closeout_reconciliation(
     actor_session_id: str | None,
     expected_claim_sha256: str | None,
     expected_tracker_sha256: str | None,
-) -> dict[str, str]:
+    tracker_absent: bool = False,
+) -> dict[str, Any]:
     """Authorize terminal closeout without transferring predecessor write custody.
+
+    ``tracker_absent`` (issue #2010) replaces the tracker digest with verified
+    absence: a claim whose tracker never existed has no tracker bytes to bind,
+    so the exact claim digest is the only binding.
 
     The actor identity and native-runtime marker are resolved against the
     ACTING client -- parsed from ``actor_session_id``'s own ``<agent>:`` prefix
@@ -580,6 +585,26 @@ def _validate_session_ended_closeout_reconciliation(
             "Session-ended closeout reconciliation claim digest mismatch; preserve the lane and regenerate evidence."
         )
 
+    if tracker_absent:
+        if expected_tracker_sha256:
+            raise ValueError(
+                "--tracker-absent and --tracker-sha256 are mutually exclusive; a tracker digest "
+                "means the tracker exists, so use ordinary --reconcile-session-ended."
+            )
+        absence = _verify_session_ended_tracker_absent(claim)
+        return {
+            "schema_version": "1.0",
+            "claim_status_before": claim.status,
+            "predecessor_session_id": claim.session_id,
+            "reconciliation_actor_session_id": resolved_actor,
+            "recorded_worktree_path": str(recorded_worktree),
+            "worktree_present_before": recorded_worktree.is_dir(),
+            "claim_sha256": actual_claim_digest,
+            "tracker_path": None,
+            "tracker_sha256": None,
+            **absence,
+        }
+
     expected_tracker_digest = (expected_tracker_sha256 or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected_tracker_digest):
         raise ValueError(
@@ -603,6 +628,139 @@ def _validate_session_ended_closeout_reconciliation(
         "tracker_sha256": actual_tracker_digest,
         "tracker_identity_mismatches": tracker_identity_mismatches,
     }
+
+
+def _verify_session_ended_tracker_absent(claim: coordination_claims.ClaimRecord) -> dict[str, Any]:
+    """Prove, not assume, that a session-ended claim has no tracker to bind (#2010)."""
+
+    recorded = Path(claim.tracker_path).expanduser() if claim.tracker_path else None
+    if recorded is not None and recorded.exists():
+        raise ValueError(
+            f"--tracker-absent refused: the recorded tracker exists at {recorded}; "
+            "use ordinary --reconcile-session-ended with --tracker-sha256."
+        )
+    exact = _exact_tracker_candidates(claim)
+    found = session_contracts.find_session_tracker_path(
+        agent=claim.agent,
+        project=claim.primary_project() or "",
+        scope=claim.scope,
+        session_id=claim.session_id,
+        preferred_path=claim.tracker_path,
+    )
+    if exact or found is not None:
+        rendered = ", ".join(str(path) for path in [*exact, *([found] if found else [])])
+        raise ValueError(
+            f"--tracker-absent refused: an identity-matched session tracker exists ({rendered}); "
+            "use ordinary --reconcile-session-ended with --tracker-sha256."
+        )
+    return {"recorded_tracker_path": str(recorded) if recorded else None, "tracker_absent_verified": True}
+
+
+def _git_capture(cwd: Path, *args: str) -> str:
+    """Run one Git command for lane-state capture; any failure is a capture failure."""
+
+    result = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise ValueError(
+            f"Session-ended lane capture failed at 'git {' '.join(args)}': "
+            + (result.stderr or result.stdout).strip()
+        )
+    return result.stdout
+
+
+def _capture_session_ended_lane_state(
+    *,
+    claim: coordination_claims.ClaimRecord,
+    worktree: Path,
+    repo_root: Path,
+    archive_dir: str | None,
+) -> dict[str, Any]:
+    """Capture an existing session-ended worktree before any lifecycle mutation (#2010).
+
+    Records ``git status``, the branch head, and an independent recovery ref.
+    When the worktree holds staged or unstaged changes, the exact state is also
+    written under ``archive_dir`` as a verified Git bundle plus diffs. Capture
+    only adds objects, one new ref, and new files; it never deletes anything.
+    """
+
+    if not archive_dir:
+        raise ValueError("--tracker-absent on an existing worktree requires --recovery-archive-dir.")
+    archive = Path(archive_dir).expanduser()
+    if not archive.is_absolute():
+        raise ValueError("--recovery-archive-dir must be an absolute path.")
+    try:
+        archive.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ValueError(f"Session-ended lane capture failed creating {archive}: {exc}") from exc
+    if any(archive.iterdir()):
+        raise ValueError(f"Session-ended lane capture requires an empty recovery archive dir: {archive}")
+
+    status = _git_capture(worktree, "status", "--porcelain=v1", "--untracked-files=all")
+    entries = [line for line in status.splitlines() if line.strip()]
+    untracked = [line[3:] for line in entries if line.startswith("??")]
+    if untracked:
+        raise ValueError(
+            "Session-ended lane capture refuses untracked files, which a recovery ref cannot hold: "
+            + ", ".join(untracked[:10])
+        )
+    head = _git_capture(worktree, "rev-parse", "--verify", "HEAD^{commit}").strip()
+    current_branch = _git_capture(worktree, "symbolic-ref", "--quiet", "--short", "HEAD").strip()
+    if not claim.branch or current_branch != claim.branch:
+        raise ValueError(
+            f"Session-ended lane capture found branch {current_branch!r}, not the claimed {claim.branch!r}."
+        )
+    dirty = bool(entries)
+    snapshot = _git_capture(worktree, "stash", "create").strip() if dirty else head
+    if not snapshot:
+        raise ValueError("Session-ended lane capture failed: git stash create returned no commit.")
+    safe_branch = re.sub(r"[^a-zA-Z0-9._-]+", "-", claim.branch)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    recovery_ref = f"refs/recovery/session-ended/{safe_branch}-{stamp}"
+    _git_capture(repo_root, "update-ref", recovery_ref, snapshot, "")
+    if _git_capture(repo_root, "rev-parse", "--verify", f"{recovery_ref}^{{commit}}").strip() != snapshot:
+        raise ValueError("Session-ended lane capture failed: recovery ref does not resolve to the snapshot.")
+    if not _is_ancestor(repo_root, head, recovery_ref):
+        raise ValueError("Session-ended lane capture failed: recovery ref does not contain the branch head.")
+
+    (archive / "git_status.txt").write_text(status, encoding="utf-8")
+    capture: dict[str, Any] = {
+        "schema_version": "1.0",
+        "worktree_path": str(worktree),
+        "branch": current_branch,
+        "branch_head": head,
+        "git_status_porcelain": entries,
+        "uncommitted_changes": dirty,
+        "recovery_ref": recovery_ref,
+        "recovery_commit": snapshot,
+        "archive_dir": str(archive),
+        "bundle_path": None,
+        "bundle_sha256": None,
+    }
+    if dirty:
+        # Non-vacuous verification: the snapshot must reproduce the exact index
+        # and working tree, not merely exist.
+        index_commit = _git_capture(repo_root, "rev-parse", "--verify", f"{snapshot}^2").strip()
+        for args in (("diff", "--quiet", "--cached", index_commit), ("diff", "--quiet", snapshot)):
+            _git_capture(worktree, *args)
+        staged = _git_capture(worktree, "diff", "--cached", "--binary")
+        unstaged = _git_capture(worktree, "diff", "--binary")
+        (archive / "staged.diff").write_text(staged, encoding="utf-8")
+        (archive / "unstaged.diff").write_text(unstaged, encoding="utf-8")
+        bundle = archive / "lane-state.bundle"
+        _git_capture(repo_root, "bundle", "create", str(bundle), recovery_ref, f"^{head}")
+        _git_capture(repo_root, "bundle", "verify", str(bundle))
+        if snapshot not in _git_capture(repo_root, "bundle", "list-heads", str(bundle)):
+            raise ValueError("Session-ended lane capture failed: bundle does not carry the snapshot commit.")
+        capture.update(
+            {
+                "bundle_path": str(bundle),
+                "bundle_sha256": hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                "staged_diff_path": str(archive / "staged.diff"),
+                "unstaged_diff_path": str(archive / "unstaged.diff"),
+            }
+        )
+    (archive / "capture_receipt.json").write_text(json.dumps(capture, indent=2, sort_keys=True), encoding="utf-8")
+    return capture
 
 
 def _validate_canonical_root_reconciliation(
@@ -2805,6 +2963,57 @@ def _validate_closeout_preflight(
     )
 
 
+def _captured_lane_preflight(
+    *,
+    repo_root: Path,
+    branch: str | None,
+    disposition: str,
+    disposition_reason: str | None,
+    capture: dict[str, Any],
+) -> CloseoutPreflight:
+    """Preflight for a tracker-absent lane whose uncommitted state was captured (#2010).
+
+    The worktree and branch are retained, so nothing is deleted; the operator
+    must still name a recovery-required disposition and reason, and the
+    verified capture ref must contain the exact branch tip.
+    """
+
+    normalized = disposition.strip().lower()
+    if normalized not in RECOVERY_REQUIRED_DISPOSITIONS:
+        supported = ", ".join(sorted(RECOVERY_REQUIRED_DISPOSITIONS))
+        raise ValueError(
+            "A session-ended lane with captured uncommitted changes requires a recovery-required "
+            f"disposition ({supported}); found {disposition!r}."
+        )
+    if not disposition_reason or not disposition_reason.strip():
+        raise ValueError(f"Disposition '{normalized}' requires --disposition-reason.")
+    if not branch or not _branch_exists(repo_root, branch):
+        raise ValueError("Captured-lane closeout requires the claimed branch to exist.")
+    branch_ref = f"refs/heads/{branch}"
+    head = _git_capture(repo_root, "rev-parse", "--verify", f"{branch_ref}^{{commit}}").strip()
+    if head != capture["branch_head"] or not _is_ancestor(repo_root, branch_ref, capture["recovery_ref"]):
+        raise ValueError("Captured recovery ref no longer contains the exact branch tip; recapture the lane.")
+    default_branch = push_safety.resolve_default_branch(repo_root)
+    default_remote_ref = f"refs/remotes/origin/{default_branch}" if default_branch else None
+    merged = (
+        _is_ancestor(repo_root, branch_ref, default_remote_ref)
+        if default_remote_ref and _ref_exists(repo_root, default_remote_ref)
+        else None
+    )
+    return CloseoutPreflight(
+        disposition=normalized,
+        branch_exists=True,
+        default_branch=default_branch,
+        merged_to_default=merged,
+        default_remote_ref=default_remote_ref,
+        default_branch_pushed=None,
+        merge_commit=None,
+        merge_evidence=None,
+        recovery_ref=capture["recovery_ref"],
+        force_delete_branch=False,
+    )
+
+
 def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
     """Remove one worktree path from a safe root-anchored control session."""
 
@@ -4785,6 +4994,8 @@ def close_session(
     mailbox_note: str | None = None,
     actor_session_id: str | None = None,
     terminalize_shared_child: bool = False,
+    tracker_absent: bool = False,
+    recovery_archive_dir: str | None = None,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
 
@@ -4804,6 +5015,10 @@ def close_session(
     )
     if reconciliation_modes > 1:
         raise ValueError("Choose only one reconciliation mode per session-close invocation.")
+    if tracker_absent and not reconcile_session_ended:
+        raise ValueError("--tracker-absent is only valid with --reconcile-session-ended.")
+    if recovery_archive_dir and not tracker_absent:
+        raise ValueError("--recovery-archive-dir is only valid with --tracker-absent.")
     if not reconcile_session_ended:
         _require_claim_actor(claim, actor_session_id=actor_session_id)
     resolved_worktree_path = _resolve_closeout_worktree_path(claim, worktree_path)
@@ -4819,6 +5034,7 @@ def close_session(
             actor_session_id=actor_session_id,
             expected_claim_sha256=expected_claim_sha256,
             expected_tracker_sha256=expected_tracker_sha256,
+            tracker_absent=tracker_absent,
         )
         if reconcile_session_ended
         else None
@@ -4900,26 +5116,49 @@ def close_session(
     if claim.write_paths:
         doc_authority.assert_no_unresolved_owned_obligations(claim)
 
+    lane_state_capture: dict[str, Any] | None = None
+    retain_captured_lane = False
     if resolved_worktree_path and resolved_worktree_path.exists():
         surface_runtime.assert_no_live_leases_for_worktree(resolved_worktree_path)
+        if tracker_absent:
+            lane_state_capture = _capture_session_ended_lane_state(
+                claim=claim,
+                worktree=resolved_worktree_path,
+                repo_root=repo_root,
+                archive_dir=recovery_archive_dir,
+            )
+            retain_captured_lane = bool(lane_state_capture["uncommitted_changes"])
         clean, dirty_details = _worktree_is_clean(str(resolved_worktree_path))
-        if not clean:
+        if not clean and not retain_captured_lane:
             raise ValueError(
                 f"Worktree is dirty; commit or stash before session-close. Uncommitted state:\n{dirty_details}"
             )
-        if canonical_root_reconciliation is None:
+        if canonical_root_reconciliation is None and not retain_captured_lane:
             _assert_worktree_removal_access(resolved_worktree_path)
 
-    preflight = _validate_closeout_preflight(
-        repo_root=repo_root,
-        branch=resolved_branch,
-        disposition=disposition,
-        disposition_reason=disposition_reason,
-        recovery_ref=recovery_ref,
-        merge_commit=merge_commit,
-        allow_discard_unique=allow_discard_unique,
-        delete_branch=delete_branch,
-    )
+    if retain_captured_lane and lane_state_capture is not None:
+        # Uncommitted work is never removed on this path: the worktree and
+        # branch are retained, and the verified capture is the recovery
+        # evidence for the recovery-required disposition.
+        preflight = _captured_lane_preflight(
+            repo_root=repo_root,
+            branch=resolved_branch,
+            disposition=disposition,
+            disposition_reason=disposition_reason,
+            capture=lane_state_capture,
+        )
+    else:
+        preflight = _validate_closeout_preflight(
+            repo_root=repo_root,
+            branch=resolved_branch,
+            disposition=disposition,
+            disposition_reason=disposition_reason,
+            recovery_ref=recovery_ref
+            or (lane_state_capture["recovery_ref"] if lane_state_capture is not None else None),
+            merge_commit=merge_commit,
+            allow_discard_unique=allow_discard_unique,
+            delete_branch=delete_branch,
+        )
     mailbox_closeout = _resolve_active_mailbox_for_closeout(
         claim=claim,
         mailbox_disposition=mailbox_disposition,
@@ -4950,11 +5189,15 @@ def close_session(
     if session_ended_reconciliation is not None:
         session_ended_reconciliation["merge_evidence"] = preflight.merge_evidence or "none"
         session_ended_reconciliation["merge_commit"] = preflight.merge_commit or "none"
+        session_ended_reconciliation["lane_state_capture"] = lane_state_capture
         payload["session_ended_closeout_reconciliation"] = session_ended_reconciliation
-        tracker = Path(session_ended_reconciliation["tracker_path"])
         if _claim_sha256(claim_file) != session_ended_reconciliation["claim_sha256"]:
             raise ValueError("Session-ended closeout reconciliation claim changed before mutation.")
-        if _tracker_sha256(tracker) != session_ended_reconciliation["tracker_sha256"]:
+        if tracker_absent:
+            _verify_session_ended_tracker_absent(claim)
+        elif _tracker_sha256(Path(session_ended_reconciliation["tracker_path"])) != session_ended_reconciliation[
+            "tracker_sha256"
+        ]:
             raise ValueError("Session-ended closeout reconciliation tracker changed before mutation.")
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
@@ -4988,12 +5231,16 @@ def close_session(
         worktree_action = canonical_root_reconciliation["filesystem_action"]
     elif terminalize_shared_child:
         worktree_action = "retained_for_parent"
+    elif retain_captured_lane:
+        worktree_action = "retained_uncommitted_state_captured"
     elif worktree_path or claim.worktree_path:
         worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
     if canonical_root_reconciliation is not None:
         branch_action = canonical_root_reconciliation["branch_action"]
     elif terminalize_shared_child:
         branch_action = "retained_for_parent"
+    elif retain_captured_lane:
+        branch_action = "retained_uncommitted_state_captured"
     elif delete_branch:
         branch_action = _delete_branch(
             repo_root,
@@ -5052,6 +5299,7 @@ def close_session(
         "missing_worktree_reconciliation": reconciliation_receipt,
         "canonical_root_reconciliation": canonical_root_reconciliation,
         "retained_parent_scope": retained_parent_scope,
+        "lane_state_capture": lane_state_capture,
         **mailbox_closeout,
     }
 

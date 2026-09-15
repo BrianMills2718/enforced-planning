@@ -184,7 +184,13 @@ adoption.
    digests are supplied to `session-close --reconcile-session-ended`, and the
    ordinary merge or durable-recovery preflight passes. This terminal cleanup
    does not transfer write custody; continuing unmerged work still uses
-   `session-resume`. Cross-session Codex `session-resume` requires the exact
+   `session-resume`. A `session_ended` claim whose recorded session tracker
+   never existed has no digest to supply and cannot be resumed, so it adds
+   `--tracker-absent` (plus `--claim-sha256` and `--recovery-archive-dir`) to
+   that same command: absence is verified, the worktree's status, head, and a
+   recovery ref are captured first, uncommitted state is bundled under the
+   named archive directory, and a lane with unsaved work keeps its worktree and
+   branch while only the claim is dispositioned. Cross-session Codex `session-resume` requires the exact
    predecessor PID plus `/proc` start ticks, and fences that verified
    session/worktree process under the exact claim-bytes transfer epoch before
    claim custody changes.

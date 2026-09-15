@@ -5675,9 +5675,25 @@ def abandon_session(
     note: str,
     actor_session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Mark one live lane as explicitly abandoned."""
+    """Mark one live, or preserved session-ended, lane as explicitly abandoned.
 
-    claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    A session-ended lane blocks any replacement lane on the same paths until it
+    is disposed of (``validate_no_preserved_lane_conflict``). A lane without a
+    session tracker cannot be resumed or closed, so abandonment by its own
+    session is its only disposition (issue #548).
+    """
+
+    if _iter_matching_live_claims(agent=agent, project=project, scope=scope):
+        claim = _single_matching_live_claim(agent=agent, project=project, scope=scope)
+    else:
+        try:
+            claim, _payload, _path = _claim_record_any_status(agent=agent, project=project, scope=scope)
+        except (ValueError, FileNotFoundError) as exc:
+            raise ValueError(f"No live or session-ended claim found for {agent} → {project}:{scope}") from exc
+        if claim.status != coordination_claims.SESSION_ENDED_STATUS:
+            raise ValueError(
+                f"No live or session-ended claim found for {agent} → {project}:{scope} (status {claim.status})"
+            )
     _require_claim_actor(claim, actor_session_id=actor_session_id)
     updated_at = datetime.now(timezone.utc).isoformat()
     claim_file = _claim_path(agent, project, scope)

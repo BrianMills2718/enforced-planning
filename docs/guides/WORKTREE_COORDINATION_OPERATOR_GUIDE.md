@@ -1944,7 +1944,11 @@ Canonical lifecycle commands:
   when selected state exists, append an exact lossless outcome transfer
 - `session-handoff`: intentionally pause or transfer work with a durable note
 - `session-abandon`: explicitly mark a dead lane as abandoned instead of
-  leaving it stale forever
+  leaving it stale forever. It also accepts a preserved `session_ended` lane,
+  for its own session only: such a lane blocks every replacement lane on its
+  paths, and one without a session tracker cannot be resumed or closed, so
+  abandonment is its disposition (issue #548). Keep any unique commits on a
+  branch first; abandoning changes only the claim.
 
 Every terminal mutation (`session-finish`, `session-close`, `session-handoff`,
 `session-abandon`, and blocker-disposition application) is bound to the exact

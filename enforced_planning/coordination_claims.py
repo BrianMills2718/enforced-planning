@@ -1286,7 +1286,13 @@ def validate_no_preserved_lane_conflict(
     raise ValueError(
         "Preserved session-ended lane(s) still require disposition: "
         f"{identities}. Resume/take over the existing lane or close it through "
-        "the sanctioned merge/recovery path before creating a replacement."
+        "the sanctioned merge/recovery path before creating a replacement. "
+        "If the ended lane's session tracker does not exist (resume and ordinary "
+        "reconciliation both refuse it), dispose of it with: session_close.py "
+        "--agent <agent> --project <project> --scope <scope> --session-id <your-native-session-id> "
+        "--reconcile-session-ended --tracker-absent --claim-sha256 <sha256 of the claim file> "
+        "--recovery-archive-dir <absolute empty dir under ~/archive> "
+        "--disposition superseded --disposition-reason <why>."
     )
 
 

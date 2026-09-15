@@ -13,8 +13,13 @@ The frontmatter split, plan-file discovery, and identity rules mirror
 ecosystem-ops ``parse_plans.py`` and ``plan_graph.py`` (``_split_yaml_frontmatter``,
 ``PLAN_SUBDIRS``/``SHALLOW_PLAN_SUBDIRS``, ``_normalize_project_name``,
 ``_normalize_plan_number``, ``_plan_identity``), so a plan this module accepts is
-one the dashboard graph parses the same way. Status extraction reuses
-``plan_validation.parse_plan_status``.
+one the dashboard graph parses the same way.
+
+A plan is a titled Markdown file whose *filename* carries the numeric prefix that
+plan_graph's identity rule reads (digits, optionally dotted, then ``_``, ``-``, or end).
+Catalogs, templates, ADRs, logs, and other unnumbered files in plan directories
+are not plans. Status is read from YAML ``status:`` or from the header block in
+every spelling found in the corpus (see ``extract_status``).
 """
 
 from __future__ import annotations
@@ -30,31 +35,60 @@ from typing import Any, Literal
 import yaml  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict
 
-from enforced_planning.plan_validation import parse_plan_status
-
 # Same directory set and depth rule as ecosystem-ops parse_plans.py.
 PLAN_SUBDIRS: tuple[str, ...] = ("plans", "docs/plans", "plan", "docs/planning", "claude_code_planning")
 SHALLOW_PLAN_SUBDIRS = frozenset({"plan", "docs/planning"})
-NON_PLAN_FILENAMES = frozenset({"CLAUDE.md", "AGENTS.md", "TEMPLATE.md", "INDEX.md"})
+NON_PLAN_FILENAMES = frozenset({"CLAUDE.md", "AGENTS.md", "TEMPLATE.md", "INDEX.md", "README.md"})
 
-CLOSED_STATUS_WORDS: tuple[str, ...] = (
-    "complete",
-    "completed",
-    "done",
-    "cancelled",
-    "canceled",
-    "superseded",
-    "historical",
-    "retired",
-    "deferred",
-    "archived",
+# The one closed-status vocabulary. A status whose leading word (after any leading
+# emoji or punctuation) is one of these marks a closed plan; everything else is open.
+CLOSED_STATUS_WORDS: frozenset[str] = frozenset(
+    {
+        "complete",
+        "completed",
+        "done",
+        "implemented",
+        "executed",
+        "built",
+        "shipped",
+        "cancelled",
+        "canceled",
+        "superseded",
+        "historical",
+        "retired",
+        "deferred",
+        "closed",
+        "merged",
+        "archived",
+        "dormant",
+        "abandoned",
+    }
 )
-_CLOSED_STATUS_SYMBOLS = ("✅",)
+
+# Status spellings, each matched against one stripped header line. Quote (``>``)
+# and bullet (``*``, ``-``, ``+``) markers may precede the bold forms.
+_LEAD = r"^(?:(?:>|[*+-])\s+)*"
+_STATUS_LINE_RES: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"^#{1,6}\s*Status\s*:\s*(.+?)\s*$",  # ## Status: X
+        _LEAD + r"\*\*Status:\*\*\s*(.+?)\s*$",  # **Status:** X / > **Status:** X / * **Status:** X
+        _LEAD + r"\*\*Status\*\*\s*:\s*(.+?)\s*$",  # **Status**: X
+        _LEAD + r"\*\*Status:\s*(.+?)\*\*(?:\s+.*)?$",  # **Status: X**
+        _LEAD + r"\*Status:\*\s*(.+?)\s*$",  # *Status:* X
+        r"^(?:>\s*)?Status\s*:\s*(.+?)\s*$",  # Status: X / > Status: X
+    )
+)
 
 _PLAN_NUMBER_RE = re.compile(r"\d+(?:\.\d+)*")
 _QUALIFIED_PLAN_ID_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)#([A-Za-z0-9_.-]+)\s*$")
+# plan_graph._plan_identity's filename-number rule, applied to the full filename.
 _FILENAME_NUMBER_RE = re.compile(r"^(\d+(?:\.\d+)*)(?:[_\-]|$)")
-_TITLE_NUMBER_RE = re.compile(r"\bPlan\s*#?\s*(\d+(?:\.\d+)*)\b", re.IGNORECASE)
+# Deliberate narrowing of plan_graph: files under these companion subdirectories
+# (goal, progress, evidence and supporting records) are not plans (project-meta#2008).
+# Date-prefixed files stay plans (the date's year is their number), so two open
+# ones in a repo surface loudly as duplicate_plan_id rather than being skipped.
+COMPANION_SUBDIRS = frozenset({"goals", "progress", "evidence", "supporting"})
 
 ErrorCode = Literal[
     "invalid_frontmatter",
@@ -68,6 +102,9 @@ ErrorCode = Literal[
     "missing_dependencies_reviewed",
     "unresolved_dependency",
     "dependency_cycle",
+    "conflicting_status",
+    "duplicate_plan_id",
+    "ambiguous_dependency",
 ]
 
 
@@ -108,6 +145,7 @@ class ParsedPlan:
     frontmatter_error: str | None
     declared_plan_id: str | None = None
     dependencies: list[str] = field(default_factory=list)
+    conflicting_statuses: list[str] = field(default_factory=list)
 
 
 def normalize_project_name(name: str) -> str:
@@ -159,11 +197,32 @@ def split_yaml_frontmatter(content: str) -> tuple[dict[str, Any] | None, str, st
     return None, content, "YAML frontmatter opened with '---' but never closed"
 
 
+def is_plan_filename(name: str) -> bool:
+    """Return whether a filename names a numbered plan.
+
+    Catalogs (INDEX/CLAUDE/AGENTS/README), templates, ``_``-prefixed files, and
+    anything without plan_graph's filename-number prefix are not plans.
+    """
+
+    if not name.endswith(".md") or name in NON_PLAN_FILENAMES:
+        return False
+    if name.startswith("_") or name.upper().startswith("TEMPLATE"):
+        return False
+    return _FILENAME_NUMBER_RE.match(name) is not None
+
+
+def _is_plan_relative_path(relative_path: str) -> bool:
+    """Filename rule plus: nothing under a companion subdirectory is a plan."""
+
+    path = PurePosixPath(relative_path)
+    return is_plan_filename(path.name) and not any(part in COMPANION_SUBDIRS for part in path.parent.parts)
+
+
 def is_plan_path(relative_path: str) -> bool:
     """Return whether a repo-relative path is a plan file under the five plan dirs."""
 
     path = PurePosixPath(relative_path)
-    if path.suffix != ".md" or path.name in NON_PLAN_FILENAMES:
+    if not _is_plan_relative_path(relative_path):
         return False
     parent = path.parent.as_posix()
     for subdir in PLAN_SUBDIRS:
@@ -185,7 +244,7 @@ def iter_plan_paths(repo_root: Path) -> list[Path]:
             continue
         pattern = plan_dir.glob("*.md") if subdir in SHALLOW_PLAN_SUBDIRS else plan_dir.rglob("*.md")
         for path in sorted(pattern):
-            if path.name in NON_PLAN_FILENAMES or not path.is_file():
+            if not _is_plan_relative_path(path.relative_to(repo_root).as_posix()) or not path.is_file():
                 continue
             found.append(path)
     return found
@@ -199,11 +258,56 @@ def classify_status(raw_status: str | None) -> tuple[str | None, bool]:
     value = raw_status.strip().strip("*").strip()
     if not value or value.lower() == "unknown":
         return None, True
-    if any(symbol in value for symbol in _CLOSED_STATUS_SYMBOLS):
-        return value, False
-    lowered = re.sub(r"^[^\w]+", "", value.lower())
+    # Drop leading emoji/punctuation, then compare the first word only, so
+    # "✅ Complete" is closed and "Partially complete" stays open.
+    lowered = re.sub(r"^[\W_]+", "", value.lower())
     first_word = re.split(r"[^a-z]+", lowered, maxsplit=1)[0]
     return value, first_word not in CLOSED_STATUS_WORDS
+
+
+def _status_on_line(line: str, *, allow_prefixed: bool) -> str | None:
+    stripped = line.strip()
+    if not allow_prefixed and not stripped.startswith(("**", "#")):
+        return None
+    for pattern in _STATUS_LINE_RES:
+        match = pattern.match(stripped)
+        if match and match.group(1).strip():
+            return match.group(1).strip()
+    return None
+
+
+def extract_statuses(frontmatter: Mapping[str, Any] | None, body: str) -> list[str]:
+    """Return every plan-level status declaration, in precedence order.
+
+    Plan-level declarations are YAML frontmatter ``status:`` plus every status
+    line in the header block (all lines before the first ``##`` heading that is
+    not itself a ``## Status: X`` heading), in document order. Only when the
+    header declares none does a later bare ``**Status:** X`` or ``## Status: X``
+    line count (plans that put status at the end); bulleted or quoted status
+    lines below the header are per-step statuses and never count.
+    """
+
+    found: list[str] = []
+    if frontmatter and isinstance(frontmatter.get("status"), (str, datetime.date)):
+        text = str(frontmatter["status"]).strip()
+        if text:
+            found.append(text)
+    lines = body.split("\n")
+    header_end = len(lines)
+    for index, line in enumerate(lines):
+        value = _status_on_line(line, allow_prefixed=True)
+        if value is not None:
+            found.append(value)
+        elif line.strip().startswith("## "):
+            header_end = index
+            break
+    if found:
+        return found
+    for line in lines[header_end:]:
+        value = _status_on_line(line, allow_prefixed=False)
+        if value is not None:
+            return [value]
+    return []
 
 
 def _title(body: str) -> str:
@@ -213,34 +317,35 @@ def _title(body: str) -> str:
     return ""
 
 
-def derive_plan_id(project_id: str, relative_path: str, title: str) -> str | None:
-    """Derive ``project#N`` the way plan_graph._plan_identity does for unconverted plans."""
+def derive_plan_id(project_id: str, relative_path: str) -> str | None:
+    """Derive ``project#N`` from the filename number, as plan_graph._plan_identity does."""
 
     project = normalize_project_name(project_id)
-    if not project:
-        return None
-    filename = PurePosixPath(relative_path).name
-    match = _FILENAME_NUMBER_RE.match(filename) or _TITLE_NUMBER_RE.search(title)
+    match = _FILENAME_NUMBER_RE.match(PurePosixPath(relative_path).name)
     number = _normalize_plan_number(match.group(1)) if match else None
-    plan = number or normalize_project_name(PurePosixPath(filename).stem)
-    return f"{project}#{plan}" if plan else None
+    return f"{project}#{number}" if project and number else None
 
 
 def parse_plan(source: PlanFile) -> ParsedPlan | None:
-    """Parse one plan; returns None for a Markdown file with no title (not a plan)."""
+    """Parse one plan; returns None for a non-plan file (unnumbered or untitled)."""
 
+    if not _is_plan_relative_path(source.relative_path):
+        return None
     frontmatter, body, frontmatter_error = split_yaml_frontmatter(source.content)
     title = _title(body)
     if not title:
         return None
-    _, raw_status = parse_plan_status(source.content)
-    status, is_open = classify_status(raw_status)
-    derived = derive_plan_id(source.project_id, source.relative_path, title) or ""
+    declarations = [classify_status(raw) for raw in extract_statuses(frontmatter, body)]
+    status, is_open = declarations[0] if declarations else classify_status(None)
+    conflict = len({open_ for text, open_ in declarations if text is not None}) > 1
+    derived = derive_plan_id(source.project_id, source.relative_path) or ""
     parsed = ParsedPlan(
         source=source,
         title=title,
         status=status,
-        is_open=is_open,
+        # Declarations that disagree on open vs closed cannot exempt a plan.
+        is_open=is_open or conflict,
+        conflicting_statuses=[text for text, _ in declarations if text is not None] if conflict else [],
         derived_id=derived,
         frontmatter=frontmatter,
         frontmatter_error=frontmatter_error,
@@ -263,10 +368,33 @@ def plan_identity(plan: ParsedPlan) -> str:
     return plan.derived_id
 
 
-def build_known_ids(plans: Iterable[ParsedPlan]) -> set[str]:
-    """Every resolvable id: converted plans by plan_id, unconverted by derived id."""
+@dataclass(frozen=True)
+class PlanRef:
+    """One plan file holding an id, for duplicate and ambiguity reporting."""
 
-    return {plan_identity(plan) for plan in plans if plan_identity(plan)}
+    project_id: str
+    relative_path: str
+    is_open: bool
+
+    def label(self) -> str:
+        return f"{self.project_id}:{self.relative_path}"
+
+
+def build_known_ids(plans: Iterable[ParsedPlan]) -> dict[str, list[PlanRef]]:
+    """Index every resolvable id to the plan files holding it.
+
+    Converted plans index by plan_id, unconverted by derived id. An id held by
+    more than one file is ambiguous: a reference to it cannot name one plan.
+    """
+
+    index: dict[str, list[PlanRef]] = {}
+    for plan in plans:
+        identity = plan_identity(plan)
+        if identity:
+            index.setdefault(identity, []).append(
+                PlanRef(plan.source.project_id, plan.source.relative_path, plan.is_open)
+            )
+    return index
 
 
 def build_dependency_graph(plans: Iterable[ParsedPlan]) -> dict[str, list[str]]:
@@ -312,7 +440,9 @@ def _date_text(value: Any) -> Any:
     return value
 
 
-def _contract_errors(plan: ParsedPlan, known_ids: set[str], repo_project_id: str) -> list[PlanDependencyError]:
+def _contract_errors(
+    plan: ParsedPlan, known_ids: Mapping[str, Sequence[PlanRef]], repo_project_id: str
+) -> list[PlanDependencyError]:
     path = plan.source.relative_path
     errors: list[PlanDependencyError] = []
 
@@ -321,6 +451,26 @@ def _contract_errors(plan: ParsedPlan, known_ids: set[str], repo_project_id: str
 
     if plan.status is None:
         err("missing_status", "plan has no status line; triage it to a real status first")
+    if plan.conflicting_statuses:
+        err(
+            "conflicting_status",
+            "status declarations disagree on open vs closed: "
+            + " | ".join(repr(text) for text in plan.conflicting_statuses)
+            + "; keep one real status",
+        )
+    identity = plan_identity(plan)
+    self_project = normalize_project_name(plan.source.project_id)
+    other_open = sorted(
+        ref.label()
+        for ref in known_ids.get(identity, ())
+        if ref.is_open and not (ref.relative_path == path and normalize_project_name(ref.project_id) == self_project)
+    )
+    if other_open:
+        err(
+            "duplicate_plan_id",
+            f"open plans {plan.source.project_id}:{path} and {', '.join(other_open)} all derive "
+            f"{identity!r}; renumber so each open plan has its own id",
+        )
     if plan.frontmatter_error:
         err("invalid_frontmatter", plan.frontmatter_error)
         return errors
@@ -359,19 +509,23 @@ def _contract_errors(plan: ParsedPlan, known_ids: set[str], repo_project_id: str
         normalized = normalize_qualified_id(dep)
         if normalized is None or normalized not in known_ids:
             err("unresolved_dependency", f"dependency {dep!r} does not resolve to any known plan")
+        elif len(known_ids[normalized]) > 1:
+            names = ", ".join(sorted(ref.label() for ref in known_ids[normalized]))
+            err("ambiguous_dependency", f"dependency {dep!r} names more than one plan file: {names}")
     return errors
 
 
 def validate_plan_dependencies(
     plan_files: Iterable[PlanFile],
-    known_ids: set[str],
+    known_ids: Mapping[str, Sequence[PlanRef]],
     *,
     repo_project_id: str,
     graph: Mapping[str, Sequence[str]] | None = None,
 ) -> list[PlanDependencyError]:
     """Validate the Plan #289 contract for each open plan in ``plan_files``.
 
-    Closed plans are exempt. ``known_ids`` should cover the full corpus. When a
+    Closed plans are exempt. ``known_ids`` (from ``build_known_ids``) should cover
+    the full corpus so duplicate ids and ambiguous references are seen. When a
     ``graph`` (the full-corpus dependency graph) is given, cycles through the
     validated plans are reported; otherwise the graph of ``plan_files`` alone is used.
     """

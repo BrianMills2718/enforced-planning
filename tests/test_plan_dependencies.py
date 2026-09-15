@@ -12,10 +12,13 @@ from pathlib import Path
 import pytest
 
 from enforced_planning.plan_dependencies import (
+    CLOSED_STATUS_WORDS,
     PlanFile,
     build_dependency_graph,
     build_known_ids,
     check_cycles,
+    is_plan_path,
+    iter_plan_paths,
     parse_plan,
     validate_plan_dependencies,
 )
@@ -212,3 +215,152 @@ def test_corpus_report_counts_open_converted_and_errors(tmp_path: Path) -> None:
     assert repos["alpha"]["converted_open_plans"] == 2
     assert repos["alpha"]["errors_by_type"] == {"missing_dependencies": 1, "missing_plan_id": 1}
     assert repos["beta_tools"]["errors_by_type"] == {"missing_dependencies": 1, "missing_plan_id": 1}
+
+
+# --- open-plan detection: status forms, non-plan files, duplicate ids -----------
+
+CONVERTED_NONE = '---\nplan_id: "{pid}"\ndependencies: []\ndependencies_reviewed: "2026-09-15"\n---\n'
+
+
+def _plan(body: str, relative_path: str = "docs/plans/20_example.md", project_id: str = "alpha") -> PlanFile:
+    return PlanFile(project_id, relative_path, body)
+
+
+STATUS_FORMS = [
+    "**Status:** {s}\n",
+    "## Status: {s}\n",
+    "> Status: {s}\n",
+    "> **Status:** {s}\n",
+    "* **Status:** {s}\n",
+    "- **Status:** {s}\n",
+    "Status: {s}\n",
+]
+
+
+@pytest.mark.parametrize("form", STATUS_FORMS)
+@pytest.mark.parametrize(
+    ("status", "expected_open"),
+    [
+        ("Complete", False),
+        ("✅ COMPLETED (2026-09-01)", False),
+        ("🟢 shipped in PR #12", False),
+        ("Superseded by Plan #30", False),
+        ("In Progress", True),
+        ("Planned", True),
+        ("🚧 Current", True),
+        ("Partially complete", True),
+    ],
+)
+def test_status_forms_classify_open_and_closed(form: str, status: str, expected_open: bool) -> None:
+    body = "# Plan #20: Example\n\n" + form.format(s=status) + "\n## Gap\n"
+    parsed = parse_plan(_plan(body))
+    assert parsed is not None
+    assert parsed.status is not None, form
+    assert parsed.is_open is expected_open, (form, status)
+
+
+@pytest.mark.parametrize(("status", "expected_open"), [("done", False), ("Abandoned", False), ("active", True)])
+def test_yaml_frontmatter_status_classifies(status: str, expected_open: bool) -> None:
+    body = f"---\nstatus: {status}\n---\n# Plan #20: Example\n\n## Gap\n"
+    parsed = parse_plan(_plan(body))
+    assert parsed is not None and parsed.status == status and parsed.is_open is expected_open
+
+
+def test_every_closed_word_closes_a_plan() -> None:
+    assert {"implemented", "executed", "built", "merged", "dormant", "closed"} <= CLOSED_STATUS_WORDS
+    for word in sorted(CLOSED_STATUS_WORDS):
+        parsed = parse_plan(_plan(f"# Plan #20: Example\n\n**Status:** {word.title()}\n"))
+        assert parsed is not None and parsed.is_open is False, word
+
+
+def test_closed_plan_in_heading_form_is_exempt_from_contract() -> None:
+    source = _plan("# Plan #20: Example\n\n## Status: Complete\n\n## Gap\n")
+    assert validate_plan_dependencies([source], {}, repo_project_id="alpha") == []
+
+
+def test_step_status_below_header_does_not_override_plan_status() -> None:
+    body = "# Plan #20: Example\n\n**Status:** Complete\n\n## Steps\n\n- **Status:** In Progress\n"
+    parsed = parse_plan(_plan(body))
+    assert parsed is not None and parsed.is_open is False
+
+
+def test_status_added_over_existing_closed_status_conflicts() -> None:
+    """A conversion that adds 'In Progress' above a real '## Status: Complete' is refused."""
+    body = CONVERTED_NONE.format(pid="alpha#20") + "# Plan #20: Example\n\n**Status:** In Progress\n## Status: Complete\n"
+    source = _plan(body)
+    parsed = parse_plan(source)
+    assert parsed is not None and parsed.is_open is True
+    errors = validate_plan_dependencies([source], build_known_ids([parsed]), repo_project_id="alpha")
+    assert [e.code for e in errors] == ["conflicting_status"]
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "docs/plans/INDEX.md",
+        "docs/plans/CLAUDE.md",
+        "docs/plans/AGENTS.md",
+        "docs/plans/README.md",
+        "docs/plans/TEMPLATE.md",
+        "docs/plans/TEMPLATE_batch.md",
+        "docs/plans/_01_draft.md",
+        "docs/plans/ROADMAP.md",
+        "docs/plans/COMPLETION_LOG.md",
+        "claude_code_planning/ADR-001-choice.md",
+        "docs/plans/goals/30_goal.md",
+        "docs/plans/progress/30_progress.md",
+    ],
+)
+def test_non_plan_files_are_ignored(relative_path: str) -> None:
+    assert is_plan_path(relative_path) is False
+    assert parse_plan(_plan("# Plan #30: Looks like a plan\n\n**Status:** Planned\n", relative_path)) is None
+
+
+def test_plan_discovery_skips_non_plan_files(tmp_path: Path) -> None:
+    plans = tmp_path / "docs" / "plans"
+    (plans / "goals").mkdir(parents=True)
+    for name in ("INDEX.md", "README.md", "TEMPLATE_plan.md", "_scratch.md", "ROADMAP.md", "goals/05_goal.md"):
+        (plans / name).write_text("# Plan #5: not a plan\n\n**Status:** Planned\n", encoding="utf-8")
+    for name in ("05_real.md", "0.3-tier.md", "2026-08-22_dated.md"):
+        (plans / name).write_text("# Real\n\n**Status:** Planned\n", encoding="utf-8")
+    found = sorted(path.name for path in iter_plan_paths(tmp_path))
+    assert found == ["0.3-tier.md", "05_real.md", "2026-08-22_dated.md"]
+
+
+def _two_plan_corpus(first_status: str, second_status: str) -> list[PlanFile]:
+    return [
+        _plan(CONVERTED_NONE.format(pid="alpha#30") + f"# A\n\n**Status:** {first_status}\n", "docs/plans/30_a.md"),
+        _plan(f"# B\n\n**Status:** {second_status}\n", "docs/plans/030-b.md"),
+    ]
+
+
+def _known(sources: list[PlanFile]):
+    return build_known_ids([plan for plan in (parse_plan(source) for source in sources) if plan is not None])
+
+
+def test_two_open_plans_with_one_id_are_duplicates_naming_both() -> None:
+    sources = _two_plan_corpus("Planned", "In Progress")
+    errors = [
+        e for e in validate_plan_dependencies(sources, _known(sources), repo_project_id="alpha")
+        if e.code == "duplicate_plan_id"
+    ]
+    assert sorted(e.path for e in errors) == ["docs/plans/030-b.md", "docs/plans/30_a.md"]
+    for error in errors:
+        assert "docs/plans/30_a.md" in error.message and "docs/plans/030-b.md" in error.message
+
+
+def test_open_plan_sharing_id_with_closed_plan_is_not_duplicate() -> None:
+    sources = _two_plan_corpus("Planned", "Complete")
+    assert validate_plan_dependencies(sources, _known(sources), repo_project_id="alpha") == []
+
+
+def test_dependency_on_ambiguous_id_is_reported() -> None:
+    sources = _two_plan_corpus("Planned", "Complete")
+    dependent = _plan(
+        '---\nplan_id: "alpha#31"\ndependencies: ["alpha#30"]\n'
+        'dependency_evidence:\n  "alpha#30": "Blocked By: Plan #30"\n---\n# C\n\n**Status:** Planned\n',
+        "docs/plans/31_c.md",
+    )
+    errors = validate_plan_dependencies([dependent], _known([*sources, dependent]), repo_project_id="alpha")
+    assert [e.code for e in errors] == ["ambiguous_dependency"]
+    assert "docs/plans/30_a.md" in errors[0].message and "docs/plans/030-b.md" in errors[0].message

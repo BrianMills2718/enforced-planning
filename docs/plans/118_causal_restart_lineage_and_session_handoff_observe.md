@@ -1,3 +1,10 @@
+---
+plan_id: "enforced-planning#118"
+dependencies: ["enforced-planning#117"]
+dependency_evidence:
+  "enforced-planning#117": "**Blocked By:** #117"
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #118: Causal Restart Lineage And Restart-Safe Session Handoff Observe
 
 **Status:** In Progress

@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#109"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #109: Artifact Creation and Directory Policy Enforcement
 
 **Status:** 🚧 In Progress — portable mechanism and consumer observe pilot implemented; publication and observation window pending

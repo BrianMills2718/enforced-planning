@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#108"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
 **Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-04 manifest is frozen and per-repository rollout remains; PW-05 read-target separation is the next low-friction slice

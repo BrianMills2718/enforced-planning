@@ -1,3 +1,10 @@
+---
+plan_id: "enforced-planning#124"
+dependencies: ["enforced-planning#123"]
+dependency_evidence:
+  "enforced-planning#123": "**Blocked By:** #123"
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #124: Qualitative Coding Outcome-Admission Pilot
 
 **Status:** In Progress — source compatibility accepted; merge and terminal park precede QC execution

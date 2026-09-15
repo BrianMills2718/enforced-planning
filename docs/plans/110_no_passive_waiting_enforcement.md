@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#110"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #110: No-Passive-Waiting Enforcement
 
 **Status:** 🚧 In Progress — NPW-01 through NPW-03 accepted; NPW-04 blocked on its Project Meta bootstrap seam

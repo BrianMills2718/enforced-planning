@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#135"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #135: Correction-Aware Learning Gate
 
 **Status:** In Progress — Prompt 1.2/Sonnet promotion route rejected by signed

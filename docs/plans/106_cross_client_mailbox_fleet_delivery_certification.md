@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#106"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #106: Cross-Client Mailbox Fleet Delivery Certification
 
 **Status:** In Progress — MF-01/MF-02/MF-03A/MF-03B/MF-04/MF-06 accepted; MF-05 is explicitly deferred

@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#72"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan #72: Engineering Control-Plane System Model and Planning Handoff
 
 **Status:** In Progress

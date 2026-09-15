@@ -367,7 +367,7 @@ _FULL_FORMAT_REMAINING_FIELDS = tuple(
 )
 _REPORT_FIELD_PATTERN = re.compile(
     rf"^[ \t]*(?:[-*][ \t]+)?(?:"
-    rf"\*\*(?P<bold>{'|'.join(map(re.escape, REPORT_FIELD_NAMES))})\*\*"
+    rf"\*\*(?P<bold>{'|'.join(map(re.escape, REPORT_FIELD_NAMES))}):?\*\*"
     rf"[ \t]*(?:[-—:][ \t]*)?"
     rf"|(?P<plain>{'|'.join(map(re.escape, REPORT_FIELD_NAMES))})"
     rf"[ \t]*[-—:][ \t]*"
@@ -770,6 +770,19 @@ def turn_took_durable_action(transcript_path: str | Path | None) -> bool | None:
     return took_action
 
 
+def _is_human_prompt_event(event: dict[str, Any]) -> bool:
+    """Whether a ``user`` event is a prompt a person sent, as opposed to text the
+    harness injected into the same turn: Stop-hook feedback, system reminders and
+    peer-session messages carry ``isMeta``; background-task notices carry a
+    non-human ``origin.kind``. Events with neither marker (older transcripts)
+    count as prompts."""
+    if event.get("isMeta"):
+        return False
+    origin = event.get("origin")
+    kind = origin.get("kind") if isinstance(origin, dict) else None
+    return kind in (None, "human")
+
+
 def _split_transcript_into_turns(transcript_path: str | Path | None) -> list[list[dict[str, Any]]] | None:
     """Split a transcript into turns, each starting at one real user-prompt
     boundary (inclusive) and running up to the next one (exclusive).
@@ -798,7 +811,7 @@ def _split_transcript_into_turns(transcript_path: str | Path | None) -> list[lis
         return None
     boundaries: list[int] = []
     for index, event in enumerate(events):
-        if event.get("type") != "user":
+        if event.get("type") != "user" or not _is_human_prompt_event(event):
             continue
         content = event.get("message", {}).get("content")
         if not _is_tool_result_only_content(content):

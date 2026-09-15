@@ -333,6 +333,64 @@ def test_required_check_command_is_repository_bound(monkeypatch) -> None:
     ]]
 
 
+def _no_checks_runner(classic, rules, calls):
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        if cmd[:3] == ["gh", "pr", "checks"]:
+            return completed(cmd, 1, "", "no checks reported on the 'feature' branch")
+        if cmd[:3] == ["gh", "pr", "view"]:
+            return completed(cmd, 0, "main\n")
+        if cmd[-1].endswith("/protection/required_status_checks"):
+            return classic(cmd)
+        if "/rules/branches/" in cmd[-1]:
+            return rules(cmd)
+        raise AssertionError(cmd)
+
+    return fake_run
+
+
+def test_no_reported_checks_pass_when_base_branch_requires_none(monkeypatch) -> None:
+    module = _load()
+    calls = []
+    monkeypatch.setattr(module, "run_cmd", _no_checks_runner(
+        lambda cmd: completed(cmd, 1, "", "gh: Required status checks not enabled (HTTP 404)"),
+        lambda cmd: completed(cmd, 0, "[]"),
+        calls,
+    ))
+    assert module.require_all_required_checks(304, "owner/repo", {}) == (
+        True, "OK: base branch requires no status checks",
+    )
+    assert calls[2] == ["gh", "api", "repos/owner/repo/branches/main/protection/required_status_checks"]
+    assert calls[3] == ["gh", "api", "repos/owner/repo/rules/branches/main"]
+
+
+def test_no_reported_checks_fail_when_required_checks_never_started(monkeypatch) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "run_cmd", _no_checks_runner(
+        lambda cmd: completed(cmd, 0, json.dumps({"contexts": ["ci"], "checks": [{"context": "ci"}]})),
+        lambda cmd: completed(cmd, 0, json.dumps([
+            {"type": "required_status_checks",
+             "parameters": {"required_status_checks": [{"context": "lint"}]}},
+        ])),
+        [],
+    ))
+    assert module.require_all_required_checks(304, "owner/repo", {}) == (
+        False, "required checks have not reported: ci, lint",
+    )
+
+
+def test_no_reported_checks_fail_closed_when_protection_is_unreadable(monkeypatch) -> None:
+    module = _load()
+    monkeypatch.setattr(module, "run_cmd", _no_checks_runner(
+        lambda cmd: completed(cmd, 1, "", "gh: Resource not accessible (HTTP 403)"),
+        lambda cmd: completed(cmd, 0, "[]"),
+        [],
+    ))
+    ok, reason = module.require_all_required_checks(304, "owner/repo", {})
+    assert ok is False
+    assert "cannot read branch protection" in reason
+
+
 def test_closeout_refreshes_remote_before_removal_and_uses_merge_receipt(monkeypatch) -> None:
     module = _load()
     calls = []

@@ -138,6 +138,14 @@ After a successful minimum install, your repo should have:
 - `scripts/meta/sync_plan_status.py`
 - `scripts/hook_receipts.py` and `scripts/meta/hook_receipts.py`
 - `scripts/meta/validate_plan.py`
+- `scripts/meta/validate_plan_dependencies.py` and
+  `enforced_planning/plan_dependencies.py` (the Plan #289 plan dependency
+  contract: frontmatter `plan_id`, `dependencies`, evidence, cross-repo
+  resolution and cycles)
+  The installer does not write `hooks/pre-commit`; the template
+  `hooks/git/pre-commit` runs this check (section 7c), so a repo adds that
+  section to its own hook. It warns by default and refuses commits once the
+  repo declares `plan dependency check: block` under `quality.hook_modes`
 - `.claude/hooks/gate-edit.sh`
 - `.claude/hooks/track-reads.sh`
 - `.claude/settings.json`

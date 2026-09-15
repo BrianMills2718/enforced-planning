@@ -94,6 +94,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/worktree_paths.py": "enforced_planning/worktree_paths.py",
     "enforced_planning/notebook_registry_validation.py": "enforced_planning/notebook_registry_validation.py",
     "enforced_planning/plan_validation.py": "enforced_planning/plan_validation.py",
+    "enforced_planning/plan_dependencies.py": "enforced_planning/plan_dependencies.py",
     "enforced_planning/push_safety.py": "enforced_planning/push_safety.py",
     "enforced_planning/repository_status.py": "enforced_planning/repository_status.py",
     "enforced_planning/session_contracts.py": "enforced_planning/session_contracts.py",
@@ -159,6 +160,12 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/validate_dead_code_audit.py": "scripts/validate_dead_code_audit.py",
     "scripts/meta/validate_doc_authority.py": "scripts/validate_doc_authority.py",
     "scripts/meta/validate_plan.py": "scripts/validate_plan.py",
+    # Plan #289. hooks/git/pre-commit calls this when present. The hook itself
+    # is deliberately not in this map: measured 2026-09-15, every governed repo
+    # with hooks/pre-commit carries a locally diverged copy (~600-740 diff lines),
+    # so a byte sync would delete repo-local checks, and installing the template
+    # where none exists also turns on its canonical-checkout commit guard.
+    "scripts/meta/validate_plan_dependencies.py": "scripts/validate_plan_dependencies.py",
     "scripts/meta/canonical_lock.py": "scripts/worktree-coordination/canonical_lock.py",
     "scripts/meta/worktree-coordination/create_worktree.py": "scripts/worktree-coordination/create_worktree.py",
     "scripts/meta/worktree-coordination/finish_pr.py": "scripts/worktree-coordination/finish_pr.py",

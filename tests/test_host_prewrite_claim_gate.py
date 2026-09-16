@@ -337,6 +337,7 @@ def test_workspace_inventory_can_pipe_through_safe_sort(tmp_path: Path) -> None:
         "date -u +%Y-%m-%dT%H:%M:%SZ",
         "git ls-remote --heads origin | jq -R .",
         "gh pr view 132 --json state | jq -r .state",
+        "gh-insidesuccess issue view 438 --repo Inside-Success/Team-Brains --json state | jq -r .state",
         "gh api --method GET repos/example/project | jq -r .default_branch",
         "gh api -XGET repos/example/project | jq -r .default_branch",
     ],

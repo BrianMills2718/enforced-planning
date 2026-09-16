@@ -26,7 +26,7 @@
     "negative_control": "No ambiguous-write file was created by the denied hook evaluation."
   },
   "candidate": {
-    "status": "exact recovery and the bounded failure table pass except oversized-authority retention; full client matrix pending",
+    "status": "exact recovery and every bounded failure-table row has retained evidence; full client matrix pending",
     "source_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4",
     "commands": [
       "uv run pytest -q tests/test_pw06_recovery_resume.py",
@@ -103,12 +103,25 @@
     "scope_limit": "No contextual policy service is currently in the synchronous hook path. This proves model unavailability cannot add a block or grant authority today; it does not certify the post-PW-06 advisory experiment, which must preserve this behavior when implemented.",
     "test": "tests/test_pw06_recovery_resume.py::test_installed_gate_keeps_deterministic_authority_when_model_service_is_absent"
   },
+  "oversized_required_authority": {
+    "result": "pass for source-owner and installed-byte evidence; prior live gate-clear report retained as externally observed",
+    "repair_revision": "agent-skills@1625d65",
+    "diagnostic_correction_revision": "agent-skills@382c2a9",
+    "current_deployed_revision": "agent-skills@50e7ea8f2d32c139191bcd4f5751906c567adb3d",
+    "deployed_file_sha256": "d2698d283a34a0cb50758c48b9d814cb327db985434a946299ad50297dbe4068",
+    "observations": [
+      "The live client path /home/brian/code/active/agent-skills resolves to the canonical Agent Skills checkout, and the deployed and source read_first_gate.py hashes match.",
+      "All 59 focused read-first tests pass on the deployed revision.",
+      "The oversized-document control verifies a document above the 80000-byte budget, injects less than 8000 bytes including an explicit bounded-excerpt notice, and clears the required-reading gate for the next source read.",
+      "Brian supplied a prior fresh live report that a real blocked gate moved from remaining 1 to remaining 0. That report did not include a receipt identifier, so it is retained as external authentic evidence rather than independently replayed proof."
+    ],
+    "scope_limit": "The excerpt proves bounded delivery and readability verification, not that the agent read the entire required document."
+  },
   "acceptance": {
     "status": "not accepted",
     "remaining": [
       "Restart this app/API Codex thread and repeat its out-of-scope exec command so the additional matcher is verified on that exact runtime surface, not only fresh Codex CLI.",
       "Exercise ended and unhealthy claim variants, authorized and denied edits, closeout, and post-close reads.",
-      "Exercise oversized required-authority retention and bounded excerpt behavior.",
       "Retain authentic Codex and Claude Code sequences in addition to subprocess evidence."
     ]
   }

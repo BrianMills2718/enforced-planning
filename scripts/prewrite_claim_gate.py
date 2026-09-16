@@ -325,6 +325,28 @@ def _session_bound_payload(
         unresolved = dict(payload)
         unresolved["_session_target_error_code"] = exc.reason_code
         unresolved["_session_target_error"] = str(exc)
+        if exc.reason_code == "ambiguous_exact_session_target":
+            from enforced_planning.session_target import effective_session_id
+
+            native_session = effective_session_id(payload, client)
+            if native_session is not None:
+                recovery_command = shlex.join(
+                    [
+                        "/usr/bin/python3",
+                        str((REPO_ROOT / "scripts" / "session_end.py").resolve()),
+                        "--agent",
+                        client,
+                        "--session-id",
+                        native_session,
+                        "--reason",
+                        "retire ambiguous native-session claims before exact rebootstrap",
+                        "--json",
+                    ]
+                )
+                unresolved["_session_target_recovery"] = (
+                    "Retire this native session's overlapping claim metadata without "
+                    f"touching Git work, then bootstrap one exact replacement claim. Command: {recovery_command}"
+                )
         return unresolved
     if launch_root == resolution.worktree_path:
         # The launch directory is already inside the exact claimed worktree;

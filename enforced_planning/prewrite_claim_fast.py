@@ -1154,6 +1154,7 @@ def adapt_native_payload(
         "bash_command": command if tool_name == "Bash" else None,
         "session_target_error_code": payload.get("_session_target_error_code"),
         "session_target_error": payload.get("_session_target_error"),
+        "session_target_recovery": payload.get("_session_target_recovery"),
         "session_target_rebound": bool(payload.get("_session_target_worktree")),
     }
 
@@ -1558,6 +1559,17 @@ def evaluate_request_fast(
     target_error_code = request.get("session_target_error_code")
     target_error = request.get("session_target_error")
     if isinstance(target_error_code, str) and target_error_code:
+        exact_recovery = request.get("session_target_recovery")
+        recovery = (
+            exact_recovery
+            if isinstance(exact_recovery, str) and exact_recovery.strip()
+            else (
+                "Create one healthy claim for this native session with the exact typed maintenance_worktree "
+                "claim-bootstrap transaction, or close duplicate claims before mutating. The raw Bash "
+                "bootstrap form must start with /usr/bin/python3 and the installed canonical "
+                "scripts/claim_bootstrap.py; bare python3 is intentionally not admitted."
+            )
+        )
         result = _decision(
             started=started,
             request=request,
@@ -1566,12 +1578,7 @@ def evaluate_request_fast(
             reason_code=target_error_code,
             context=None,
             details=(str(target_error),) if target_error else (),
-            recovery=(
-                "Create one healthy claim for this native session with the exact typed maintenance_worktree "
-                "claim-bootstrap transaction, or close duplicate claims before mutating. The raw Bash "
-                "bootstrap form must start with /usr/bin/python3 and the installed canonical "
-                "scripts/claim_bootstrap.py; bare python3 is intentionally not admitted."
-            ),
+            recovery=recovery,
         )
         _record_receipt(receipt_path, result)
         return result

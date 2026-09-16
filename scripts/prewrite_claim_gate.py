@@ -610,6 +610,35 @@ def _parse_native_closeout_command(
         raise ValueError("closeout branch does not match the exact live claim")
 
 
+def _parse_native_session_end_command(
+    command: str,
+    *,
+    client: str,
+    native_session: str | None = None,
+) -> None:
+    """Admit only the canonical self-owned runtime-end recovery command."""
+
+    from scripts import session_end
+
+    if "\n" in command or "\r" in command:
+        raise ValueError("session-end command must be exactly one line")
+    tokens = shlex.split(command)
+    end_script = (REPO_ROOT / "scripts" / "session_end.py").resolve()
+    if len(tokens) < 6 or tokens[0] != "/usr/bin/python3" or tokens[1] != str(end_script):
+        raise ValueError("session-end command does not use the canonical host script")
+    if any(token in {";", "&", "&&", "|", "||", ">", ">>", "<"} for token in tokens):
+        raise ValueError("session-end command cannot compose shell operations")
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            args = session_end.parse_args(tokens[2:])
+    except SystemExit as exc:
+        raise ValueError("session-end command does not match the canonical CLI grammar") from exc
+    if args.hook or args.claims_dir is not None:
+        raise ValueError("manual session-end recovery cannot override hook input or claim storage")
+    if native_session is None or args.agent != client or args.session_id != native_session:
+        raise ValueError("session-end identity does not match the ambient native session")
+
+
 def _trusted_merged_closeout_worktree(target: Path) -> bool:
     """Accept only clean control code already present in installed history."""
 
@@ -1078,8 +1107,8 @@ def _special_unclaimed_command(
     try:
         _parse_maintenance_worktree_make_command(command, client=client)
         return "claim_bootstrap"
-    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
-        _ = exc
+    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
+        pass
     try:
         _parse_hook_feedback_report_command(command)
         return "hook_feedback_report"
@@ -1092,8 +1121,8 @@ def _special_unclaimed_command(
             native_session=native_session,
         )
         return "native_mailbox"
-    except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
-        pass
+    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
+        _ = exc
     try:
         _parse_plan_execution_cursor_command(
             command,
@@ -1116,6 +1145,15 @@ def _special_unclaimed_command(
         return "native_closeout"
     except Exception:  # noqa: BLE001 -- try the remaining strict control grammars
         pass
+    try:
+        _parse_native_session_end_command(
+            command,
+            client=client,
+            native_session=native_session,
+        )
+        return "native_closeout"
+    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
+        _ = exc
     try:
         _parse_native_closeout_make_command(
             command,

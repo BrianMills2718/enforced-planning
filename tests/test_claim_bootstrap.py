@@ -402,7 +402,24 @@ def test_unclaimed_native_session_can_start_its_own_claim(
     trackers_dir = tmp_path / "trackers"
     repo_root = tmp_path / "repo"
     worktree = repo_root / "worktrees" / "self-owned-scope"
-    worktree.mkdir(parents=True)
+    repo_root.mkdir()
+    subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True)
+    (repo_root / "README.md").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git", "-C", str(repo_root), "-c", "user.name=Test User",
+            "-c", "user.email=test@example.invalid", "commit", "-m", "seed",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo_root), "worktree", "add", "-b", "self-owned-scope", str(worktree)],
+        check=True,
+        capture_output=True,
+    )
     monkeypatch.setattr(claim_bootstrap.coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(claim_bootstrap, "SESSION_TRACKERS_DIR", trackers_dir)
     monkeypatch.setattr(
@@ -441,8 +458,33 @@ def test_unclaimed_native_session_can_start_its_own_claim(
     claims = claim_bootstrap.coordination_claims.check_claims("demo")
     assert [(claim.scope, claim.session_id) for claim in claims] == [("self-owned-scope", "codex:native-123")]
     assert claims[0].write_paths == ["src/owned.py"]
-    assert list(worktree.iterdir()) == []
+    assert subprocess.run(
+        ["git", "-C", str(worktree), "branch", "--show-current"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip() == "self-owned-scope"
     assert len(list(trackers_dir.rglob("*.yaml"))) == 1
+
+
+def test_session_start_rejects_missing_worktree_before_claim_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "native-123")
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    worktree = repo_root / "worktrees" / "missing"
+    monkeypatch.setattr(claim_bootstrap, "_require_self_owned_slot", lambda **_kwargs: None)
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_start_payload(repo_root=str(repo_root), worktree_path=str(worktree), branch="missing"))
+    )
+
+    with pytest.raises(
+        claim_bootstrap.ClaimBootstrapError,
+        match="worktree_path is not an existing Git checkout",
+    ):
+        claim_bootstrap.execute_request(request)
 
 
 def test_request_for_wrong_agent_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -461,6 +503,7 @@ def test_request_cannot_supply_session_id() -> None:
 
 def test_cross_session_scope_update_is_denied(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CODEX_THREAD_ID", "native-123")
+    monkeypatch.setattr(claim_bootstrap, "_validate_existing_session_worktree", lambda _request: None)
 
     def reject_foreign_owner(**_kwargs: object) -> dict[str, object]:
         raise ValueError("Existing live claim slot demo:self-owned-scope is owned by runtime session codex:other")

@@ -1035,6 +1035,76 @@ def test_host_gate_admits_exact_native_closeout_for_merged_claim(
     assert decision["reason_code"] == "native_closeout_command"
 
 
+def test_host_gate_admits_exact_missing_worktree_reconciliation_for_session_ended_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    monkeypatch.setattr(prewrite_claim_gate, "REPO_ROOT", repo)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["status"] = coordination_claims.SESSION_ENDED_STATUS
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    _git(repo, "worktree", "remove", "--force", str(worktree))
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    command = (
+        f"/usr/bin/python3 {repo / 'scripts' / 'session_close.py'} "
+        "--agent claude-code --project host-gate-test --scope host-gate-lane "
+        "--session-id claude-code:host-gate-test --reconcile-missing-worktree "
+        f"--tracker-sha256 {'a' * 64} --json"
+    )
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    )
+    assert classification == "native_closeout"
+    payload = _payload(cwd=repo, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_closeout_command"
+
+
+def test_host_gate_rejects_ordinary_closeout_for_session_ended_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _workspace, repo, _worktree, claims_dir, claim_path = _fixture(tmp_path)
+    monkeypatch.setattr(prewrite_claim_gate, "REPO_ROOT", repo)
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["status"] = coordination_claims.SESSION_ENDED_STATUS
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    command = (
+        f"/usr/bin/python3 {repo / 'scripts' / 'session_close.py'} "
+        "--agent claude-code --project host-gate-test --scope host-gate-lane "
+        "--session-id claude-code:host-gate-test --json"
+    )
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=SESSION,
+    )
+
+    assert classification is False
+
+
 def test_host_gate_admits_exact_native_session_end_for_unhealthy_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

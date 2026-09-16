@@ -590,16 +590,31 @@ def _parse_native_closeout_command(
             raise ValueError("session-finish bypass is restricted to dirty handoff recovery")
         if args.session_id not in {None, native_session}:
             raise ValueError("session-finish asserted session does not match the ambient native session")
+    allow_session_ended = bool(
+        getattr(args, "reconcile_missing_worktree", False)
+        or getattr(args, "reconcile_canonical_root", False)
+        or getattr(args, "reconcile_session_ended", False)
+    )
     matches = [
         claim
-        for claim in coordination_claims.check_claims(project=args.project, claims_dir=claims_dir)
+        for claim in coordination_claims.list_claims(
+            project=args.project,
+            claims_dir=claims_dir,
+            include_inactive=allow_session_ended,
+        )
         if claim.agent == args.agent
         and claim.scope == args.scope
         and claim.session_id == native_session
-        and claim.is_live()
+        and (
+            claim.is_live()
+            or (
+                allow_session_ended
+                and claim.status == coordination_claims.SESSION_ENDED_STATUS
+            )
+        )
     ]
     if len(matches) != 1:
-        raise ValueError("closeout target is not the ambient runtime's exact live claim")
+        raise ValueError("closeout target is not the ambient runtime's exact eligible claim")
     claim = matches[0]
     effective_worktree = claim.target_worktree_path or claim.worktree_path
     if args.worktree_path and Path(args.worktree_path).expanduser().resolve() != Path(

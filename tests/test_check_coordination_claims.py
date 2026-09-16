@@ -15,14 +15,14 @@ from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timezone
 from pathlib import Path
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import claim_mutation_receipts
+from enforced_planning import claim_mutation_receipts, prewrite_claim_projection
 from enforced_planning import coordination_claims as claims_impl
-from enforced_planning import prewrite_claim_projection
 from enforced_planning.prewrite_claim_fast import projection_path_for, registry_digest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "check_coordination_claims.py"
@@ -2590,6 +2590,36 @@ def test_registry_lock_prunes_only_old_sanctioned_write_artifacts(
     assert not staged.exists()
     assert fresh.exists()
     assert unrelated.exists()
+
+
+def test_registry_lock_contention_returns_bounded_retry_and_then_succeeds(tmp_path: Path) -> None:
+    """A stuck writer must not hang recovery, invent authority, or poison retry."""
+
+    claims_dir = tmp_path / "claims"
+    holder_entered = Event()
+    release_holder = Event()
+
+    def hold_registry() -> None:
+        with claims_impl.claim_registry_lock(claims_dir, timeout_seconds=1):
+            holder_entered.set()
+            assert release_holder.wait(timeout=2)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        holder = executor.submit(hold_registry)
+        assert holder_entered.wait(timeout=1)
+        started = time.monotonic()
+        with pytest.raises(
+            claims_impl.ClaimRegistryLockTimeout,
+            match=r"no claim state changed.*Retry after the current writer releases",
+        ), claims_impl.claim_registry_lock(claims_dir, timeout_seconds=0.05):
+            pytest.fail("contended registry lock unexpectedly admitted a second writer")
+        assert time.monotonic() - started < 0.5
+        assert not claims_dir.exists()
+        release_holder.set()
+        holder.result(timeout=2)
+
+    with claims_impl.claim_registry_lock(claims_dir, timeout_seconds=0.2):
+        pass
 
 
 def test_heartbeat_claims_refreshes_claude_code_session(

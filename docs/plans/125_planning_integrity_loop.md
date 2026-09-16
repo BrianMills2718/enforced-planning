@@ -574,6 +574,22 @@ and worktree. This lane uses the truthful narrower broader goal “Prove
 Revision-Bound Successor Custody”; generalized tracker rollover remains a
 separate continuity concern and is not added to Plan 125's critical path.
 
+### Post-completion correction — registry contention must fail bounded
+
+Later recovery testing exposed a control-path failure below planning integrity:
+all claim mutations shared one registry-writer lock, but a competing writer
+could make the sanctioned entrypoint wait indefinitely before it returned an
+admission result. That made exact revision and selection custody irrelevant to
+the blocked caller because it could not reach the decision boundary.
+
+The registry lock now has a five-second default acquisition bound. Exhausting
+that bound raises `ClaimRegistryLockTimeout` with the exact lock path, confirms
+that no claim state changed, and supplies the retry condition. The change does
+not weaken claim exclusivity, create authority, or alter Plan 125 selection;
+it preserves admission-before-mutation by making contention an explicit,
+retryable non-mutation. A holder/retry test proves the first attempt times out
+without creating claim state and the same mutation succeeds after release.
+
 ### Acceptance receipt — authentic successor custody
 
 The qualified PI-02E claim started at exact revision

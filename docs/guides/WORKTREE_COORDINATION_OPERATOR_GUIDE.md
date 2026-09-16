@@ -250,6 +250,17 @@ New-lane creation is stricter: `require_new` bypasses same-owner refresh, then
 rejects an occupied slot or creates the claim while holding the registry lock.
 A concurrent exact-owner claim therefore cannot turn bootstrap into refresh.
 
+**Registry-writer contention is bounded.** Claim mutations serialize through
+`~/.claude/coordination/.claims.lock`. A mutation waits at most five seconds by
+default; if another writer still owns the lock, it raises
+`ClaimRegistryLockTimeout`, states that no claim state changed, and tells the
+caller to retry after the current writer releases the lock. The timeout is a
+runtime safety invariant, not a `meta-process.yaml` setting. Do not delete the
+lock file or infer that its age identifies a stale owner: `flock` ownership is
+held by a live process, not by the file's timestamp. Inspect the holder, then
+retry the same sanctioned command. A timed-out claim start, heartbeat, resume,
+or close therefore never becomes ambiguous authority.
+
 A successful cross-session `session-resume` also writes one immutable
 `claim_session_custody_transfer` receipt under the coordination root and returns
 its exact path and SHA-256. The receipt binds the project, scope, repository,

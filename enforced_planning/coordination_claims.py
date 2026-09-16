@@ -85,6 +85,12 @@ CURRENT_CLAIM_SCHEMA_VERSION = 6
 BROAD_SCOPE_MODES = {"bootstrap", "bounded"}
 BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX = ".bootstrap-no-mutation-authority"
 SESSION_TAKEOVER_RESERVATION_FIELD = "session_takeover_reservation"
+CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS = 5.0
+CLAIM_REGISTRY_LOCK_POLL_SECONDS = 0.05
+
+
+class ClaimRegistryLockTimeout(TimeoutError):
+    """The single local claim writer stayed busy beyond the bounded wait."""
 
 # Directories whose contents are immutable, uniquely-named artifacts created by
 # an atomic exclusive open. Two lanes appending to one of these cannot collide:
@@ -217,15 +223,35 @@ class ProgressEventV1(BaseModel):
 
 
 @contextmanager
-def claim_registry_lock(claims_dir: Path | None = None) -> Iterator[None]:
-    """Serialize claim check-and-write mutations across local agent processes."""
+def claim_registry_lock(
+    claims_dir: Path | None = None,
+    *,
+    timeout_seconds: float = CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS,
+) -> Iterator[None]:
+    """Serialize mutations, failing with an exact retry condition on contention."""
+
+    if timeout_seconds < 0:
+        raise ValueError("claim registry lock timeout_seconds must be non-negative")
 
     resolved_claims_dir = (claims_dir or CLAIMS_DIR).expanduser().resolve()
     resolved_claims_dir.parent.mkdir(parents=True, exist_ok=True)
     lock_path = resolved_claims_dir.parent / f".{resolved_claims_dir.name}.lock"
     with lock_path.open("a+", encoding="utf-8") as lock_file:
         lock_path.chmod(0o600)
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ClaimRegistryLockTimeout(
+                        "Claim registry writer is contended at "
+                        f"{lock_path}; no claim state changed. Retry after the current "
+                        f"writer releases this lock (waited {timeout_seconds:g}s)."
+                    ) from exc
+                time.sleep(min(CLAIM_REGISTRY_LOCK_POLL_SECONDS, remaining))
         try:
             _prune_abandoned_claim_write_artifacts(resolved_claims_dir)
             yield

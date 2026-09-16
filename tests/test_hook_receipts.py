@@ -97,6 +97,21 @@ def test_completed_receipt_rejects_unbounded_details(
         invocation.complete(decision="allow", reason_code="test", details=details)
 
 
+def test_reader_accepts_legacy_nested_details_in_v1_receipts(tmp_path: Path) -> None:
+    path = _write_receipt(
+        tmp_path,
+        "session",
+        "a" * 32,
+        details={"continuation": {"state": "legacy", "attempts": [1, 2]}},
+    )
+
+    loaded = load_completed_receipts(tmp_path)
+
+    assert len(loaded) == 1
+    assert loaded[0]["receipt_id"] == path.parent.name
+    assert loaded[0]["details"]["continuation"]["state"] == "legacy"
+
+
 def test_hook_feedback_report_groups_recurrence_and_steps_down(tmp_path: Path) -> None:
     for hook_run_id in ("stop:1:/config.toml", "stop:2:/config.toml"):
         invocation = start_hook_invocation(

@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "plan": "108",
+  "work_unit": "prewrite-pw-06-recovery-resume",
+  "baseline": {
+    "recorded_at": "2026-09-16T16:29:00Z",
+    "source_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd",
+    "execution_cursor_revision": "9f36203060ff6b4cf5d5b3857a8d7bf29e9332fb",
+    "client": "claude-code",
+    "event": {
+      "hook_event_name": "PreToolUse",
+      "tool_name": "Bash",
+      "cwd_kind": "non-git workspace root",
+      "native_session": "claude-code:pw06-recovery",
+      "command": "touch ambiguous-write"
+    },
+    "precondition": "The authenticated native session owns two healthy claims in separate disposable repositories.",
+    "command": "uv run pytest -q tests/test_pw06_recovery_resume.py",
+    "result": "failed",
+    "decision": {
+      "decision": "deny",
+      "reason_code": "ambiguous_exact_session_target",
+      "recovery": "Create one healthy claim for this native session with the exact typed maintenance_worktree claim-bootstrap transaction, or close duplicate claims before mutating."
+    },
+    "first_failing_transition": "The denial correctly detects ambiguity but supplies no executable close/recovery operation. Its suggested bootstrap cannot run while the two live claim roots remain, so recovery cannot reach its handler through the gate.",
+    "negative_control": "No ambiguous-write file was created by the denied hook evaluation."
+  },
+  "candidate": {
+    "status": "first transition repaired; full sequence pending",
+    "source_revision": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776",
+    "commands": [
+      "uv run pytest -q tests/test_pw06_recovery_resume.py",
+      "uv run pytest -q tests/test_pw06_recovery_resume.py tests/test_host_prewrite_claim_gate.py -q"
+    ],
+    "result": "Both PW-06 probes passed and all 218 combined host-gate checks passed.",
+    "verified_transitions": [
+      "The ambiguous-target denial contains an exact installed session_end.py command bound to the authenticated native session, and the same gate classifies that command as native_closeout.",
+      "Two healthy claims become session-ended without deleting their worktrees; one retained lane resumes under a successor native session while the other stays ended.",
+      "The resumed lane admits its exact README edit, denies an out-of-scope target, denies a foreign-session edit, retains only the authorized diff, and returns to session-ended state."
+    ],
+    "evidence_limit": "The retained-lane lifecycle calls and file mutation are subprocess/supporting evidence, not yet an authentic end-to-end Claude Code run through installed hooks."
+  },
+  "acceptance": {
+    "status": "not accepted",
+    "remaining": [
+      "Execute the emitted recovery command itself through an installed combined hook and run one exact rebootstrap/resume sequence.",
+      "Exercise ended and unhealthy claim variants, authorized and denied edits, closeout, and post-close reads.",
+      "Exercise contention, interruption, oversized authority, durable-write cleanup, and semantic-service failure behavior.",
+      "Retain authentic Codex and Claude Code sequences in addition to subprocess evidence."
+    ]
+  }
+}

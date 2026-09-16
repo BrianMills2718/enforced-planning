@@ -646,7 +646,13 @@ denial.
 #### PW-06 — complete recovery and resume through the combined hooks
 
 **Design revision:** `plan-108-v4` (2026-09-16 review adopted by Brian).
-**State:** Ready for implementation; no recovery-and-resume result is claimed.
+**State:** In implementation. The pre-fix baseline and first repaired transition
+are retained in `docs/evidence/plan108_pw06_recovery_resume.json`: an ambiguous
+native session now receives an exact self-owned `session_end.py` recovery
+command that the same gate admits, and a disposable supporting replay resumes
+one retained lane while preserving authorized/out-of-scope/foreign-session edit
+boundaries. This is not PW-06 acceptance; installed authentic sequences and the
+remaining failure table are still required.
 **Critical-path classification:** `vertical`. This is the next implementation
 unit, before further PW-04 rollout. PW-05 is not a prerequisite unless a replay
 demonstrates that repository selection prevents this workflow.

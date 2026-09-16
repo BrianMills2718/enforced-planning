@@ -128,6 +128,9 @@ exact commit, and uses it as the lane base. It then creates the branch,
 worktree, exact-session claim, tracker, and projection transactionally; failure
 removes only artifacts created by that attempt. Checkout occurs only after the
 claim is durable. Raw Make or shell escape forms are not authority surfaces.
+A clean lane whose branch still equals its retained start revision remains
+active if unrelated work advances the default branch before its first edit; it
+has no task commit to disposition.
 
 ### Brand-new local repository
 

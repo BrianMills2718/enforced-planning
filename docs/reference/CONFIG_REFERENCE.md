@@ -127,6 +127,11 @@ require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
 resolve runtime identity through their adapters and populate the same claim and
 tracker contract.
 
+An unused claimed lane remains active when its branch tip is exactly its retained
+`start_revision`, even if an unrelated default-branch commit makes that tip an
+ancestor of the current default. This is lifecycle identity, not a configurable
+policy: no task work exists to close.
+
 Pre-write enforcement is explicit and staged. Use `observe` first and retain
 latency/decision receipts. Promote to `enforce` only after representative
 compliant edits have zero false blocks and the approved latency bar passes.

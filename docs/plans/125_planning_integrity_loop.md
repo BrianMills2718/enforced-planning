@@ -216,9 +216,12 @@ admission controls; isolated parser tests prove only implementation.
 Plan #132 later advances new claims to schema v6 for explicit broad-scope
 custody. That extension preserves this staged-activation contract: v6 is an
 accepted current schema at the tracker-attachment boundary, legacy v1-v5
-records remain readable without eager migration, and unknown future versions
-still fail closed. Bootstrap broad claims additionally separate their readable
+   records remain readable without eager migration, and unknown future versions
+   still fail closed. Bootstrap broad claims additionally separate their readable
 target worktree from mutation authority until an atomic strict-subset narrow.
+An untouched lane retains its start revision as evidence that it has no task
+commit to disposition, even when unrelated default-branch progress contains
+that revision.
 The same current runtime keeps housekeeping and observation bounded: completed
 claim pruning applies optional agent/project/scope selectors before archival,
 and claimless Bash admission accepts only fully classified read-only command

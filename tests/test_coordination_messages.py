@@ -41,6 +41,7 @@ from enforced_planning.coordination_messages import (
     inspect_host_delivery_capability,
     poll_session_inbox,
 )
+from scripts import prewrite_claim_gate
 
 NOW = datetime(2026, 7, 15, 20, 0, tzinfo=UTC)
 CODEX_SESSION = "codex:thread-123"
@@ -1365,6 +1366,79 @@ def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
     )
     assert after_ack.returncode == 0
     assert after_ack.stdout == ""
+
+
+def test_prewrite_gate_admits_workdir_attested_native_mailbox_acknowledgement(
+    tmp_path: Path,
+) -> None:
+    """The worktree-safe wrapper required by Bash admission must not deadlock mailbox ack."""
+
+    worktree = (tmp_path / "claimed-worktree").resolve()
+    worktree.mkdir()
+    request = json.dumps(
+        {
+            "current_session_id": CODEX_SESSION,
+            "message_id": "msg_0123456789abcdef0123456789abcdef",
+            "disposition": "information_only",
+            "note": "Recorded the complete findings in this acknowledgement note.",
+        },
+        separators=(",", ":"),
+    )
+    command = (
+        f"/usr/bin/env -C {worktree} /usr/bin/python3 "
+        f"{prewrite_claim_gate.REPO_ROOT / 'scripts' / 'coordination_messages.py'} "
+        f"acknowledge --request-json '{request}'"
+    )
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=CODEX_SESSION,
+    )
+
+    assert classification == "native_mailbox"
+
+
+@pytest.mark.parametrize(
+    "workdir",
+    (
+        "relative/worktree",
+        "/tmp/../tmp/worktree",
+        "/tmp/worktree;touch-/tmp/escaped",
+    ),
+)
+def test_prewrite_gate_rejects_unsafe_mailbox_workdir_wrapper(
+    tmp_path: Path,
+    workdir: str,
+) -> None:
+    request = json.dumps(
+        {
+            "current_session_id": CODEX_SESSION,
+            "message_id": "msg_0123456789abcdef0123456789abcdef",
+            "disposition": "information_only",
+            "note": "Recorded the complete findings in this acknowledgement note.",
+        },
+        separators=(",", ":"),
+    )
+    command = (
+        f"/usr/bin/env -C {workdir} /usr/bin/python3 "
+        f"{prewrite_claim_gate.REPO_ROOT / 'scripts' / 'coordination_messages.py'} "
+        f"acknowledge --request-json '{request}'"
+    )
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=CODEX_SESSION,
+    )
+
+    assert classification is False
 
 
 def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(

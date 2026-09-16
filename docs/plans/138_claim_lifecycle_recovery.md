@@ -5,7 +5,7 @@ dependencies_reviewed: "2026-09-15"
 ---
 # Plan #138: Claim Lifecycle Recovery
 
-**Status:** In Progress
+**Status:** Complete
 **Type:** maintenance
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -27,8 +27,8 @@ admission enforce one start-revision contract.
 ## User outcome
 
 A typed session start cannot create a live claim for a missing or mismatched
-Git checkout, and an exact self-owned session-end command remains reachable
-when claim health has already failed.
+Git checkout, and the exact self-owned session-end and reconciliation commands
+remain reachable when claim health has already failed.
 
 ## Canonical behavioral example
 
@@ -37,10 +37,11 @@ against a missing checkout; separately, its already-owned claim loses its
 recorded checkout.
 
 **Action:** Submit the typed start request, then submit the exact canonical
-session-end command for the unhealthy owned claim.
+session-end and missing-worktree reconciliation commands for the unhealthy
+owned claim.
 
 **Expected result:** The invalid start writes no claim or tracker. The exact
-recovery command is admitted and terminates ownership.
+recovery commands are admitted, archive the claim, and terminate ownership.
 
 **Failure signal:** The start reports success, leaves claim residue, or the
 unhealthy claim prevents the exact owning session from ending it.
@@ -114,6 +115,20 @@ the canonical recovery command. Maintenance bootstrap also stores a verified
 - Admit exact reconciliation closeout only after that claim is session-ended.
 - Deny foreign identity, storage overrides, and composed commands.
 - Accept the verified maintenance start revision in the exemption contract.
+
+## Verification
+
+- PRs #556 and #557 merged the lifecycle repair into `main` at
+  `076852312b8f438ef9b3c33588a221c2e16984d7`.
+- The host pre-write gate suite passed: `210 passed`.
+- The repository self-test reported `ALL CHECKS PASSED`; focused Ruff F checks
+  and `git diff --check` also passed.
+- Installed-runtime replay rejected a nonexistent worktree before creating a
+  claim, admitted the exact `session_end.py` request after the recorded
+  worktree was removed, then admitted `session_close.py
+  --reconcile-missing-worktree` for that session-ended claim. The closeout
+  archived and released the claim, deleted its branch, and reported
+  `worktree_action: not_attempted_absent_recorded_worktree`.
 
 ## Files Affected
 

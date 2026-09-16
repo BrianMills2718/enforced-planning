@@ -275,6 +275,12 @@ metadata. Generated consumers use the synchronized
 only when the rendered worktree block and installed wrapper/module digests match
 the canonical runtime.
 
+The typed maintenance request's `new_files` field is a transaction contract,
+not a configuration switch. It can create at most 16 explicitly declared new
+top-level files in the linked worktree, narrows before returning, and persists
+the declaration in the claim so health checks remain deterministic while the
+canonical checkout does not yet contain those files.
+
 `session-status` is the sole Python-backed lifecycle command classified as
 claimless read-only. The classifier accepts only the fixed installed script,
 its declared query arguments, and an optional absolute `/usr/bin/env -C`

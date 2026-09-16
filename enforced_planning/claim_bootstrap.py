@@ -2237,11 +2237,23 @@ def _execute_maintenance_worktree(
                     session_id=owner_session_id,
                     write_paths=request.write_paths,
                     require_native_session_binding=True,
+                    known_new_files=new_files,
+                    start_revision=starting_head,
                 )
+                def attach_start_revision(tracker: dict[str, Any]) -> None:
+                    tracker_claim = tracker.get("claim")
+                    if not isinstance(tracker_claim, dict):
+                        raise ValueError("maintenance tracker is missing its claim section")
+                    tracker_claim["start_revision"] = starting_head
+
+                session_contracts.mutate_session_tracker(tracker_path, attach_start_revision)
             # The initial claim authorizes Git artifact creation. Once those
             # exact artifacts exist, attach the already-resolved remote-default
             # revision so closeout can measure concurrent arrivals precisely.
-            payload = start_primary_session(start_revision=starting_head)
+            if new_files:
+                payload = {**payload, "action": "updated", "start_revision": starting_head}
+            else:
+                payload = start_primary_session(start_revision=starting_head)
         lock_reconciliation = _reconcile_canonical_after_claim(
             repo,
             session_id=session_id,

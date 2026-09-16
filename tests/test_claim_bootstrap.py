@@ -1601,7 +1601,7 @@ def test_delegated_maintenance_requires_exact_healthy_parent_before_artifacts(
     ).returncode != 0
 
 
-def test_delegated_maintenance_admits_sibling_overlap_in_distinct_worktree(
+def test_delegated_maintenance_rejects_sibling_overlap_with_healthy_owner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1622,23 +1622,17 @@ def test_delegated_maintenance_admits_sibling_overlap_in_distinct_worktree(
         )
     )
 
-    result = claim_bootstrap.execute_request(second)
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="write ownership conflicts"):
+        claim_bootstrap.execute_request(second)
 
-    assert result["ok"] is True
     assert (repo / "worktrees" / "fix" / "child-lane").is_dir()
-    assert (repo / "worktrees" / "fix" / "sibling-lane").is_dir()
+    assert not (repo / "worktrees" / "fix" / "sibling-lane").exists()
     sibling_claims = [
         claim
         for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
         if claim.scope in {"fix/child-lane", "fix/sibling-lane"}
     ]
-    assert {claim.scope for claim in sibling_claims} == {"fix/child-lane", "fix/sibling-lane"}
-    interaction = claim_bootstrap.coordination_claims.evaluate_claim(
-        next(claim for claim in sibling_claims if claim.scope == "fix/sibling-lane"),
-        active_claims=[next(claim for claim in sibling_claims if claim.scope == "fix/child-lane")],
-    ).interactions[0]
-    assert interaction.severity == "advisory_overlap"
-    assert interaction.reason == "isolated_worktree_overlap"
+    assert [claim.scope for claim in sibling_claims] == ["fix/child-lane"]
 
 
 def test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear(

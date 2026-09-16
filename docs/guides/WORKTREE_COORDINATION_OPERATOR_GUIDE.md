@@ -130,7 +130,9 @@ file only after the broad bootstrap claim and linked worktree exist, then
 narrows to the final declared paths before returning authority. It never infers
 file intent from an extension, and rejects nested, existing, undeclared,
 delegated, or goal-bound `new_files`. A failure removes only empty files created
-by that attempt before rolling back the lane.
+by that attempt before rolling back the lane. The final claim retains the exact
+`new_files` declaration so later health checks can distinguish the still-new
+worktree file from an ambiguous missing top-level path.
 
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,

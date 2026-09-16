@@ -2285,6 +2285,15 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
     verified_new_files: set[str] = set()
     worktree = Path(claim.target_worktree_path or claim.worktree_path or "")
     canonical_root = Path(claim.repo_root or "")
+    staged_worktree = (
+        bool(claim.worktree_path)
+        and bool(claim.repo_root)
+        and bool(claim.branch)
+        and Path(claim.worktree_path or "").is_absolute()
+        and not Path(claim.worktree_path or "").exists()
+        and Path(claim.worktree_path or "").resolve(strict=False)
+        == (Path(claim.repo_root or "") / "worktrees" / Path(claim.branch or "")).resolve(strict=False)
+    )
     for path in claim.new_files:
         created = worktree / path
         canonical = canonical_root / path
@@ -2297,6 +2306,18 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
             and created.is_file()
             and not created.is_symlink()
         ):
+            verified_new_files.add(path)
+        elif (
+            staged_worktree
+            and path in claim.write_paths
+            and "/" not in path
+            and path not in {"", ".", ".."}
+            and not canonical.exists()
+            and not canonical.is_symlink()
+        ):
+            # A typed maintenance transaction reserves its exact final paths
+            # before creating the branch/worktree. Once the worktree exists,
+            # the ordinary exact-file checks above take over.
             verified_new_files.add(path)
         elif not canonical.is_file():
             issues.append("invalid_new_file_contract")
@@ -3106,6 +3127,7 @@ def build_candidate_claim(
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
     contact_ref: str | None = None,
+    new_files: list[str] | tuple[str, ...] | None = None,
     schema_version: int | None = None,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
@@ -3180,6 +3202,7 @@ def build_candidate_claim(
         broad_scope_reason=normalized_reason,
         target_worktree_path=effective_target_worktree,
         contact_ref=contact_ref,
+        new_files=tuple(_normalize_repo_path(path) for path in (new_files or ())),
     )
 
 
@@ -3368,6 +3391,7 @@ def create_claim(
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
     contact_ref: str | None = None,
+    new_files: list[str] | None = None,
     verified_goal_default_revision: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
@@ -3532,6 +3556,7 @@ def create_claim(
         broad_scope_reason=broad_scope_reason,
         target_worktree_path=target_worktree_path,
         contact_ref=contact_ref,
+        new_files=new_files,
         schema_version=6,
         **_progress_event_payload(initial_progress),
     )

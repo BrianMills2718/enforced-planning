@@ -1289,7 +1289,7 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
         assert admitted["decision"] == "allow"
 
 
-def test_maintenance_bootstrap_creates_declared_new_root_file_then_narrows(
+def test_maintenance_bootstrap_creates_declared_new_root_file_with_exact_scope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1311,6 +1311,62 @@ def test_maintenance_bootstrap_creates_declared_new_root_file_then_narrows(
     assert claim.target_worktree_path is None
     assert receipt["result"]["bootstrap_requires_narrowing"] is False
     assert receipt["result"]["new_files_created"] == ["Makefile.worktree"]
+
+
+def test_new_root_file_bootstrap_keeps_exact_scope_beside_healthy_disjoint_writer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    other_worktree = repo / "worktrees" / "product-lane"
+    other_worktree.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "product-lane", str(other_worktree), "main"],
+        check=True,
+        capture_output=True,
+    )
+    other_tracker = tmp_path / "other-session.yaml"
+    other_tracker.write_text("{}\n", encoding="utf-8")
+    ok, message = claim_bootstrap.coordination_claims.create_claim(
+        agent="codex",
+        project=repo.name,
+        scope="product-lane",
+        intent="maintain an unrelated product file",
+        plan_ref="UNPLANNED",
+        claim_type="write",
+        write_paths=["src/product.py"],
+        repo_root=str(repo),
+        worktree_path=str(other_worktree),
+        branch="product-lane",
+        session_id="codex:other-native",
+        session_name="maintain-product-file",
+        broader_goal="Maintain an unrelated product file",
+        tracker_path=str(other_tracker),
+    )
+    assert ok, message
+    other = next(
+        claim
+        for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+        if claim.scope == "product-lane"
+    )
+    assert claim_bootstrap.coordination_claims.claim_health_issues(other) == []
+
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(
+        repo,
+        write_paths=["Makefile.worktree", "src/adapter.py"],
+        new_files=["Makefile.worktree"],
+    )))
+    receipt = claim_bootstrap.execute_request(request)
+
+    assert receipt["ok"] is True
+    created = next(
+        claim
+        for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
+        if claim.scope == "fix/safe-lane"
+    )
+    assert created.write_paths == ["Makefile.worktree", "src/adapter.py"]
+    assert created.new_files == ("Makefile.worktree",)
 
 
 @pytest.mark.parametrize(

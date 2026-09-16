@@ -1956,6 +1956,7 @@ def _upsert_session_claim(
     broad_scope_mode: str | None = None,
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
+    new_files: list[str] | None = None,
     staged_reservation: coordination_claims.ClaimRecord | None = None,
     maintenance_snapshot: _MaintenanceRefreshSnapshot | None = None,
     registry_lock_held: bool = False,
@@ -1995,6 +1996,7 @@ def _upsert_session_claim(
             broad_scope_mode=broad_scope_mode,
             broad_scope_reason=broad_scope_reason,
             target_worktree_path=target_worktree_path,
+            new_files=new_files,
             require_native_session_binding=True,
             verified_goal_default_revision=verified_goal_default_revision,
         )
@@ -2045,6 +2047,7 @@ def _upsert_session_claim(
         effective_target_worktree_path = (
             existing.target_worktree_path if target_worktree_path is None else target_worktree_path
         )
+        effective_new_files = list(existing.new_files) if new_files is None else new_files
         if start_revision is not None and existing.start_revision not in {None, start_revision}:
             raise ValueError(f"Claim at {path} retains start revision {existing.start_revision}, not {start_revision}")
         effective_start_revision = existing.start_revision or start_revision
@@ -2126,6 +2129,7 @@ def _upsert_session_claim(
             broad_scope_mode=effective_broad_scope_mode,
             broad_scope_reason=effective_broad_scope_reason,
             target_worktree_path=effective_target_worktree_path,
+            new_files=effective_new_files,
             # Ordinary refreshes preserve an existing legacy schema until the
             # caller supplies v6-only metadata.  This keeps a tracker attach or
             # heartbeat-equivalent upsert from becoming an implicit migration.
@@ -2200,6 +2204,10 @@ def _upsert_session_claim(
             "parallel_root_authorized": candidate.parallel_root_authorized,
             **progress_payload,
         }
+        if candidate.new_files:
+            payload["new_files"] = list(candidate.new_files)
+        else:
+            payload.pop("new_files", None)
         if "project" in refreshed_payload:
             payload["project"] = project
         for field, value in (
@@ -3312,6 +3320,7 @@ def start_session(
     broad_scope_mode: str | None = None,
     broad_scope_reason: str | None = None,
     target_worktree_path: str | None = None,
+    new_files: list[str] | None = None,
     outcome_selected: bool = False,
     outcome_bootstrap_plan: int | None = None,
     outcome_admission_receipt_path: Path = (outcome_admission.DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH),
@@ -3556,6 +3565,7 @@ def start_session(
             broad_scope_mode=broad_scope_mode,
             broad_scope_reason=broad_scope_reason,
             target_worktree_path=target_worktree_path,
+            new_files=new_files,
             staged_reservation=staged_reservation,
             maintenance_snapshot=maintenance_snapshot,
             registry_lock_held=registry_lock_held,

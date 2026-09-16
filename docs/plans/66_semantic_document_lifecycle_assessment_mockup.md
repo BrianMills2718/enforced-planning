@@ -1,3 +1,8 @@
+---
+plan_id: "enforced-planning#66"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Plan 66 semantic document lifecycle assessment mockup
 
 > **Status:** proposed design seam awaiting human disposition. This is not a

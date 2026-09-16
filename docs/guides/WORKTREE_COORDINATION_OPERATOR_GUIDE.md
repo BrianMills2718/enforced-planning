@@ -191,16 +191,20 @@ handoff/session-end plus session-resume before it may hand off, abandon, finish,
 or close the lane; claim creation fails
 without changing the claim or its derived projection.
 
-Write-path overlap is hard ownership conflict only when the physical mutation
-boundary is shared or cannot be verified. Two claims whose paths resolve to the
-same worktree, the canonical checkout, the same Git branch, or an unverified
-target remain blocked. When both claims instead name different verified linked
-worktrees of the same canonical repository (including a new claim's exact
-future `<repo>/worktrees/<branch>` target), the interaction is
-`advisory_overlap` with reason `isolated_worktree_overlap`: claim creation may
-continue, each session remains confined to its own worktree, and Git owns later
-content reconciliation. This does not transfer, delete, or weaken the older
-claim, and heartbeat age is not part of the safety decision.
+Write-path overlap remains hard ownership conflict while the incumbent claim is
+healthy, including when the claims use different linked worktrees. Worktrees
+isolate filesystem writes; they do not grant two active sessions authority to
+implement the same paths independently. The same worktree, canonical checkout,
+same Git branch, or an unverified target is always blocked.
+
+Different verified linked worktrees of the same canonical repository (including
+a new claim's exact future `<repo>/worktrees/<branch>` target) become an owner-
+loss recovery boundary only when the incumbent claim is non-healthy. In that
+case the interaction is `advisory_overlap` with reason
+`isolated_worktree_overlap`: claim creation may continue in the separate
+worktree, and Git owns later content reconciliation. This does not transfer,
+delete, or weaken the older claim; resume or reconcile that claim when
+continuing its lane is possible.
 
 New-lane creation is stricter: `require_new` bypasses same-owner refresh, then
 rejects an occupied slot or creates the claim while holding the registry lock.

@@ -3538,8 +3538,8 @@ def test_same_client_different_sessions_conflict_on_program_write_ownership(
     assert result.hard_conflicts[0].reason == "write ownership overlaps across active claims"
 
 
-def test_distinct_linked_worktrees_make_path_overlap_advisory(tmp_path: Path) -> None:
-    """Git-isolated writes are merge risk, not concurrent filesystem ownership."""
+def test_distinct_linked_worktrees_keep_nonhealthy_owner_recovery_advisory(tmp_path: Path) -> None:
+    """A non-healthy owner can be recovered without concurrent filesystem writes."""
 
     repo = tmp_path / "demo"
     _init_git_repo(repo)
@@ -3583,6 +3583,8 @@ def test_distinct_linked_worktrees_make_path_overlap_advisory(tmp_path: Path) ->
         session_id="codex:successor",
     )
 
+    assert claims_impl.claim_runtime_status(owner, active_claims=[owner]) != "healthy"
+
     result = claims_impl.evaluate_claim(candidate, active_claims=[owner])
 
     assert result.hard_conflicts == []
@@ -3590,6 +3592,62 @@ def test_distinct_linked_worktrees_make_path_overlap_advisory(tmp_path: Path) ->
     assert len(result.interactions) == 1
     assert result.interactions[0].severity == "advisory_overlap"
     assert result.interactions[0].reason == "isolated_worktree_overlap"
+
+
+def test_distinct_linked_worktrees_do_not_override_healthy_write_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Isolation is a recovery boundary, not permission to duplicate active work."""
+
+    repo = tmp_path / "demo"
+    _init_git_repo(repo)
+    owner_worktree = repo / "worktrees" / "owner-lane"
+    candidate_worktree = repo / "worktrees" / "candidate-lane"
+    owner_worktree.parent.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "owner-lane", str(owner_worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-b", "candidate-lane", str(candidate_worktree)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    owner = claims_impl.build_candidate_claim(
+        agent="claude-code",
+        project="demo",
+        scope="owner-lane",
+        intent="edit the owned path",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(owner_worktree),
+        branch="owner-lane",
+        session_id="claude-code:owner",
+    )
+    candidate = claims_impl.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="candidate-lane",
+        intent="attempt duplicate work",
+        claim_type="write",
+        write_paths=["README.md"],
+        repo_root=str(repo),
+        worktree_path=str(candidate_worktree),
+        branch="candidate-lane",
+        session_id="codex:candidate",
+    )
+    monkeypatch.setattr(claims_impl, "claim_runtime_status", lambda *_args, **_kwargs: "healthy")
+
+    result = claims_impl.evaluate_claim(candidate, active_claims=[owner])
+
+    assert len(result.hard_conflicts) == 1
+    assert result.hard_conflicts[0].reason == "write ownership overlaps across active claims"
+    assert result.continuation()["state"] == "integration_wait"
 
 
 def test_claim_creation_admits_planned_distinct_worktree_overlap(

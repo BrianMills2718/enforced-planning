@@ -294,16 +294,18 @@ def _prepare_cross_agent_repo(tmp_path: Path) -> Path:
     return repo
 
 
-def test_resume_session_transfers_claim_identity_to_a_different_handed_off_agent(
+@pytest.mark.parametrize("status", ["handoff", coordination_claims.SESSION_ENDED_STATUS])
+def test_resume_session_transfers_quiesced_claim_identity_to_a_different_agent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    status: str,
 ) -> None:
-    """A claim explicitly left in 'handoff' status by one agent can be resumed by another."""
+    """Explicit handoff and session end both prove the predecessor is quiescent."""
 
     repo = _prepare_cross_agent_repo(tmp_path)
     claims_dir = tmp_path / "claims"
     claims_dir.mkdir()
-    old_claim_path = _write_cross_agent_claim(claims_dir, repo=repo, status="handoff")
+    old_claim_path = _write_cross_agent_claim(claims_dir, repo=repo, status=status)
 
     monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(
@@ -364,7 +366,7 @@ def test_resume_session_refuses_cross_agent_transfer_of_a_live_claim(
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "successor-run")
 
-    with pytest.raises(ValueError, match="explicit 'handoff' claim status"):
+    with pytest.raises(ValueError, match="explicit 'handoff' or 'session_ended'"):
         session_lifecycle.resume_session(
             agent="codex",
             project="demo",

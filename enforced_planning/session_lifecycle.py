@@ -1100,12 +1100,12 @@ def _apply_cross_agent_handoff_transaction(
     project: str,
     scope: str,
 ) -> dict[str, Any]:
-    """Transfer an explicitly-handed-off claim's identity to a different native agent.
+    """Transfer a quiesced claim's identity to a different native agent.
 
-    Reachable only for ``claim.status == "handoff"``: the predecessor already
-    voluntarily quiesced with no live process to fence, so there is nothing to
-    verify beyond the successor's own proven native identity and the claim's
-    exact unchanged bytes. This intentionally does not reuse the same-agent
+    Reachable only for explicit ``handoff`` or ``session_ended`` claims: the
+    predecessor already quiesced with no live process to fence, so there is
+    nothing to verify beyond the successor's own proven native identity and the
+    claim's exact unchanged bytes. This intentionally does not reuse the same-agent
     cross-session transfer machinery (process fencing, transfer journals):
     those exist to protect a *live* predecessor runtime, which a handoff
     claim by definition no longer has. The claim file itself is renamed
@@ -5441,13 +5441,13 @@ def resume_session(
     <scope>.yaml``) -- that is the claim's recorded, and by default required,
     native identity. Pass ``successor_agent`` only when a *different*
     supported agent is legitimately taking over a claim the recorded agent
-    explicitly left in ``handoff`` status: this proves the successor's own
+    explicitly left in ``handoff`` or ``session_ended`` status: this proves the successor's own
     native identity (never the departed agent's) and transfers the claim's
     recorded identity, including renaming its file, to ``successor_agent``.
-    It is refused for any other lifecycle status -- a live, stale-heartbeat,
-    or session-ended claim still needs the existing same-agent transfer paths
-    below, which protect a possibly-live predecessor process that a handoff
-    claim by definition no longer has.
+    It is refused for any other lifecycle status. Live or stale-heartbeat claims
+    still need the existing fenced transfer paths below because their predecessor
+    may still be running. Explicit handoff and session end are both terminal
+    process boundaries, so neither requires predecessor fencing.
     """
 
     claim, payload, claim_file, claim_snapshot_bytes = _claim_snapshot_any_status(
@@ -5511,12 +5511,11 @@ def resume_session(
         )
 
     if successor_agent is not None and successor_agent != agent:
-        if claim.status != "handoff":
+        if claim.status not in {"handoff", coordination_claims.SESSION_ENDED_STATUS}:
             raise ValueError(
-                f"Cross-agent resume requires an explicit 'handoff' claim status, not "
-                f"{claim.status!r}. A live, stale-heartbeat, or session-ended claim can "
-                "only be resumed by its own recorded agent; have the recorded agent "
-                "explicitly hand off the lane first."
+                "Cross-agent resume requires an explicit 'handoff' or "
+                f"'session_ended' claim status, not {claim.status!r}. A live or "
+                "stale-heartbeat claim must be fenced through its existing transfer path."
             )
         if successor_agent not in coordination_claims.SUPPORTED_AGENTS:
             raise ValueError(f"Unsupported successor agent {successor_agent!r}")

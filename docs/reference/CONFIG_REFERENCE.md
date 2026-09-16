@@ -127,6 +127,11 @@ require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
 resolve runtime identity through their adapters and populate the same claim and
 tracker contract.
 
+Cross-client recovery is also a fixed lifecycle contract rather than a config
+key. `session-resume --successor-agent` may transfer only an explicit `handoff`
+or `session_ended` claim: both prove the predecessor runtime is quiescent. Live
+and stale-heartbeat claims retain the fenced transfer path.
+
 Claim-registry writer contention is also not configurable. Mutations acquire
 `~/.claude/coordination/.claims.lock` for at most five seconds by default. If
 the lock remains owned, `ClaimRegistryLockTimeout` reports the lock path,

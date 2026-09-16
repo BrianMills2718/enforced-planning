@@ -818,7 +818,7 @@ refused with an actor mismatch because a different runtime session_id still
 owned the claim; and plain `session-resume` refused on the path mismatch
 itself. This flag closes exactly that gap.
 
-### Resuming a lane a different agent explicitly handed off
+### Resuming a quiesced lane under a different agent
 
 Before 2026-09-09, `resume_session()` used one `agent` value both to select
 which claim file to open (`<agent>_<project>_<scope>.yaml`) and to prove the
@@ -833,7 +833,7 @@ session, or vice versa, even though nothing in the claim model restricts
 
 Pass `--successor-agent` to `session_resume.py` (or `successor_agent=` to
 `resume_session()`) when a different supported agent is legitimately taking
-over such a lane:
+over a lane whose recorded status is `handoff` or `session_ended`:
 
 ```bash
 python scripts/session_resume.py \
@@ -846,11 +846,10 @@ python scripts/session_resume.py \
 
 `--agent` still names the claim's recorded agent, purely to locate the file;
 `--successor-agent` is the one whose native identity gets proven and who
-receives custody. This is refused for any status other than `handoff` --
-a live, stale-heartbeat, or session-ended claim still needs the existing
-same-agent transfer paths above, which exist to protect a possibly-live
-predecessor process that a voluntary handoff by definition no longer has, so
-no process fencing or transfer-journal machinery applies here. On success the
+receives custody. This is refused for any status other than `handoff` or
+`session_ended`. Both are explicit process-quiescence boundaries, so no
+predecessor fencing is needed; a live or stale-heartbeat claim still uses the
+existing fenced transfer path. On success the
 claim file is renamed to the successor's `<agent>_<project>_<scope>.yaml` and
 its `agent` field updated; the session tracker keeps its original filename as
 provenance of which agent created it.

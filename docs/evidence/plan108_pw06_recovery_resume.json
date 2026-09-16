@@ -26,8 +26,8 @@
     "negative_control": "No ambiguous-write file was created by the denied hook evaluation."
   },
   "candidate": {
-    "status": "first transition repaired; full sequence pending",
-    "source_revision": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776",
+    "status": "exact recovery plus bounded contention and interruption sequence passed; full client matrix pending",
+    "source_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4",
     "commands": [
       "uv run pytest -q tests/test_pw06_recovery_resume.py",
       "uv run pytest -q tests/test_pw06_recovery_resume.py tests/test_host_prewrite_claim_gate.py -q"
@@ -60,18 +60,37 @@
         "The first fresh CLI probe also created the marker after PR #355 incorrectly replaced canonical Bash matchers with exec_command. OpenAI Codex source inspection showed HookToolName::bash() serializes the canonical name Bash, so that diagnosis and deployment were corrected.",
         "Corrective Agent Skills PR #357 preserved Bash and added exec_command as an additional matcher. After deployment, fresh thread 01a0ab2a-72e7-70e0-8c75-443ae66f9298 received BLOCKED [prewrite/no_exact_claim], and its independent absence check exited 0."
       ],
-      "recovery_resume": "The parent PW-06 claim was ended with installed session_end.py, the Agent Skills repair ran in a separately claimed worktree and closed after merge, and installed session_resume.py reattached this exact retained PW-06 lane without losing its plan reference, branch, worktree, tracker, or user files.",
+      "recovery_resume": "The parent PW-06 claim was ended with installed session_end.py, the Agent Skills repair ran in a separately claimed worktree and closed after merge, and installed session_resume.py reattached this exact retained PW-06 lane without losing its plan reference, branch, worktree, tracker, or user files. The lane was ended a second time for the registry-contention repair, then resumed again after that repair merged and deployed, preserving the same identity and artifacts.",
       "deployed_revision": "agent-skills@9ef2fe9",
       "deployment_receipt": "apply-20260916T170111108666Z.json",
       "concern": "https://github.com/BrianMills2718/project-meta/issues/2067"
     }
+  },
+  "contention_interruption": {
+    "result": "pass for bounded registry-writer contention and focused interruption recovery",
+    "source_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4",
+    "pull_request": "https://github.com/BrianMills2718/enforced-planning/pull/579",
+    "deployment": {
+      "installed_runtime_before": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776",
+      "installed_runtime_after": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4",
+      "mode": "fast_forward",
+      "recovery_ref": "refs/codex-runtime-recovery/20260916T172003691658Z-aacabad1c1a8"
+    },
+    "observations": [
+      "A real child-claim attempt under concurrent registry ownership returned ClaimRegistryLockTimeout after five seconds, stated that no claim state changed, and supplied the exact retry condition.",
+      "Read-only holder inspection found no continuing flock owner; retrying the identical sanctioned bootstrap then created the child claim successfully.",
+      "The focused claim-registry suite passed 183 tests, including a holder/timeout/unchanged-state/release/retry sequence.",
+      "Seven focused interruption tests passed for split-identity visibility, receipt-failure rollback, tracker-write rollback, and abrupt write-boundary takeover recovery.",
+      "The broader claim-plus-session suite reached 208 passes before one independently reproducible baseline failure in test_sanctioned_maintenance_start_refresh_preserves_bootstrap_provenance; that unrelated assertion is not counted as PW-06 evidence."
+    ],
+    "recovery_resume": "The contention repair used separate parent and documentation child claims, merged as PR #579, deployed the exact pushed revision, closed both maintenance claims and their worktree through sanctioned session_close, and resumed this retained PW-06 lane through the installed runtime."
   },
   "acceptance": {
     "status": "not accepted",
     "remaining": [
       "Restart this app/API Codex thread and repeat its out-of-scope exec command so the additional matcher is verified on that exact runtime surface, not only fresh Codex CLI.",
       "Exercise ended and unhealthy claim variants, authorized and denied edits, closeout, and post-close reads.",
-      "Exercise contention, interruption, oversized authority, durable-write cleanup, and semantic-service failure behavior.",
+      "Exercise oversized authority, durable-write cleanup, and semantic-service failure behavior.",
       "Retain authentic Codex and Claude Code sequences in addition to subprocess evidence."
     ]
   }

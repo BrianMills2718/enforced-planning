@@ -26,7 +26,7 @@
     "negative_control": "No ambiguous-write file was created by the denied hook evaluation."
   },
   "candidate": {
-    "status": "exact recovery plus bounded contention and interruption sequence passed; full client matrix pending",
+    "status": "exact recovery, bounded contention/interruption, and durable-write cleanup passed; full client matrix pending",
     "source_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4",
     "commands": [
       "uv run pytest -q tests/test_pw06_recovery_resume.py",
@@ -85,12 +85,24 @@
     ],
     "recovery_resume": "The contention repair used separate parent and documentation child claims, merged as PR #579, deployed the exact pushed revision, closed both maintenance claims and their worktree through sanctioned session_close, and resumed this retained PW-06 lane through the installed runtime."
   },
+  "durable_write_cleanup": {
+    "result": "pass for the reproduced learning-writer index-lock failure",
+    "source_revision": "project-meta@e6efa30da3710e198415d123cdc0194ec1651dd4",
+    "pull_request": "https://github.com/BrianMills2718/project-meta/pull/2069",
+    "observations": [
+      "The prior writer published the immutable entry first, then attempted git reset; an index.lock failure therefore returned success while preserving a staged duplicate.",
+      "Cleanup now runs before the irreversible remote append. An index lock older than one hour is removed only when no visible process descriptor owns its inode; cleanup then retries once.",
+      "A fresh lock and an old-but-open lock are both preserved, the operation returns a truthful failure, and origin remains unchanged.",
+      "An abandoned old lock is removed, the retry publishes exactly one remote entry, and the checkout has no staged or loose duplicate.",
+      "The focused register and learning-writer suites passed 74 tests; the merged canonical revision passed the four lock and detached-cleanup probes again."
+    ]
+  },
   "acceptance": {
     "status": "not accepted",
     "remaining": [
       "Restart this app/API Codex thread and repeat its out-of-scope exec command so the additional matcher is verified on that exact runtime surface, not only fresh Codex CLI.",
       "Exercise ended and unhealthy claim variants, authorized and denied edits, closeout, and post-close reads.",
-      "Exercise oversized authority, durable-write cleanup, and semantic-service failure behavior.",
+      "Exercise oversized authority and semantic-service failure behavior.",
       "Retain authentic Codex and Claude Code sequences in addition to subprocess evidence."
     ]
   }

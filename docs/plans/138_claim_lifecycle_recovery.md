@@ -111,6 +111,7 @@ the canonical recovery command. Maintenance bootstrap also stores a verified
 - Reject missing or mismatched Git identity before claim/tracker creation.
 - Preserve the valid exact-checkout control.
 - Admit exact self-owned session-end for an unhealthy claim.
+- Admit exact reconciliation closeout only after that claim is session-ended.
 - Deny foreign identity, storage overrides, and composed commands.
 - Accept the verified maintenance start revision in the exemption contract.
 

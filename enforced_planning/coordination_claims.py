@@ -2266,6 +2266,44 @@ def classify_broad_write_paths(
     return broad
 
 
+def _regular_top_level_files_at_revision(
+    repo_root: str | None,
+    revision: str | None,
+    write_paths: list[str],
+) -> set[str]:
+    """Return exact top-level regular files recorded by one retained Git tree."""
+
+    if not repo_root or not revision or START_REVISION_PATTERN.fullmatch(revision) is None:
+        return set()
+    root = Path(repo_root).expanduser()
+    if not root.is_absolute():
+        return set()
+    verified: set[str] = set()
+    for path in write_paths:
+        normalized = _normalize_repo_path(path)
+        if normalized in {"", ".", ".."} or "/" in normalized:
+            continue
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-tree", "-z", revision, "--", normalized],
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.endswith(b"\0"):
+            continue
+        records = [record for record in result.stdout.split(b"\0") if record]
+        if len(records) != 1 or b"\t" not in records[0]:
+            continue
+        metadata, raw_path = records[0].split(b"\t", 1)
+        fields = metadata.split()
+        if (
+            len(fields) == 3
+            and fields[0] in {b"100644", b"100755"}
+            and raw_path == normalized.encode()
+        ):
+            verified.add(normalized)
+    return verified
+
+
 def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
     """Return deterministic schema-v6 broad-scope contract violations."""
 
@@ -2282,7 +2320,11 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         if possible_broad:
             issues.append("legacy_broad_scope_unclassified")
         return issues
-    verified_new_files: set[str] = set()
+    verified_new_files = _regular_top_level_files_at_revision(
+        claim.repo_root,
+        claim.start_revision,
+        list(claim.write_paths),
+    )
     worktree = Path(claim.target_worktree_path or claim.worktree_path or "")
     canonical_root = Path(claim.repo_root or "")
     staged_worktree = (
@@ -3393,10 +3435,13 @@ def create_claim(
     contact_ref: str | None = None,
     new_files: list[str] | None = None,
     verified_goal_default_revision: str | None = None,
+    verified_maintenance_default_revision: str | None = None,
 ) -> tuple[bool, str]:
     """Create a new claim after checking for hard conflicts."""
     if verified_goal_default_revision is not None and not is_goal_authority_ref(plan_ref):
         raise ValueError("verified goal default revision is valid only for goal-bound ownership")
+    if verified_maintenance_default_revision is not None and is_goal_authority_ref(plan_ref):
+        raise ValueError("verified maintenance default revision is valid only for unplanned maintenance")
     now = datetime.now(timezone.utc)
     initial_progress = build_progress_event(
         progress_kind="claim_started",
@@ -3519,6 +3564,18 @@ def create_claim(
             require_branch=tracker_path is not None,
             require_worktree=tracker_path is not None,
         )
+    elif write_paths and verified_maintenance_default_revision is not None:
+        if not (require_native_session_binding and tracker_path and branch and worktree_path and repo_root):
+            raise ValueError(
+                "verified maintenance default revision requires one native-bound tracker, branch, and worktree transaction"
+            )
+        if START_REVISION_PATTERN.fullmatch(verified_maintenance_default_revision) is None:
+            raise ValueError("verified maintenance default revision must be one full lowercase Git object ID")
+        root = Path(repo_root).expanduser().resolve()
+        resolved_start = _resolve_commit(root, start_point, label="maintenance worktree start")
+        if resolved_start != verified_maintenance_default_revision:
+            raise ValueError("maintenance worktree start does not match its freshly verified default revision")
+        start_revision = resolved_start
     _reject_unreadable_tracker_path(tracker_path)
     candidate = build_candidate_claim(
         agent=agent,
@@ -3617,13 +3674,14 @@ def create_claim(
             )
 
         if start_revision is not None:
+            staged_verified_maintenance = verified_maintenance_default_revision is not None
             validate_start_revision_targets(
                 repo_root=repo_root or "",
                 start_revision=start_revision,
                 branch=branch,
                 worktree_path=worktree_path,
-                require_branch=tracker_path is not None,
-                require_worktree=tracker_path is not None,
+                require_branch=tracker_path is not None and not staged_verified_maintenance,
+                require_worktree=tracker_path is not None and not staged_verified_maintenance,
             )
 
         CLAIMS_DIR.mkdir(parents=True, exist_ok=True)

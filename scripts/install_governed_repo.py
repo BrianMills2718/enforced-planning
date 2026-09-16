@@ -834,6 +834,71 @@ def _apply_file_writes(file_writes: dict[Path, str]) -> None:
             path.chmod(0o755)
 
 
+def _planned_write_paths(
+    repo_root: Path,
+    file_writes: dict[Path, str],
+    *,
+    agents_refresh_needed: bool,
+) -> list[str]:
+    """Return actual repository-relative targets, independent of action labels."""
+
+    resolved_root = repo_root.resolve()
+    planned: set[str] = set()
+    for path in file_writes:
+        try:
+            relative = path.resolve(strict=False).relative_to(resolved_root)
+        except ValueError as exc:
+            raise RuntimeError(f"installer write target escapes repo root: {path}") from exc
+        planned.add(relative.as_posix())
+    if agents_refresh_needed:
+        planned.add("AGENTS.md")
+    return sorted(planned)
+
+
+def _write_path_is_covered(path: str, owned_paths: tuple[str, ...] | list[str]) -> bool:
+    """Return whether one planned target is inside a declared write reservation."""
+
+    return any(owned == "." or path == owned or path.startswith(f"{owned}/") for owned in owned_paths)
+
+
+def _native_claim_write_blockers(repo_root: Path, planned_write_paths: list[str]) -> list[str]:
+    """Fail closed when this native lane does not own every installer target."""
+
+    native_session_ids = {
+        f"{agent}:{value}"
+        for agent, env_key in coordination_claims.STRICT_NATIVE_SESSION_ENV_KEYS.items()
+        if (value := os.environ.get(env_key, "").strip())
+    }
+    if not native_session_ids:
+        return []
+    resolved_root = repo_root.resolve()
+    matching = [
+        claim
+        for claim in coordination_claims.list_claims()
+        if claim.is_live()
+        and claim.session_id in native_session_ids
+        and claim.worktree_path
+        and Path(claim.worktree_path).expanduser().resolve(strict=False) == resolved_root
+    ]
+    if not matching:
+        return []
+    if len(matching) != 1:
+        scopes = ", ".join(sorted(claim.scope for claim in matching))
+        return [f"installer write authority is ambiguous across native claims: {scopes}"]
+    claim = matching[0]
+    uncovered = [
+        path
+        for path in planned_write_paths
+        if not _write_path_is_covered(path, claim.write_paths)
+    ]
+    if not uncovered:
+        return []
+    return [
+        "installer planned write paths exceed the current native claim "
+        f"{claim.primary_project()}:{claim.scope}: {', '.join(uncovered)}"
+    ]
+
+
 def _plan_git_hook_activation(repo_root: Path) -> tuple[str | None, str | None]:
     """Plan safe activation of the versioned ``hooks/`` directory."""
 
@@ -1069,6 +1134,7 @@ def install_or_plan(
         hook_writes = {path: content for path, content in hook_writes.items() if path not in duplicate_hook_paths}
         file_writes.update(hook_writes)
 
+    agents_refresh_needed = False
     if (
         not worktree_only
         and not relationship_context_only
@@ -1082,12 +1148,21 @@ def install_or_plan(
                 (repo_root / "scripts" / "relationships.yaml").exists() or relationships_will_change
             ),
         )
-        if _needs_agents_refresh(
+        agents_refresh_needed = _needs_agents_refresh(
             pre_audit,
             relationships_will_change=relationships_will_change,
-        ):
+        )
+        if agents_refresh_needed:
             actions.extend(agent_actions)
         blockers.extend(agent_blockers)
+
+    planned_write_paths = _planned_write_paths(
+        repo_root,
+        file_writes,
+        agents_refresh_needed=agents_refresh_needed,
+    )
+    if write and not blockers:
+        blockers.extend(_native_claim_write_blockers(repo_root, planned_write_paths))
 
     applied_actions: list[str] = []
     post_audit = pre_audit
@@ -1105,10 +1180,7 @@ def install_or_plan(
                 and not coordination_messages_only
                 and not claim_projection_refresh_only
                 and not coordination_claims_only
-                and _needs_agents_refresh(
-                    pre_audit,
-                    relationships_will_change=relationships_will_change,
-                )
+                and agents_refresh_needed
             ):
                 applied_actions.append(_write_agents(repo_root))
             post_audit = audit_repo(
@@ -1130,6 +1202,7 @@ def install_or_plan(
         "coordination_claims_only_mode": coordination_claims_only,
         "actions": actions,
         "applied_actions": applied_actions,
+        "planned_write_paths": planned_write_paths,
         "scaffolded_files": scaffolded_files,
         "drift_files": drift_files,
         "blockers": blockers,
@@ -1149,6 +1222,14 @@ def _print_human(payload: dict[str, Any]) -> None:
             print(f"  - {action}")
     else:
         print("Planned actions: none")
+
+    planned_write_paths = payload["planned_write_paths"]
+    if planned_write_paths:
+        print("Planned write paths:")
+        for path in planned_write_paths:
+            print(f"  - {path}")
+    else:
+        print("Planned write paths: none")
 
     blockers = payload["blockers"]
     if blockers:

@@ -232,6 +232,7 @@ def test_relative_nested_target_is_resolved_from_root_cwd(tmp_path: Path) -> Non
         "pwd",
         "cat README.md",
         "ls -la",
+        "ps -p 3050492 -o pid=,ppid=,stat=,etime=,args=",
         "rg needle .",
         "git status --short",
         "sed -n 1,20p README.md",

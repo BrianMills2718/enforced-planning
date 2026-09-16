@@ -84,6 +84,7 @@ _SIMPLE_READ_ONLY_COMMANDS = frozenset(
         "jq",
         "ls",
         "printf",
+        "ps",
         "pwd",
         "readlink",
         "realpath",

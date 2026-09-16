@@ -131,6 +131,8 @@ claim is durable. Raw Make or shell escape forms are not authority surfaces.
 A clean lane whose branch still equals its retained start revision remains
 active if unrelated work advances the default branch before its first edit; it
 has no task commit to disposition.
+Both the canonical lifecycle checker and the fast pre-write projection enforce
+this same start-revision exception.
 
 ### Brand-new local repository
 

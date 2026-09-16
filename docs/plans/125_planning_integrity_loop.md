@@ -221,7 +221,8 @@ accepted current schema at the tracker-attachment boundary, legacy v1-v5
 target worktree from mutation authority until an atomic strict-subset narrow.
 An untouched lane retains its start revision as evidence that it has no task
 commit to disposition, even when unrelated default-branch progress contains
-that revision.
+that revision. The full registry checker and fast pre-write checker must agree
+on this exception.
 The same current runtime keeps housekeeping and observation bounded: completed
 claim pruning applies optional agent/project/scope selectors before archival,
 and claimless Bash admission accepts only fully classified read-only command

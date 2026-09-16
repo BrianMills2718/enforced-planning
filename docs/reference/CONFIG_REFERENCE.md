@@ -130,7 +130,8 @@ tracker contract.
 An unused claimed lane remains active when its branch tip is exactly its retained
 `start_revision`, even if an unrelated default-branch commit makes that tip an
 ancestor of the current default. This is lifecycle identity, not a configurable
-policy: no task work exists to close.
+policy: no task work exists to close. Both claim-health implementations compare
+the lane tip with its retained start revision before classifying it as merged.
 
 Pre-write enforcement is explicit and staged. Use `observe` first and retain
 latency/decision receipts. Promote to `enforce` only after representative

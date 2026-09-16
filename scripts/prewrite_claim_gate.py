@@ -942,6 +942,65 @@ def _parse_hook_feedback_report_command(command: str) -> None:
         raise ValueError("hook feedback arguments do not match the read-only report grammar") from exc
 
 
+def _parse_coordination_inspection_command(command: str) -> None:
+    """Admit only exact read-only coordination-claim inspections claimlessly."""
+
+    if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
+        raise ValueError("coordination inspection cannot compose shell operations")
+    tokens = shlex.split(command)
+    if len(tokens) < 3 or tokens[0] != "/usr/bin/python3":
+        raise ValueError("coordination inspection must use canonical Python")
+    supplied_script = Path(tokens[1]).expanduser()
+    if not supplied_script.is_absolute():
+        raise ValueError("coordination inspection script must be absolute")
+    supplied_script = supplied_script.resolve()
+    canonical_script = (REPO_ROOT / "scripts" / "check_coordination_claims.py").resolve()
+    if supplied_script != canonical_script and not _same_file_digest(
+        supplied_script, canonical_script
+    ):
+        raise ValueError("coordination inspection script does not match the installed control revision")
+
+    parser = argparse.ArgumentParser(add_help=False)
+    operation = parser.add_mutually_exclusive_group(required=True)
+    operation.add_argument("--check", action="store_true")
+    operation.add_argument("--list", action="store_true")
+    operation.add_argument("--list-stale", action="store_true")
+    parser.add_argument("--project")
+    parser.add_argument("--json", action="store_true")
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            parser.parse_args(tokens[2:])
+    except SystemExit as exc:
+        raise ValueError("coordination inspection arguments are not read-only") from exc
+
+
+def _parse_skill_feedback_log_command(command: str) -> None:
+    """Admit one bounded qualitative skill-feedback append claimlessly."""
+
+    if "\n" in command or "\r" in command or any(char in command for char in ";&|<>`$"):
+        raise ValueError("skill feedback command cannot compose shell operations")
+    tokens = shlex.split(command)
+    if len(tokens) < 3 or tokens[0] not in {"python3", "/usr/bin/python3"}:
+        raise ValueError("skill feedback command must use Python directly")
+    supplied_script = Path(tokens[1]).expanduser().resolve()
+    canonical_script = (Path.home() / ".claude" / "skill-feedback" / "log.py").resolve()
+    if supplied_script != canonical_script:
+        raise ValueError("skill feedback command does not use the canonical logger")
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--client", choices=("claude", "codex"), default="claude")
+    parser.add_argument("--skill", required=True)
+    parser.add_argument("--rating", type=int, choices=range(1, 6), required=True)
+    parser.add_argument("--task")
+    parser.add_argument("--friction", required=True)
+    parser.add_argument("--fix", required=True)
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            parser.parse_args(tokens[2:])
+    except SystemExit as exc:
+        raise ValueError("skill feedback arguments do not match the bounded logger grammar") from exc
+
+
 def _parse_maintenance_worktree_make_command(command: str, *, client: str) -> None:
     """Validate the exact self-claiming maintenance Make entrypoint.
 
@@ -1147,6 +1206,17 @@ def _special_unclaimed_command(
         pass
     try:
         _parse_hook_feedback_report_command(command)
+        return "hook_feedback_report"
+    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
+        _ = exc
+    try:
+        _parse_coordination_inspection_command(command)
+        # Compatibility classification: both are bounded observational controls.
+        return "hook_feedback_report"
+    except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
+        _ = exc
+    try:
+        _parse_skill_feedback_log_command(command)
         return "hook_feedback_report"
     except Exception as exc:  # noqa: BLE001 -- try the remaining strict control grammars
         _ = exc

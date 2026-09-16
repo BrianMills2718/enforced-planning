@@ -272,6 +272,112 @@ def test_session_ended_owner_closeout_is_claimless_control_command(
     assert classification == "native_closeout"
 
 
+def test_coordination_list_is_claimless_but_mutation_is_not(tmp_path: Path) -> None:
+    """Zero-claim sessions may inspect coordination state, never mutate it."""
+
+    script = prewrite_claim_gate.REPO_ROOT / "scripts" / "check_coordination_claims.py"
+    read_command = f"/usr/bin/python3 {script} --list --project project-meta --json"
+    mutation_command = f"/usr/bin/python3 {script} --prune-stale --project project-meta --json"
+
+    assert (
+        prewrite_claim_gate._special_unclaimed_command(
+            read_command,
+            client="claude-code",
+            claims_dir=tmp_path / "claims",
+            projection_path=tmp_path / "projection.json",
+            subagent_event=False,
+            native_session=CLAIM_SESSION,
+        )
+        == "hook_feedback_report"
+    )
+    assert not prewrite_claim_gate._special_unclaimed_command(
+        mutation_command,
+        client="claude-code",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=CLAIM_SESSION,
+    )
+
+
+def test_skill_feedback_append_is_claimless_but_hook_mode_is_not(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Qualitative feedback remains possible after closeout without admitting stdin hooks."""
+
+    home = tmp_path / "home"
+    logger = home / ".claude" / "skill-feedback" / "log.py"
+    logger.parent.mkdir(parents=True)
+    logger.write_text("# logger\n", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    feedback_command = (
+        f"/usr/bin/python3 {logger} --client codex --skill audit --rating 4 "
+        "--task 'review a repair' --friction 'closeout blocked feedback' "
+        "--fix 'admit the bounded logger'"
+    )
+    hook_command = f"/usr/bin/python3 {logger} --client codex --from-hook"
+
+    assert (
+        prewrite_claim_gate._special_unclaimed_command(
+            feedback_command,
+            client="codex",
+            claims_dir=tmp_path / "claims",
+            projection_path=tmp_path / "projection.json",
+            subagent_event=False,
+            native_session="codex:test",
+        )
+        == "hook_feedback_report"
+    )
+    assert not prewrite_claim_gate._special_unclaimed_command(
+        hook_command,
+        client="codex",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session="codex:test",
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "reason_code"),
+    [
+        (
+            f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'check_coordination_claims.py'} "
+            "--list --project project-meta --json",
+            "hook_feedback_report_command",
+        ),
+        (
+            f"/usr/bin/python3 {Path.home() / '.claude' / 'skill-feedback' / 'log.py'} "
+            "--client codex --skill audit --rating 4 --task 'review a repair' "
+            "--friction 'closeout blocked feedback' --fix 'admit the bounded logger'",
+            "hook_feedback_report_command",
+        ),
+    ],
+)
+def test_zero_claim_session_admits_typed_inspection_and_feedback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    reason_code: str,
+) -> None:
+    """The full gate admits post-closeout inspection and feedback from a workspace root."""
+
+    workspace = tmp_path / "code"
+    workspace.mkdir()
+    code, decision = _run_gate(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=workspace, tool="Bash", tool_input={"command": command}),
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == reason_code
+
+
 # --------------------------------------------------------------------------
 # The gate must not become a no-op: governed targets still enforce.
 # --------------------------------------------------------------------------

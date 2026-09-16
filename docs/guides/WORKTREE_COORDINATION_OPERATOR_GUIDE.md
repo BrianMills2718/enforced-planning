@@ -86,6 +86,15 @@ when exactly one healthy claim makes its target unambiguous; with zero or
 multiple healthy claims it fails closed. This is target-aware claim resolution,
 not a second portfolio or lane registry.
 
+When multiple healthy claims make an unqualified mutation ambiguous, the denial
+prints the exact installed `session_end.py` command bound to the authenticated
+native session. That command retires every live claim owned by that runtime as
+coordination metadata; it does not remove a worktree, branch, commit, or working
+file. Run it only after preserving any current repository changes, then bootstrap
+the one exact replacement lane needed for the next mutation. Do not substitute a
+consumer repository's `make session-end`: claimless recovery admits only the
+installed absolute script whose client and session identity match the hook.
+
 Subagents use their own `agent_id`, targets, and claims and inherit none of the
 parent's mutation authority.
 

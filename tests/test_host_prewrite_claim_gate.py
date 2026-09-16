@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -2359,6 +2360,31 @@ def test_explicit_host_mode_routes_one_session_across_two_claimed_repositories(
     assert code == 2
     assert decision["decision"] == "deny"
     assert decision["reason_code"] == "ambiguous_exact_session_target"
+    expected_command = shlex.join(
+        [
+            "/usr/bin/python3",
+            str(prewrite_claim_gate.REPO_ROOT / "scripts" / "session_end.py"),
+            "--agent",
+            "claude-code",
+            "--session-id",
+            SESSION,
+            "--reason",
+            "retire ambiguous native-session claims before exact rebootstrap",
+            "--json",
+        ]
+    )
+    assert decision["recovery"].endswith(f"Command: {expected_command}")
+    assert (
+        prewrite_claim_gate._special_unclaimed_command(
+            expected_command,
+            client="claude-code",
+            claims_dir=claims_dir,
+            projection_path=tmp_path / "projection.json",
+            subagent_event=False,
+            native_session=SESSION,
+        )
+        == "native_closeout"
+    )
 
 
 def test_explicit_host_mode_denies_unclaimed_mutating_bash_from_workspace_root(

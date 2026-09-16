@@ -26,6 +26,12 @@ coordination. Other documentation has narrower roles:
 | Worktree lifecycle | `make worktree*`, `scripts/meta/check_coordination_claims.py`, and `enforced_planning/worktree_lifecycle.yaml` |
 | Publication gate | `make push-check` / `scripts/meta/check_push_safety.py` |
 
+The installed pre-write gate admits the exact read-only `--check`, `--list`, and
+`--list-stale` claim commands even when the native session has no live claim.
+It also admits the bounded qualitative skill-feedback logger so closeout can
+still report control friction. Mutation-capable claim operations and composed
+shell commands continue to require ordinary claim authority.
+
 The older repo-local `.claude/active-work.yaml` plus legacy
 `scripts/meta/worktree-coordination/check_claims.py` surface may still be
 present in some repos for compatibility. They are not the canonical

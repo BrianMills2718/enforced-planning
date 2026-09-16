@@ -17,6 +17,7 @@ from enforced_planning.prewrite_claim_projection import write_projection
 from scripts import prewrite_claim_gate
 
 SESSION_ID = "claude-code:pw06-recovery"
+INSTALLED_GATE = Path.home() / ".codex/runtime/enforced-planning/scripts/prewrite_claim_gate.py"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -134,7 +135,6 @@ def test_ambiguous_session_denial_supplies_executable_exact_recovery(
         monkeypatch=monkeypatch,
         capsys=capsys,
     )
-
     assert code == 2
     assert decision["reason_code"] == "ambiguous_exact_session_target", decision
     recovery = decision["recovery"]
@@ -152,6 +152,58 @@ def test_ambiguous_session_denial_supplies_executable_exact_recovery(
         == "native_closeout"
     )
 
+
+def test_installed_combined_gate_supplies_the_same_exact_recovery(tmp_path: Path) -> None:
+    """The deployed adapter must expose the repaired transition, not only source."""
+
+    if not INSTALLED_GATE.is_file():
+        pytest.skip("installed combined gate is unavailable")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _claimed_repo(workspace, claims_dir, "first")
+    _claimed_repo(workspace, claims_dir, "second")
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+    payload = {
+        "session_id": "pw06-recovery",
+        "cwd": str(workspace),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "touch ambiguous-write"},
+    }
+
+    completed = subprocess.run(
+        [
+            "/usr/bin/python3",
+            str(INSTALLED_GATE),
+            "--client",
+            "claude-code",
+            "--mode",
+            "enforce",
+            "--claims-dir",
+            str(claims_dir),
+            "--projection-path",
+            str(projection_path),
+            "--receipt-path",
+            str(tmp_path / "receipts.jsonl"),
+            "--outcome-receipt-path",
+            str(tmp_path / "outcome-receipts.jsonl"),
+            "--json",
+        ],
+        input=json.dumps(payload),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 2, completed.stderr
+    assert not completed.stderr
+    decision = json.loads(completed.stdout)
+    assert decision["reason_code"] == "ambiguous_exact_session_target"
+    assert "Command: /usr/bin/python3" in decision["recovery"]
+    assert "/scripts/session_end.py" in decision["recovery"]
+    assert not (workspace / "ambiguous-write").exists()
 
 def test_ended_claim_resumes_one_lane_and_preserves_edit_boundaries(
     tmp_path: Path,

@@ -35,10 +35,26 @@
     "result": "Both PW-06 probes passed and all 218 combined host-gate checks passed.",
     "verified_transitions": [
       "The ambiguous-target denial contains an exact installed session_end.py command bound to the authenticated native session, and the same gate classifies that command as native_closeout.",
+      "The deployed Codex runtime adapter at ~/.codex/runtime/enforced-planning/scripts/prewrite_claim_gate.py has SHA-256 853f9824a499a4ad0bfc910b2c2d048c658106553dfd02ca20cda3e19ed1b9db, matching source, and returned the same recovery command for the synthetic Claude Code event shape.",
       "Two healthy claims become session-ended without deleting their worktrees; one retained lane resumes under a successor native session while the other stays ended.",
       "The resumed lane admits its exact README edit, denies an out-of-scope target, denies a foreign-session edit, retains only the authorized diff, and returns to session-ended state."
     ],
     "evidence_limit": "The retained-lane lifecycle calls and file mutation are subprocess/supporting evidence, not yet an authentic end-to-end Claude Code run through installed hooks."
+  },
+  "authentic_clients": {
+    "claude_code": {
+      "session_id": "b9a47612-b536-48c2-887c-e3dc0b51b342",
+      "result": "pass for the negative control",
+      "observed": "Claude Code ran installed session_status.py, then its attempted canonical-checkout marker write was denied and an independent filesystem check confirmed the marker was absent.",
+      "cost_usd": 0.2630644
+    },
+    "codex": {
+      "session_id": "codex:01a0a817-3d9e-79f0-b409-4ca9213f2b89",
+      "result": "fail for the negative control",
+      "observed": "An exec_command touch created PW06_CODEX_DENIED_MARKER at the claimed worktree root even though that path was outside the claim's declared write_paths. The marker was immediately removed and absence rechecked.",
+      "diagnosis": "hooks/list reported the prewrite hook enabled and trusted but matched only Bash|apply_patch. The authentic tool surface is exec_command; no new prewrite receipt for this session was emitted. Synthetic Bash-shaped payloads therefore tested a route the live Codex command did not take.",
+      "concern": "https://github.com/BrianMills2718/project-meta/issues/2067"
+    }
   },
   "acceptance": {
     "status": "not accepted",

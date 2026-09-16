@@ -1,4 +1,11 @@
+---
+plan_id: "enforced-planning#135"
+dependencies: []
+dependencies_reviewed: "2026-09-15"
+---
 # Design: contest/rebuttal loop for the correction-mode gate
+
+**Status:** Design complete — Slice 1 (schema + deterministic re-fire check) is implementation-ready; Slices 2-3 await the human decision and canary run named in section 9. Implementation authority stays with Plan #135.
 
 **Goal:** `design-contest-rebuttal-loop` (roadmap handoff:
 [`135_correction_learning_gate_roadmap_goal_handoff.json`](135_correction_learning_gate_roadmap_goal_handoff.json))

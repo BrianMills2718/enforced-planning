@@ -895,8 +895,12 @@ def _argv_is_read_only(argv: tuple[str, ...]) -> bool:
         return not any(token in mutating for token in argv[1:])
     if executable == "sort":
         return _sort_command_is_read_only(argv)
-    if executable == "gh":
-        return _gh_command_is_read_only(argv)
+    # Organization-owned GitHub repositories must use the configured wrapper
+    # rather than bare ``gh``.  It preserves the same CLI grammar and only
+    # selects a separate credential/configuration, so classify its query forms
+    # with the same conservative rules as bare GitHub CLI commands.
+    if executable in {"gh", "gh-insidesuccess"}:
+        return _gh_command_is_read_only(("gh", *argv[1:]))
     return executable == "git" and _git_command_is_read_only(argv)
 
 

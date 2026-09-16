@@ -51,6 +51,52 @@ def test_started_then_completed_receipts_are_correlatable(tmp_path: Path) -> Non
     assert completed["elapsed_ms"] >= 0
 
 
+def test_completed_receipt_accepts_bounded_scalar_details(tmp_path: Path) -> None:
+    invocation = start_hook_invocation(
+        hook_name="example-hook",
+        hook_version="7",
+        script_path=Path(__file__),
+        payload={"session_id": "private-session", "hook_event_name": "PostToolUse"},
+        receipt_root=tmp_path,
+    )
+
+    invocation.complete(
+        decision="allow",
+        reason_code="no_exact_session_target",
+        details={"status": "not_applicable", "attempt": 1, "visible": False},
+    )
+
+    completed = json.loads((invocation.receipt_dir / "completed.json").read_text())
+    assert completed["details"] == {
+        "status": "not_applicable",
+        "attempt": 1,
+        "visible": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "details, message",
+    [
+        ({"nested": {"raw": "payload"}}, "must be a scalar"),
+        ({"long": "x" * 257}, "exceeds 256 characters"),
+        ({f"key-{index}": index for index in range(13)}, "exceed 12 fields"),
+    ],
+)
+def test_completed_receipt_rejects_unbounded_details(
+    tmp_path: Path, details: dict[str, object], message: str
+) -> None:
+    invocation = start_hook_invocation(
+        hook_name="example-hook",
+        hook_version="7",
+        script_path=Path(__file__),
+        payload={"session_id": "private-session", "hook_event_name": "PostToolUse"},
+        receipt_root=tmp_path,
+    )
+
+    with pytest.raises(HookReceiptError, match=message):
+        invocation.complete(decision="allow", reason_code="test", details=details)
+
+
 def test_hook_feedback_report_groups_recurrence_and_steps_down(tmp_path: Path) -> None:
     for hook_run_id in ("stop:1:/config.toml", "stop:2:/config.toml"):
         invocation = start_hook_invocation(

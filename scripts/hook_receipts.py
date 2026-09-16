@@ -27,6 +27,9 @@ DEFAULT_SETTINGS_PATHS = (
 DEFAULT_TIMEOUT_BUDGET_FRACTION = 0.6
 # Claude Code applies this timeout (seconds) when a hook entry declares none.
 HARNESS_DEFAULT_TIMEOUT_SECONDS = 60
+MAX_DETAIL_FIELDS = 12
+MAX_DETAIL_KEY_LENGTH = 64
+MAX_DETAIL_STRING_LENGTH = 256
 
 COMPLETED_RECEIPT_FIELDS: dict[str, type | tuple[type, ...]] = {
     "schema_version": int,
@@ -44,6 +47,36 @@ COMPLETED_RECEIPT_FIELDS: dict[str, type | tuple[type, ...]] = {
 
 class HookReceiptError(ValueError):
     """Raised when persisted hook evidence is incomplete or malformed."""
+
+
+def _normalize_details(details: dict[str, Any] | None) -> dict[str, str | int | float | bool | None] | None:
+    """Validate a small, flat diagnostic map suitable for the shared index.
+
+    Details are deliberately not an arbitrary payload escape hatch: nested
+    values, long strings, and unbounded key sets would recreate the private,
+    expensive source-event store inside its content-free receipt projection.
+    """
+
+    if details is None:
+        return None
+    if not isinstance(details, dict):
+        raise HookReceiptError("receipt details must be a mapping")
+    if len(details) > MAX_DETAIL_FIELDS:
+        raise HookReceiptError(f"receipt details exceed {MAX_DETAIL_FIELDS} fields")
+    normalized: dict[str, str | int | float | bool | None] = {}
+    for key, value in details.items():
+        if not isinstance(key, str) or not key or len(key) > MAX_DETAIL_KEY_LENGTH:
+            raise HookReceiptError("receipt detail keys must be non-empty bounded strings")
+        if not isinstance(value, (str, int, float, bool)) and value is not None:
+            raise HookReceiptError(f"receipt detail {key!r} must be a scalar")
+        if isinstance(value, str) and len(value) > MAX_DETAIL_STRING_LENGTH:
+            raise HookReceiptError(
+                f"receipt detail {key!r} exceeds {MAX_DETAIL_STRING_LENGTH} characters"
+            )
+        if isinstance(value, float) and not math.isfinite(value):
+            raise HookReceiptError(f"receipt detail {key!r} must be finite")
+        normalized[key] = value
+    return normalized
 
 
 PREWRITE_EVENT_FIELDS: dict[str, type] = {
@@ -178,7 +211,15 @@ class HookInvocation:
     def receipt_id(self) -> str:
         return str(self.base_payload["receipt_id"])
 
-    def complete(self, *, decision: str, reason_code: str, exit_status: int = 0) -> Path:
+    def complete(
+        self,
+        *,
+        decision: str,
+        reason_code: str,
+        exit_status: int = 0,
+        details: dict[str, Any] | None = None,
+    ) -> Path:
+        normalized_details = _normalize_details(details)
         payload = {
             **self.base_payload,
             "phase": "completed",
@@ -188,6 +229,8 @@ class HookInvocation:
             "elapsed_ms": round((time.monotonic_ns() - self.started_ns) / 1_000_000, 3),
             "observed_at": datetime.now(UTC).isoformat(),
         }
+        if normalized_details is not None:
+            payload["details"] = normalized_details
         path = self.receipt_dir / "completed.json"
         _atomic_write(path, payload)
         return path
@@ -263,6 +306,10 @@ def validate_completed_receipt(payload: Any, path: Path) -> str | None:
             return f"invalid {field_name!r} (got {type(value).__name__})"
     if payload["record_type"] != "hook_invocation_receipt" or payload["phase"] != "completed":
         return "invalid contract identity (record_type/phase)"
+    try:
+        _normalize_details(payload.get("details"))
+    except HookReceiptError as exc:
+        return str(exc)
     if path.parent.name != payload["receipt_id"]:
         return "path/identity mismatch (directory name != receipt_id)"
     return None

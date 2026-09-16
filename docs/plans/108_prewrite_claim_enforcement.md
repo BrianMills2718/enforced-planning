@@ -694,7 +694,7 @@ action-envelope schema, policy language, registry, or recovery command.
 | Claim absent, ended, or unhealthy | Help/status remains available; exact self-owned recovery reaches its handler; ordinary writes still require valid ownership. Deny borrowed identity, storage overrides, and appended shell mutations. |
 | Registry writer contended or unavailable | Diagnostic reads report unavailable state explicitly. No new write authority is invented. Recovery cannot depend on the healthy claim it repairs; contention has a bounded return and a concrete retry condition. After releasing the test lock, the same operation succeeds without duplicate ownership. |
 | Interrupted claim/tracker transition | Validate before mutation; on interruption retain recoverable state and report partial completion. Retry converges to one consistent claim/tracker pair without losing the original plan reference or user files. |
-| Required document exceeds an input bound | Preserve the required authority and full-read obligation. A bounded excerpt is labeled partial and cannot alone prove full reading. Verify the oversized-document path reaches an explicit complete-read or chunked-read result; invalid/unreadable input remains visible. |
+| Required document exceeds an input bound | Verify the full document identity and readability, preserve it as required authority, and inject an explicitly bounded excerpt instead of silently skipping it. Verify the live gate clears, the excerpt identifies its bound and offers targeted follow-up reads, and invalid/unreadable input remains visible. Do not claim the injected excerpt proves the agent read the entire document. |
 | Durable write succeeds but cleanup fails | Report durable commit, cleanup status, actual residual files, and retry action separately. A retry must neither duplicate the logical write nor discard unrelated index/worktree changes. Use the Project Meta learning writer as the owning consumer for this case. |
 | Semantic service is unavailable, invalid, or uncertain | During the advisory experiment below, record failure/abstention without adding a new blocking condition. Existing deterministic authority checks continue to apply. No model inference occurs synchronously inside Stop. |
 
@@ -747,7 +747,8 @@ the experiment is not yet permission to activate blocking.
 
 The adviser receives user authority, the exact action, and trusted state;
 assistant persuasion is not authority. It may request missing evidence through
-bounded dialogue (at most two clarification rounds per decision), then emits
+bounded dialogue whose round limit is declared before each experiment from its
+latency/cost budget and fixture needs, then emits
 `allow`, `deny`, `need_evidence`, or `abstain` as an advisory verdict. An absent
 answer or exhausted dialogue produces `abstain`. No response, malformed output,
 or model failure can authorize a write. Any future blocking proposal must

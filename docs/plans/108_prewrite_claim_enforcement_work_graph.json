@@ -990,7 +990,7 @@
         {
           "id": "PW06-A2",
           "criterion": "Exercise the PW-06 failure table with retries that converge to consistent ownership, retain user work, preserve required reading, and distinguish durable success from cleanup failure; record any unavailable client as unverified.",
-          "evidence_required": ["Contention and interruption replays", "Oversized required-document complete-reading evidence", "Durable-write/cleanup-failure residual-state readback", "Affected tests, source-owner dogfood, and installed-consumer evidence"],
+          "evidence_required": ["Contention and interruption replays", "Oversized required-document identity/readability verification, bounded-excerpt output, and live gate-clear evidence", "Durable-write/cleanup-failure residual-state readback", "Affected tests, source-owner dogfood, and installed-consumer evidence"],
           "negative_control": "Unavailable authority never admits a new ordinary write, duplicate retry work is detected, and unavailable/uncertain semantic advice cannot add a blocking condition or grant authority."
         }
       ],

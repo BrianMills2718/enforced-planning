@@ -1,10 +1,10 @@
 {
   "active_slice": {
-    "description": "Exercise durable-write cleanup after a partial success so no staged duplicate or stale lock can masquerade as a clean completion",
-    "next_action": "Reproduce the learning-writer index-lock incident in a disposable repository, then verify a bounded repair leaves one durable entry, no staged duplicate, and a truthful result.",
+    "description": "Exercise semantic-service failure behavior so advisory model outages cannot become opaque hard blocks",
+    "next_action": "Locate the semantic hook service boundary, force an unavailable/error response through its authentic adapter, and verify the configured fail-open or fail-closed disposition is explicit and recoverable.",
     "requires_external_action": false,
     "requires_spend": false,
-    "slice_id": "pw06-durable-write-cleanup",
+    "slice_id": "pw06-semantic-service-failure",
     "status": "executing",
     "target_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4"
   },
@@ -29,7 +29,7 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 5,
+  "cursor_revision": 6,
   "failure_state": {
     "boundary": "current Codex app/API exec command prewrite coverage",
     "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
@@ -85,6 +85,13 @@
       "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#contention_interruption",
       "kind": "authentic_result",
       "observation_id": "pw06-bounded-contention-interruption",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "durable register publication and staged-duplicate cleanup under Git index-lock failure",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#durable_write_cleanup",
+      "kind": "authentic_result",
+      "observation_id": "pw06-durable-write-cleanup",
       "outcome": "pass"
     }
   ],

@@ -1504,6 +1504,8 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
                 default_sha = _run_git(repo_root, ["rev-parse", default_ref])
                 if branch_sha.returncode != 0 or default_sha.returncode != 0:
                     return issues
+                if claim.start_revision and branch_sha.stdout.strip() == claim.start_revision:
+                    return issues
                 if branch_sha.stdout.strip() == default_sha.stdout.strip():
                     return issues
                 merged_check = _run_git(

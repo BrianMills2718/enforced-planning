@@ -1277,6 +1277,9 @@ def _dynamic_claim_issues(claim: dict[str, Any]) -> tuple[str, ...]:
         revision_lines = revisions.splitlines() if revisions is not None else []
         if len(revision_lines) != 2 or revision_lines[0] == revision_lines[1]:
             return tuple(dict.fromkeys(issues))
+        start_revision = claim.get("start_revision")
+        if isinstance(start_revision, str) and revision_lines[0] == start_revision:
+            return tuple(dict.fromkeys(issues))
         merged = subprocess.run(
             ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", branch_ref, default[1]],
             capture_output=True,

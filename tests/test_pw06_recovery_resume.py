@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 from pathlib import Path
@@ -203,6 +205,66 @@ def test_installed_combined_gate_supplies_the_same_exact_recovery(tmp_path: Path
     assert decision["reason_code"] == "ambiguous_exact_session_target"
     assert "Command: /usr/bin/python3" in decision["recovery"]
     assert "/scripts/session_end.py" in decision["recovery"]
+    assert not (workspace / "ambiguous-write").exists()
+
+
+def test_installed_gate_keeps_deterministic_authority_when_model_service_is_absent(
+    tmp_path: Path,
+) -> None:
+    """Advisory model availability cannot add a block or grant authority."""
+    if not INSTALLED_GATE.is_file():
+        pytest.skip("installed combined gate is unavailable")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _claimed_repo(workspace, claims_dir, "first")
+    _claimed_repo(workspace, claims_dir, "second")
+    projection_path = tmp_path / "projection.json"
+    write_projection(claims_dir=claims_dir, projection_path=projection_path)
+    payload = {
+        "session_id": "pw06-recovery",
+        "cwd": str(workspace),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "touch ambiguous-write"},
+    }
+    env = os.environ.copy()
+    for key in ("OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"):
+        env.pop(key, None)
+
+    started = time.monotonic()
+    completed = subprocess.run(
+        [
+            "/usr/bin/python3",
+            str(INSTALLED_GATE),
+            "--client",
+            "claude-code",
+            "--mode",
+            "enforce",
+            "--claims-dir",
+            str(claims_dir),
+            "--projection-path",
+            str(projection_path),
+            "--receipt-path",
+            str(tmp_path / "receipts.jsonl"),
+            "--outcome-receipt-path",
+            str(tmp_path / "outcome-receipts.jsonl"),
+            "--json",
+        ],
+        input=json.dumps(payload),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    elapsed = time.monotonic() - started
+
+    assert completed.returncode == 2, completed.stderr
+    decision = json.loads(completed.stdout)
+    assert decision["reason_code"] == "ambiguous_exact_session_target"
+    assert "Command: /usr/bin/python3" in decision["recovery"]
+    assert elapsed < 2.0, "the synchronous gate appears to wait on an external service"
     assert not (workspace / "ambiguous-write").exists()
 
 def test_ended_claim_resumes_one_lane_and_preserves_edit_boundaries(

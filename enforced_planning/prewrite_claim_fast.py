@@ -628,6 +628,14 @@ _LIFECYCLE_IDENTIFIER_OPTIONS = {
     "--session-id",
 }
 _LIFECYCLE_PATH_OPTIONS = {"--worktree-path"}
+_LIFECYCLE_SCRIPT_PATHS = frozenset(
+    {
+        "scripts/session_close.py",
+        "scripts/session_finish.py",
+        "scripts/meta/session_close.py",
+        "scripts/meta/session_finish.py",
+    }
+)
 _MAKE_LIFECYCLE_IDENTIFIER_VARIABLES = {
     "BRANCH",
     "SESSION_NOTE",
@@ -644,6 +652,21 @@ def _path_shaped(value: str) -> bool:
     return value.startswith(("/", "~", "./", "../")) or "/" in value
 
 
+def _is_trusted_lifecycle_script(value: str) -> bool:
+    """Accept canonical relative paths and this runtime's absolute scripts."""
+
+    if value in _LIFECYCLE_SCRIPT_PATHS:
+        return True
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        return False
+    runtime_scripts = Path(__file__).resolve().parents[1] / "scripts"
+    return candidate.resolve() in {
+        runtime_scripts / relative.removeprefix("scripts/")
+        for relative in _LIFECYCLE_SCRIPT_PATHS
+    }
+
+
 def _lifecycle_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
     """Return only filesystem operands from a direct lifecycle invocation.
 
@@ -655,12 +678,7 @@ def _lifecycle_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
 
     if len(argv) < 2 or Path(argv[0]).name not in {"python", "python3", "python3.12"}:
         return None
-    if argv[1] not in {
-        "scripts/session_close.py",
-        "scripts/session_finish.py",
-        "scripts/meta/session_close.py",
-        "scripts/meta/session_finish.py",
-    }:
+    if not _is_trusted_lifecycle_script(argv[1]):
         return None
     paths: list[str] = []
     index = 2

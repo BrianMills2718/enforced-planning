@@ -787,6 +787,53 @@ def _bash_is_explicitly_bound(command: str, worktree: Path) -> bool:
     return _bash_explicit_worktree(command) == worktree
 
 
+def _canonical_sync_command_targets_repo(
+    command: str,
+    *,
+    worktree: Path,
+    repo_root: Path,
+) -> bool:
+    """Recognize the exact installed canonical-checkout sync operation.
+
+    A linked-worktree claim deliberately owns writes while the canonical
+    checkout is locked.  ``canonical_lock.py --sync`` is the one sanctioned
+    operation that must cross that physical worktree boundary: it temporarily
+    unlocks the canonical checkout, performs an exact fast-forward, and always
+    restores the lock.  Keep this recognition narrower than general Python or
+    arbitrary out-of-worktree commands.
+    """
+
+    if _bash_target_is_unprovable(command):
+        return False
+    commands = _shell_commands(command)
+    if commands is None or len(commands) != 1:
+        return False
+    tokens = list(commands[0])
+    if len(tokens) < 7 or tokens[:2] != ["/usr/bin/env", "-C"]:
+        return False
+    if Path(tokens[2]).expanduser().resolve(strict=False) != worktree.resolve(strict=False):
+        return False
+    tokens = tokens[3:]
+    if len(tokens) not in {4, 5, 6} or tokens[0] != "/usr/bin/python3":
+        return False
+    script = Path(tokens[1]).expanduser().resolve(strict=False)
+    installed_scripts = {
+        (
+            Path.home()
+            / ".codex/runtime/enforced-planning/scripts/worktree-coordination/canonical_lock.py"
+        ).resolve(strict=False),
+        (
+            Path.home()
+            / ".claude/runtime/enforced-planning/scripts/worktree-coordination/canonical_lock.py"
+        ).resolve(strict=False),
+    }
+    if script not in installed_scripts or tokens[2] != "--sync":
+        return False
+    if Path(tokens[3]).expanduser().resolve(strict=False) != repo_root.resolve(strict=False):
+        return False
+    return len(tokens) == 4 or set(tokens[4:]).issubset({"--json", "--quiet"})
+
+
 def _session_status_command_is_read_only(argv: tuple[str, ...]) -> bool:
     """Recognize only the canonical Python-backed session-status operation."""
 
@@ -1532,7 +1579,17 @@ def evaluate_request_fast(
         )
         _record_receipt(receipt_path, result)
         return result
-    if outside_bash_paths:
+    raw_bash_command = request.get("bash_command")
+    sanctioned_canonical_sync = (
+        request.get("tool_name") == "Bash"
+        and isinstance(raw_bash_command, str)
+        and _canonical_sync_command_targets_repo(
+            raw_bash_command,
+            worktree=Path(context["worktree_path"]),
+            repo_root=Path(context["repo_root"]),
+        )
+    )
+    if outside_bash_paths and not sanctioned_canonical_sync:
         recovery = (
             "If this is inspection, split it into simple read-only commands without shell loops, "
             "substitutions, or redirection. Otherwise run the mutation inside the exact claimed "

@@ -148,6 +148,7 @@ class MaintenanceWorktreeRequest(_StrictRequest):
     branch: str = Field(min_length=1)
     claim_type: Literal["program"]
     write_paths: list[str] = Field(default_factory=lambda: ["."])
+    new_files: list[str] = Field(default_factory=list, max_length=16)
 
     @field_validator("write_paths")
     @classmethod
@@ -181,6 +182,27 @@ class MaintenanceWorktreeRequest(_StrictRequest):
             or "//" in self.branch
         ):
             raise ValueError("branch is not a safe literal Git branch")
+        if self.new_files:
+            if self.operation != "maintenance_worktree":
+                raise ValueError("new_files is restricted to direct maintenance worktrees")
+            if self.write_paths == ["."]:
+                raise ValueError("new_files requires final narrow write_paths")
+            if len(self.new_files) != len(set(self.new_files)):
+                raise ValueError("new_files must contain unique literal paths")
+            for value in self.new_files:
+                path = Path(value)
+                if (
+                    not value
+                    or value != value.strip()
+                    or path.is_absolute()
+                    or len(path.parts) != 1
+                    or path.as_posix() != value
+                    or value not in self.write_paths
+                    or any(char in value for char in "\\:*?[]")
+                ):
+                    raise ValueError(
+                        "new_files must be unique declared top-level write_paths with safe literal names"
+                    )
         return self
 
 
@@ -1957,7 +1979,8 @@ def _execute_maintenance_worktree(
     if not worktree.resolve().is_relative_to(base.resolve()):
         raise ClaimBootstrapError("maintenance worktree path escapes the governed repository")
 
-    bootstrap_broad = request.write_paths == ["."]
+    new_files = list(request.new_files) if isinstance(request, MaintenanceWorktreeRequest) else []
+    bootstrap_broad = request.write_paths == ["."] or bool(new_files)
     bootstrap_kind = "goal-bound" if goal_bound else "maintenance"
     branch_created = False
 
@@ -2007,8 +2030,14 @@ def _execute_maintenance_worktree(
                 populated.stderr.strip() or "maintenance worktree population failed after branch creation"
             )
 
-    def start_primary_session(*, start_revision: str | None) -> dict[str, Any]:
+    def start_primary_session(
+        *,
+        start_revision: str | None,
+        write_paths: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Create or refresh the primary claim around the Git artifact boundary."""
+        selected_write_paths = request.write_paths if write_paths is None else write_paths
+        selected_bootstrap = selected_write_paths == ["."]
         return session_lifecycle.start_session(
             agent=agent,
             project=request.project,
@@ -2023,7 +2052,7 @@ def _execute_maintenance_worktree(
             session_id=owner_session_id,
             session_name=session_name,
             claim_type=claim_type,
-            write_paths=request.write_paths,
+            write_paths=selected_write_paths,
             read_paths=[],
             parent_scope=parent_scope,
             tracker_dir=SESSION_TRACKERS_DIR,
@@ -2034,13 +2063,13 @@ def _execute_maintenance_worktree(
                 else None
             ),
             allow_unplanned=not goal_bound,
-            broad_scope_mode="bootstrap" if bootstrap_broad else None,
+            broad_scope_mode="bootstrap" if selected_bootstrap else None,
             broad_scope_reason=(
                 f"construct this {bootstrap_kind} lane, then narrow before its first repository write"
-                if bootstrap_broad
+                if selected_bootstrap
                 else None
             ),
-            target_worktree_path=str(worktree) if bootstrap_broad else None,
+            target_worktree_path=str(worktree) if selected_bootstrap else None,
             verified_goal_default_revision=starting_head if goal_bound else None,
         )
 
@@ -2074,7 +2103,8 @@ def _execute_maintenance_worktree(
             if goal_bound:
                 create_git_artifacts()
             payload = start_primary_session(
-                start_revision=starting_head if goal_bound else None
+                start_revision=starting_head if goal_bound else None,
+                write_paths=["."] if new_files else None,
             )
     except Exception as exc:
         if delegated:
@@ -2194,10 +2224,36 @@ def _execute_maintenance_worktree(
     try:
         if not delegated and not goal_bound:
             create_git_artifacts()
+            for relative in new_files:
+                target = worktree / relative
+                if target.exists() or target.is_symlink():
+                    raise ClaimBootstrapError(f"declared new file already exists: {relative}")
+                target.touch(mode=0o644, exist_ok=False)
+            if new_files:
+                coordination_claims.narrow_claim(
+                    agent=agent,
+                    project=request.project,
+                    scope=request.scope,
+                    session_id=owner_session_id,
+                    write_paths=request.write_paths,
+                    require_native_session_binding=True,
+                    known_new_files=new_files,
+                    start_revision=starting_head,
+                )
+                def attach_start_revision(tracker: dict[str, Any]) -> None:
+                    tracker_claim = tracker.get("claim")
+                    if not isinstance(tracker_claim, dict):
+                        raise ValueError("maintenance tracker is missing its claim section")
+                    tracker_claim["start_revision"] = starting_head
+
+                session_contracts.mutate_session_tracker(tracker_path, attach_start_revision)
             # The initial claim authorizes Git artifact creation. Once those
             # exact artifacts exist, attach the already-resolved remote-default
             # revision so closeout can measure concurrent arrivals precisely.
-            payload = start_primary_session(start_revision=starting_head)
+            if new_files:
+                payload = {**payload, "action": "updated", "start_revision": starting_head}
+            else:
+                payload = start_primary_session(start_revision=starting_head)
         lock_reconciliation = _reconcile_canonical_after_claim(
             repo,
             session_id=session_id,
@@ -2209,7 +2265,7 @@ def _execute_maintenance_worktree(
             "github_repo": authority.repository_identity,
             "default_branch": authority.default_branch,
             "start_revision": starting_head,
-            "bootstrap_requires_narrowing": bootstrap_broad,
+            "bootstrap_requires_narrowing": request.write_paths == ["."],
             "authority_scope": {
                 "operation": request.operation,
                 "repo_root": str(repo),
@@ -2218,6 +2274,7 @@ def _execute_maintenance_worktree(
             "delegated_by_session_id": session_id if delegated else None,
             "delegated_session_id": owner_session_id if delegated else None,
             "parent_scope": parent_scope,
+            "new_files_created": new_files,
         }
     except Exception as exc:
         if delegated:
@@ -2251,14 +2308,24 @@ def _execute_maintenance_worktree(
                 f"the complete claimed lane remains intact for recovery: {exc}"
             ) from exc
 
-        cleanup_errors = _rollback_created_worktree(
+        for relative in new_files:
+            target = worktree / relative
+            try:
+                if target.is_file() and not target.is_symlink() and target.stat().st_size == 0:
+                    target.unlink()
+            except OSError as cleanup_exc:
+                cleanup_errors = [f"new file rollback failed for {relative}: {cleanup_exc}"]
+                break
+        else:
+            cleanup_errors = []
+        cleanup_errors.extend(_rollback_created_worktree(
             repo=repo,
             worktree=worktree,
             branch=request.branch,
             expected_head=starting_head,
             branch_created=branch_created,
             created_dirs=created_dirs,
-        )
+        ))
         tracker_verified = False
         try:
             with session_contracts.session_tracker_lock(tracker_path):

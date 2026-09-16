@@ -1241,6 +1241,8 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
         projection_path=projection_path,
         receipt_path=tmp_path / "inside-receipts.jsonl",
     )
+
+
     outside = prewrite_claim_fast.evaluate_prewrite_fast(
         {
             "session_id": "native-123",
@@ -1285,6 +1287,47 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
             receipt_path=tmp_path / "admitted-receipts.jsonl",
         )
         assert admitted["decision"] == "allow"
+
+
+def test_maintenance_bootstrap_creates_declared_new_root_file_then_narrows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(
+        repo,
+        write_paths=["Makefile.worktree", "src/adapter.py"],
+        new_files=["Makefile.worktree"],
+    )))
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    assert (worktree / "Makefile.worktree").read_bytes() == b""
+    claim = claim_bootstrap.coordination_claims.check_claims(repo.name)[0]
+    assert claim.write_paths == ["Makefile.worktree", "src/adapter.py"]
+    assert claim.broad_scope_mode is None
+    assert claim.target_worktree_path is None
+    assert receipt["result"]["bootstrap_requires_narrowing"] is False
+    assert receipt["result"]["new_files_created"] == ["Makefile.worktree"]
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"write_paths": ["src/adapter.py"], "new_files": ["Makefile.worktree"]},
+        {"write_paths": ["new/root.txt"], "new_files": ["new/root.txt"]},
+        {"write_paths": ["Makefile.worktree"], "new_files": ["Makefile.worktree", "Makefile.worktree"]},
+        {"write_paths": ["."], "new_files": ["Makefile.worktree"]},
+    ],
+)
+def test_maintenance_bootstrap_rejects_ambiguous_new_file_contract(
+    tmp_path: Path,
+    updates: dict[str, object],
+) -> None:
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError):
+        claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(tmp_path, **updates)))
 
 
 def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority(
@@ -1558,7 +1601,7 @@ def test_delegated_maintenance_requires_exact_healthy_parent_before_artifacts(
     ).returncode != 0
 
 
-def test_delegated_maintenance_admits_sibling_overlap_in_distinct_worktree(
+def test_delegated_maintenance_rejects_sibling_overlap_with_healthy_owner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1579,23 +1622,17 @@ def test_delegated_maintenance_admits_sibling_overlap_in_distinct_worktree(
         )
     )
 
-    result = claim_bootstrap.execute_request(second)
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="write ownership conflicts"):
+        claim_bootstrap.execute_request(second)
 
-    assert result["ok"] is True
     assert (repo / "worktrees" / "fix" / "child-lane").is_dir()
-    assert (repo / "worktrees" / "fix" / "sibling-lane").is_dir()
+    assert not (repo / "worktrees" / "fix" / "sibling-lane").exists()
     sibling_claims = [
         claim
         for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
         if claim.scope in {"fix/child-lane", "fix/sibling-lane"}
     ]
-    assert {claim.scope for claim in sibling_claims} == {"fix/child-lane", "fix/sibling-lane"}
-    interaction = claim_bootstrap.coordination_claims.evaluate_claim(
-        next(claim for claim in sibling_claims if claim.scope == "fix/sibling-lane"),
-        active_claims=[next(claim for claim in sibling_claims if claim.scope == "fix/child-lane")],
-    ).interactions[0]
-    assert interaction.severity == "advisory_overlap"
-    assert interaction.reason == "isolated_worktree_overlap"
+    assert [claim.scope for claim in sibling_claims] == ["fix/child-lane"]
 
 
 def test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear(

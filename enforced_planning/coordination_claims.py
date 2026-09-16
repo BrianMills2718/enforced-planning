@@ -849,6 +849,7 @@ class ClaimRecord:
     broad_scope_reason: str | None = None
     target_worktree_path: str | None = None
     contact_ref: str | None = None
+    new_files: tuple[str, ...] = ()
 
     def primary_project(self) -> str | None:
         """Return the first project for CLI compatibility surfaces."""
@@ -2211,7 +2212,12 @@ def bootstrap_authority_disabled_worktree_path(target_worktree_path: str) -> str
     return f"{target.resolve(strict=False)}{BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX}"
 
 
-def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) -> dict[str, str]:
+def classify_broad_write_paths(
+    repo_root: str | None,
+    write_paths: list[str],
+    *,
+    verified_new_files: set[str] | None = None,
+) -> dict[str, str]:
     """Classify root/top-level directory reservations without guessing.
 
     Nested paths are narrow for this contract. A missing top-level component is
@@ -2220,6 +2226,7 @@ def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) ->
     """
 
     normalized = list(dict.fromkeys(_normalize_repo_path(path) for path in write_paths))
+    verified_files = verified_new_files or set()
     if any(Path(path).is_absolute() or path == ".." or path.startswith("../") for path in normalized):
         raise ValueError("write paths must remain repository-relative and cannot traverse outside repo_root")
     if not repo_root:
@@ -2250,6 +2257,8 @@ def classify_broad_write_paths(repo_root: str | None, write_paths: list[str]) ->
             resolved.relative_to(resolved_root)
         except ValueError as exc:
             raise ValueError(f"broad path {path!r} escapes repo_root through symlink resolution") from exc
+        if not candidate.exists() and path in verified_files:
+            continue
         if not candidate.exists():
             raise ValueError(f"broad_scope_ambiguous: top-level path {path!r} does not exist")
         if candidate.is_dir():
@@ -2273,8 +2282,30 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         if possible_broad:
             issues.append("legacy_broad_scope_unclassified")
         return issues
+    verified_new_files: set[str] = set()
+    worktree = Path(claim.target_worktree_path or claim.worktree_path or "")
+    canonical_root = Path(claim.repo_root or "")
+    for path in claim.new_files:
+        created = worktree / path
+        canonical = canonical_root / path
+        if (
+            path in claim.write_paths
+            and "/" not in path
+            and path not in {"", ".", ".."}
+            and not canonical.exists()
+            and not canonical.is_symlink()
+            and created.is_file()
+            and not created.is_symlink()
+        ):
+            verified_new_files.add(path)
+        elif not canonical.is_file():
+            issues.append("invalid_new_file_contract")
     try:
-        broad_paths = classify_broad_write_paths(claim.repo_root, claim.write_paths)
+        broad_paths = classify_broad_write_paths(
+            claim.repo_root,
+            claim.write_paths,
+            verified_new_files=verified_new_files,
+        )
     except ValueError as exc:
         # A live claim's repo_root/worktree commonly stops existing on disk
         # long before its claim file is cleaned up (see missing_worktree_on_disk
@@ -2766,6 +2797,7 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         ),
         target_worktree_path=target_worktree_path,
         contact_ref=data.get("contact_ref") if isinstance(data.get("contact_ref"), str) else None,
+        new_files=tuple(_safe_string_list(data.get("new_files"))),
     )
 
 
@@ -3634,6 +3666,8 @@ def narrow_claim(
     write_paths: list[str],
     claims_dir: Path | None = None,
     require_native_session_binding: bool = False,
+    known_new_files: list[str] | None = None,
+    start_revision: str | None = None,
 ) -> NarrowClaimResult:
     """Commit one owner-only strict subset claim/projection transition."""
 
@@ -3677,7 +3711,24 @@ def narrow_claim(
                 "replacement path outside existing authority: " + ", ".join(outside)
             )
 
-        remaining_broad = classify_broad_write_paths(claim.repo_root, replacements)
+        verified_new_files: set[str] = set()
+        for path in list(dict.fromkeys(_normalize_repo_path(item) for item in (known_new_files or []))):
+            if path not in replacements or "/" in path or path in {"", ".", ".."}:
+                raise ValueError("known new files must be top-level replacement write paths")
+            canonical = Path(claim.repo_root or "") / path
+            worktree = Path(claim.target_worktree_path or claim.worktree_path or "")
+            created = worktree / path
+            if canonical.exists() or canonical.is_symlink():
+                raise ValueError(f"known new file already exists in canonical repository: {path}")
+            if not created.is_file() or created.is_symlink() or created.stat().st_size != 0:
+                raise ValueError(f"known new file is not an exact empty regular worktree file: {path}")
+            verified_new_files.add(path)
+
+        remaining_broad = classify_broad_write_paths(
+            claim.repo_root,
+            replacements,
+            verified_new_files=verified_new_files,
+        )
         if remaining_broad and claim.broad_scope_mode not in BROAD_SCOPE_MODES:
             raise ValueError(
                 "a legacy/untyped broad claim may narrow only to non-broad exact paths"
@@ -3685,6 +3736,14 @@ def narrow_claim(
         payload = dict(raw)
         payload["schema_version"] = 6
         payload["write_paths"] = replacements
+        if start_revision is not None:
+            if START_REVISION_PATTERN.fullmatch(start_revision) is None:
+                raise ValueError("narrowed claim start_revision must be one full commit SHA")
+            payload["start_revision"] = start_revision
+        if verified_new_files:
+            payload["new_files"] = sorted(verified_new_files)
+        else:
+            payload.pop("new_files", None)
         if remaining_broad:
             payload["broad_scope_mode"] = claim.broad_scope_mode
             payload["broad_scope_reason"] = claim.broad_scope_reason

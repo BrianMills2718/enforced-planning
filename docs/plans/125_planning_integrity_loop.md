@@ -1009,3 +1009,13 @@ seam, or worktree templates this plan defines; it only makes an existing
 failure-to-load path observable instead of silent. See
 `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`'s "A claim file with
 invalid YAML does not silently vanish" section for the operator-facing detail.
+
+### Post-completion note (2026-09-15)
+
+Typed maintenance bootstrap now carries an explicit `new_files` declaration
+for a bounded set of new top-level files. The transaction first creates
+bootstrap custody, creates only those empty files in the linked worktree,
+narrows the claim to its final paths, and binds the retained start revision in
+both claim and tracker before returning. This preserves this plan's admission-
+before-mutation and exact-revision custody rules without treating a missing root
+path as either a guessed file or an untyped broad reservation.

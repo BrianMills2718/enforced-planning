@@ -1,10 +1,10 @@
 {
   "active_slice": {
-    "description": "Retain authentic oversized required-authority behavior: full identity and readability verification, bounded excerpt injection, and gate clearance",
-    "next_action": "Trace the reported oversized-document repair to its source and installed hook, rerun its focused suite, and execute a live gate-clear probe that distinguishes full-document verification from bounded excerpt delivery.",
+    "description": "Complete the authentic client matrix through installed combined hooks, including recovery, authorized and denied edits, closure, and post-close reads",
+    "next_action": "Run the full disposable sequence in Claude Code, retain its exact session and filesystem results, then run the same sequence in a fresh Codex CLI thread before requesting an app/API restart probe.",
     "requires_external_action": false,
-    "requires_spend": false,
-    "slice_id": "pw06-oversized-required-authority",
+    "requires_spend": true,
+    "slice_id": "pw06-authentic-client-matrix",
     "status": "executing",
     "target_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4"
   },
@@ -29,7 +29,7 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 7,
+  "cursor_revision": 8,
   "failure_state": {
     "boundary": "current Codex app/API exec command prewrite coverage",
     "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
@@ -99,6 +99,13 @@
       "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#semantic_service_failure",
       "kind": "authentic_result",
       "observation_id": "pw06-semantic-service-unavailable",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "oversized required authority verification, bounded injection, and gate clearance",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#oversized_required_authority",
+      "kind": "supporting_work",
+      "observation_id": "pw06-oversized-required-authority",
       "outcome": "pass"
     }
   ],

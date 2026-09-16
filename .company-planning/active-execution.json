@@ -1,10 +1,10 @@
 {
   "active_slice": {
-    "description": "Exercise exact recovery, rebootstrap or resume, authorized and denied edits, closeout, and post-close reads in a disposable governed consumer",
-    "next_action": "Extend the disposable composition test through the emitted recovery command, one exact replacement lane, edit controls, and terminal-state checks.",
+    "description": "Repair the authentic Codex exec_command coverage gap, then resume the PW-06 lane and repeat the negative control",
+    "next_action": "Preserve and end the current PW-06 claim, repair the Codex matcher in Agent Skills, deploy it, resume this retained lane, and rerun the authentic out-of-scope command.",
     "requires_external_action": false,
-    "requires_spend": false,
-    "slice_id": "pw06-full-sequence-disposable",
+    "requires_spend": true,
+    "slice_id": "pw06-authentic-codex-command-coverage",
     "status": "executing",
     "target_revision": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776"
   },
@@ -13,8 +13,8 @@
     "human_decision": null,
     "human_decision_required": false,
     "implementation_authorized": true,
-    "spend_cap_usd": 0.0,
-    "spend_used_usd": 0.0
+    "spend_cap_usd": 1.0,
+    "spend_used_usd": 0.2630644
   },
   "circuit_breakers": {
     "context_integrity_valid": true,
@@ -29,11 +29,11 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 2,
+  "cursor_revision": 3,
   "failure_state": {
-    "boundary": null,
-    "last_failure_ref": null,
-    "same_boundary_failures": 0
+    "boundary": "authentic Codex exec_command out-of-scope write",
+    "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
+    "same_boundary_failures": 1
   },
   "goal_ref": "enforced-planning#108:prewrite-pw-06-recovery-resume",
   "lifecycle_state": "active",
@@ -51,6 +51,20 @@
       "kind": "supporting_work",
       "observation_id": "pw06-candidate-exact-recovery",
       "outcome": "pass"
+    },
+    {
+      "boundary": "Claude Code canonical-checkout write denial",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.claude_code",
+      "kind": "authentic_result",
+      "observation_id": "pw06-authentic-claude-negative-control",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "Codex exec_command out-of-scope write denial",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
+      "kind": "verification_failure",
+      "observation_id": "pw06-authentic-codex-negative-control",
+      "outcome": "fail"
     }
   ],
   "plan_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd",

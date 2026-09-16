@@ -49,17 +49,27 @@
       "cost_usd": 0.2630644
     },
     "codex": {
-      "session_id": "codex:01a0a817-3d9e-79f0-b409-4ca9213f2b89",
-      "result": "fail for the negative control",
-      "observed": "An exec_command touch created PW06_CODEX_DENIED_MARKER at the claimed worktree root even though that path was outside the claim's declared write_paths. The marker was immediately removed and absence rechecked.",
-      "diagnosis": "hooks/list reported the prewrite hook enabled and trusted but matched only Bash|apply_patch. The authentic tool surface is exec_command; no new prewrite receipt for this session was emitted. Synthetic Bash-shaped payloads therefore tested a route the live Codex command did not take.",
+      "session_ids": [
+        "codex:01a0a817-3d9e-79f0-b409-4ca9213f2b89",
+        "codex:01a0ab26-9683-7ec1-86e4-4175f814d8ad",
+        "codex:01a0ab2a-72e7-70e0-8c75-443ae66f9298"
+      ],
+      "result": "fresh Codex CLI negative control passes; the current app/API thread remains unverified until restart",
+      "observations": [
+        "The current app/API thread created an out-of-scope PW06_CODEX_DENIED_MARKER with no new prewrite receipt; the marker was immediately removed and absence rechecked.",
+        "The first fresh CLI probe also created the marker after PR #355 incorrectly replaced canonical Bash matchers with exec_command. OpenAI Codex source inspection showed HookToolName::bash() serializes the canonical name Bash, so that diagnosis and deployment were corrected.",
+        "Corrective Agent Skills PR #357 preserved Bash and added exec_command as an additional matcher. After deployment, fresh thread 01a0ab2a-72e7-70e0-8c75-443ae66f9298 received BLOCKED [prewrite/no_exact_claim], and its independent absence check exited 0."
+      ],
+      "recovery_resume": "The parent PW-06 claim was ended with installed session_end.py, the Agent Skills repair ran in a separately claimed worktree and closed after merge, and installed session_resume.py reattached this exact retained PW-06 lane without losing its plan reference, branch, worktree, tracker, or user files.",
+      "deployed_revision": "agent-skills@9ef2fe9",
+      "deployment_receipt": "apply-20260916T170111108666Z.json",
       "concern": "https://github.com/BrianMills2718/project-meta/issues/2067"
     }
   },
   "acceptance": {
     "status": "not accepted",
     "remaining": [
-      "Execute the emitted recovery command itself through an installed combined hook and run one exact rebootstrap/resume sequence.",
+      "Restart this app/API Codex thread and repeat its out-of-scope exec command so the additional matcher is verified on that exact runtime surface, not only fresh Codex CLI.",
       "Exercise ended and unhealthy claim variants, authorized and denied edits, closeout, and post-close reads.",
       "Exercise contention, interruption, oversized authority, durable-write cleanup, and semantic-service failure behavior.",
       "Retain authentic Codex and Claude Code sequences in addition to subprocess evidence."

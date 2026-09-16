@@ -143,7 +143,10 @@ commit and classifies the path from that Git tree; it does not widen to `.` or
 depend on the canonical checkout's current filesystem view. This keeps a
 disjoint active lane unblocked while the canonical checkout is intentionally
 stale; exact-path overlap checks still apply normally. Directory reservations
-remain broad and still require their ordinary broad-scope contract.
+remain broad and still require their ordinary broad-scope contract. Once the
+worktree exists, health checks use that checked-out file directly; Git-tree
+inspection is limited to the short pre-worktree reservation window so a global
+claim listing never walks unrelated repository histories.
 
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,

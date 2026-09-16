@@ -6404,3 +6404,36 @@ def test_broad_scope_contract_issues_reports_unresolvable_repo_root_without_rais
     # The bootstrap-mode structural check does not need filesystem evidence
     # about repo_root and must still run.
     assert "bootstrap_target_worktree_path_required" in issues
+
+
+def test_existing_worktree_file_does_not_read_retained_git_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worktree = tmp_path / "repo" / "worktrees" / "lane"
+    worktree.mkdir(parents=True)
+    (worktree / "Makefile.worktree").write_text("contract\n", encoding="utf-8")
+    claim = claims_impl.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="lane",
+        intent="maintain exact root file",
+        claim_type="program",
+        write_paths=["Makefile.worktree"],
+        repo_root=str(tmp_path / "repo"),
+        worktree_path=str(worktree),
+        branch="lane",
+        session_id="codex:test",
+        session_name="lane",
+        broader_goal="Maintain exact root file",
+        tracker_path=str(tmp_path / "tracker.yaml"),
+        start_revision="a" * 40,
+        schema_version=6,
+    )
+    monkeypatch.setattr(
+        claims_impl.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected git tree read")),
+    )
+
+    assert claims_impl._broad_scope_contract_issues(claim) == []

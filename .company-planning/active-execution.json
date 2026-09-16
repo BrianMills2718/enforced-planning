@@ -1,20 +1,20 @@
 {
   "active_slice": {
     "description": "Complete the authentic client matrix through installed combined hooks, including recovery, authorized and denied edits, closure, and post-close reads",
-    "next_action": "Run the full disposable sequence in Claude Code, retain its exact session and filesystem results, then run the same sequence in a fresh Codex CLI thread before requesting an app/API restart probe.",
-    "requires_external_action": false,
+    "next_action": "Brian must restart this Codex app/API session so the deployed exec_command matcher can be tested on that exact runtime surface; do not start another paid CLI probe until a new spend cap is explicitly authorized.",
+    "requires_external_action": true,
     "requires_spend": true,
     "slice_id": "pw06-authentic-client-matrix",
-    "status": "executing",
-    "target_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4"
+    "status": "blocked",
+    "target_revision": "48ee6b41b70dce93145a093e3e6f429d619638dd"
   },
   "authority": {
     "external_action_authorized": false,
-    "human_decision": null,
-    "human_decision_required": false,
+    "human_decision": "Restart the current Codex app/API session. The remaining fresh Codex CLI sequence also requires a later explicit replacement spend cap because observed cost is already above the authorized 1.00 USD cap.",
+    "human_decision_required": true,
     "implementation_authorized": true,
     "spend_cap_usd": 1.0,
-    "spend_used_usd": 0.2630644
+    "spend_used_usd": 2.05975655
   },
   "circuit_breakers": {
     "context_integrity_valid": true,
@@ -29,14 +29,14 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 8,
+  "cursor_revision": 9,
   "failure_state": {
-    "boundary": "current Codex app/API exec command prewrite coverage",
-    "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
+    "boundary": "current Codex app/API restart and external model spend authority",
+    "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#policy_deviation",
     "same_boundary_failures": 1
   },
   "goal_ref": "enforced-planning#108:prewrite-pw-06-recovery-resume",
-  "lifecycle_state": "active",
+  "lifecycle_state": "human_required",
   "observations": [
     {
       "boundary": "ambiguous native-session denial to exact recovery",
@@ -107,6 +107,27 @@
       "kind": "supporting_work",
       "observation_id": "pw06-oversized-required-authority",
       "outcome": "pass"
+    },
+    {
+      "boundary": "authentic Claude claimed-lane lifecycle and cross-client ended-lane takeover",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.claude_code",
+      "kind": "authentic_result",
+      "observation_id": "pw06-authentic-claude-lifecycle-recovery",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "claimed in-scope git restore through Claude Code prewrite",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.claude_code",
+      "kind": "verification_failure",
+      "observation_id": "pw06-authentic-claude-restore-false-block",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "Claude CLI max-budget enforcement",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#policy_deviation",
+      "kind": "blocker",
+      "observation_id": "pw06-claude-budget-cap-overshoot",
+      "outcome": "fail"
     }
   ],
   "plan_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd",

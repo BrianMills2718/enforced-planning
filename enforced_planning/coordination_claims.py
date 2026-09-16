@@ -2922,7 +2922,15 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
 
         overlapping_write_paths = _compute_overlapping_write_paths(candidate, other)
         if _has_write_ownership(candidate) and _has_write_ownership(other) and overlapping_write_paths:
-            isolated_worktrees = _has_isolated_worktree_boundary(candidate, other)
+            # Worktrees isolate filesystem writes, not ownership or duplicated
+            # effort. Preserve the isolated recovery exception only after the
+            # incumbent claim is no longer healthy; an active healthy owner
+            # retains exclusive authority over its declared paths.
+            other_runtime_status = claim_runtime_status(other, active_claims=claims)
+            isolated_worktrees = (
+                _has_isolated_worktree_boundary(candidate, other)
+                and other_runtime_status != "healthy"
+            )
             interactions.append(
                 ClaimInteraction(
                     severity="advisory_overlap" if isolated_worktrees else "hard_conflict",

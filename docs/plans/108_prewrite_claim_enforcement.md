@@ -5,7 +5,7 @@ dependencies_reviewed: "2026-09-15"
 ---
 # Plan #108: Low-Friction Pre-Write Claim Enforcement
 
-**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-04 manifest is frozen and per-repository rollout remains; PW-05 read-target separation is the next low-friction slice
+**Status:** In Progress — PW-01/PW-02A/PW-02/PW-02B0/PW-02B1/PW-02B2/PW-02C/PW-02D/PW-02B/PW-03 accepted; PW-06 recovery-and-resume proof is next; further PW-04 rollout waits for PW-06; PW-05 read-target separation remains subsequent work
 **Type:** implementation
 **Priority:** Critical
 **Design Revision:** `plan-108-v4`
@@ -275,6 +275,14 @@ YAML; it has no independent history or deletion requirement.
 - Proving all future client tools are covered by today's adapter fixtures.
 
 ---
+
+## Capability Adoption
+
+**Disposition: extend.** PW-06 extends the existing pre-write request/decision,
+typed bootstrap, claim/tracker lifecycle, and receipt owners. Its source-owner
+and installed-consumer sequences establish adoption separately. Shared-kernel
+extraction and contextual-agent blocking are not prerequisites or completion
+claims for this increment.
 
 ## Capabilities
 
@@ -588,7 +596,12 @@ truthfully exposed a Makefile defect: `session-start` recorded a linked
 worktree as `repo_root`. PW-03 repairs that source command to derive the
 canonical Git root before refreshing its exact-session claim.
 
-#### PW-04 — governed fleet enforcement (manifest frozen)
+#### PW-04 — governed fleet enforcement (manifest frozen; further rollout blocked on PW-06)
+
+The 2026-09-16 review adds PW-06 as a hard prerequisite for further rollout.
+Previously accepted source and consumer evidence remains historical evidence;
+it does not establish that the combined hooks permit recovery and resumed work.
+Existing deployments are not disabled by this planning update.
 
 `docs/evidence/plan108_pw04_governed_fleet_manifest.json` freezes the Project
 Meta governance revision and classifies every Brian-owned active record before
@@ -629,6 +642,118 @@ session-mismatched selections; and clear the selection without touching claims.
 The authentic probe starts at `/home/brian/code`, selects `active/agent-skills`,
 loads its instructions, confirms no claim exists, and observes a typed mutation
 denial.
+
+#### PW-06 — complete recovery and resume through the combined hooks
+
+**Design revision:** `plan-108-v4` (2026-09-16 review adopted by Brian).
+**State:** Ready for implementation; no recovery-and-resume result is claimed.
+**Critical-path classification:** `vertical`. This is the next implementation
+unit, before further PW-04 rollout. PW-05 is not a prerequisite unless a replay
+demonstrates that repository selection prevents this workflow.
+
+**User outcome:** After a blocked or ended claim, the agent can inspect its
+state, take the sanctioned recovery route, acquire correct write ownership,
+finish the requested edit, and close cleanly without asking Brian to bypass a
+hook or mislabel planned work as UNPLANNED.
+
+**Canonical example:** In a disposable governed consumer installed from one
+recorded source revision, start from an ended claim and separately from an
+unhealthy owned claim. Through each client's configured combined hook path:
+
+1. Run the documented help/status reads without creating write authority.
+2. Execute the exact recovery command supplied by the denial, then the
+   sanctioned bootstrap for a new lane (or resume a retained lane).
+3. Verify native session, claim, tracker, repository, worktree, branch, and
+   planned/unplanned provenance agree before reporting successful admission.
+4. Make an exact authorized edit and verify its actual diff; attempt an
+   out-of-scope and a foreign-session edit and verify their targets are unchanged.
+5. Integrate or retain the edit under the normal disposition contract, close
+   the lane, and repeat help/status to prove that closure does not strand the
+   next task. Verify worktree, branch, claim, and tracker terminal state.
+
+First retain a baseline replay of this sequence with commands, client event
+shapes, revisions, decisions, and the first failing transition. Do not remove
+other configured gates to obtain a pass. A subprocess replay is supporting
+evidence; acceptance also requires one authentic sequence in Codex and one in
+Claude Code. If either client cannot run, report that acceptance as unverified
+and keep further rollout blocked. Source-owner dogfooding and a disposable
+installed consumer are distinct evidence boundaries; retain both.
+
+**Bounded implementation:** Extend `PreWriteRequestV1`, `PreWriteDecisionV1`,
+typed bootstrap, and the existing claim/tracker lifecycle only where this
+sequence demonstrates a gap. Keep recovery ownership in Enforced Planning,
+client wiring in Agent Skills, and shared policy/learning storage in Project
+Meta. Fix required consumer seams through separately scoped lanes; do not copy
+their implementations into this repository. Do not introduce a parallel
+action-envelope schema, policy language, registry, or recovery command.
+
+**Failure behavior to specify and exercise before acceptance:**
+
+| Condition | Required behavior and distinguishing check |
+|---|---|
+| Claim absent, ended, or unhealthy | Help/status remains available; exact self-owned recovery reaches its handler; ordinary writes still require valid ownership. Deny borrowed identity, storage overrides, and appended shell mutations. |
+| Registry writer contended or unavailable | Diagnostic reads report unavailable state explicitly. No new write authority is invented. Recovery cannot depend on the healthy claim it repairs; contention has a bounded return and a concrete retry condition. After releasing the test lock, the same operation succeeds without duplicate ownership. |
+| Interrupted claim/tracker transition | Validate before mutation; on interruption retain recoverable state and report partial completion. Retry converges to one consistent claim/tracker pair without losing the original plan reference or user files. |
+| Required document exceeds an input bound | Preserve the required authority and full-read obligation. A bounded excerpt is labeled partial and cannot alone prove full reading. Verify the oversized-document path reaches an explicit complete-read or chunked-read result; invalid/unreadable input remains visible. |
+| Durable write succeeds but cleanup fails | Report durable commit, cleanup status, actual residual files, and retry action separately. A retry must neither duplicate the logical write nor discard unrelated index/worktree changes. Use the Project Meta learning writer as the owning consumer for this case. |
+| Semantic service is unavailable, invalid, or uncertain | During the advisory experiment below, record failure/abstention without adding a new blocking condition. Existing deterministic authority checks continue to apply. No model inference occurs synchronously inside Stop. |
+
+For every participating blocker, record its protected action, trusted inputs,
+decision owner, dependency/failure behavior, exact recovery operation, and
+positive/negative/recovery probe beside the existing receipt or test. Include
+mailbox acknowledgement, required reading, learning capture, and turn-end
+continuation when they participate in the observed sequence. This is a bounded
+composition check, not a requirement to redesign every hook before fixing one.
+Use existing hook receipts and Plan #111 feedback; recurring incidents reopen
+the failed transition with its exact revision and evidence, not only a count.
+
+**Acceptance:** The entire sequence passes without manual bypass in both
+clients; actual authorized diff and unchanged denied targets are retained;
+interruption/contended-state retries converge; no tracked or untracked user
+work is lost; and each exercised partial failure reports truthful residual
+state. Component tests alone cannot accept PW-06. Run affected tests after
+changes and the required integration checks at acceptance; do not repeat
+unchanged broad suites for each individual case.
+
+**Rollback:** Retain the previous source and client configuration revisions
+before any separately authorized activation. Revert the affected candidate
+configuration/code if a legitimate recovery is blocked or a negative-control
+write succeeds; preserve user work and receipts. Return PW-06 to unaccepted
+and keep further rollout blocked. Reverting code does not erase partial state:
+use the recorded recovery operation for that exact state.
+
+#### Subsequent architecture and contextual-agent experiment
+
+The target remains thin client adapters, explicit operation/evidence contracts,
+deterministic authority checks, and bounded contextual judgment where semantics
+are necessary. PW-06 proves one part of that target; it does not redefine the
+whole architecture or require its advance construction.
+
+[Plan #71](71_effective-policy-resolution-pilot.md#disposition) retired a
+generic resolver without implementation as disproportionate. After PW-06,
+identify residual cross-control conflicts and document why direct settings or
+extensions of existing typed seams cannot resolve them before extracting a
+shared kernel. Do not revive Plan #71 as an implicit dependency.
+
+A contextual policy agent is initially an advisory experiment outside the
+blocking hook path. Reuse `llm_client` and preserve
+[Plan #135's rejected-route disposition](135_correction_learning_gate.md).
+Before running, freeze the decision question and an incident set spanning the
+reported semantic failures, matched unsafe cases, and unseen variants. Compare
+the existing behavior with the adviser using false blocks, false allows,
+recovery completion, abstention, latency, and cost, with exact case membership
+and traces. Set promotion thresholds before viewing the candidate's results;
+the experiment is not yet permission to activate blocking.
+
+The adviser receives user authority, the exact action, and trusted state;
+assistant persuasion is not authority. It may request missing evidence through
+bounded dialogue (at most two clarification rounds per decision), then emits
+`allow`, `deny`, `need_evidence`, or `abstain` as an advisory verdict. An absent
+answer or exhausted dialogue produces `abstain`. No response, malformed output,
+or model failure can authorize a write. Any future blocking proposal must
+specify its fallback and pass the complete recovery sequence again. Give it
+blocking authority only when predeclared criteria show fewer legitimate blocks
+and no newly allowed unsafe cases; preserve the limitation of finite evidence.
 
 ### PW-01 Evidence
 
@@ -706,16 +831,15 @@ PW-02B1 manifest must be derived from runtime mutation receipts.
 
 This observation changed the remaining design from “infer the writer from the
 claim's repo root” to “record the loaded writer source and digest at mutation
-time.” PW-02B0 and PW-02B1 are accepted. The accepted inventory contains no
-`update_current_personal` rows, so PW-02B2 is a ready zero-target verification;
-the independent PW-02C Codex matcher repair is also ready. Final PW-02B
-certification, PW-03 pilot promotion, and PW-04 governed-fleet promotion remain
-dependency-blocked in that order.
+time.” This is the historical inventory checkpoint. PW-02B0/PW-02B1/PW-02B2,
+PW-02C, final PW-02B certification, and PW-03 are now accepted as recorded
+above. The current next unit is PW-06; further PW-04 rollout depends on it.
 
 ### PW-04 — governed-fleet hard-enforcement rollout
 
-The single-repository PW-03 pilot is not workspace completion. After its real
-positive and negative native probes pass, freeze the active governed-repository
+The single-repository PW-03 pilot is not workspace completion. Before further
+rollout, require both accepted PW-03 native probes and accepted PW-06 combined
+recovery-and-resume evidence. Then refresh the frozen active governed-repository
 set from Project Meta governance, classify each repository by mutation and
 publication authority, and install `claims.prewrite_mode: enforce` plus the
 generated Claude/Codex adapters through one exact claimed lane per repository.

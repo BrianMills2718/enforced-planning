@@ -1,0 +1,50 @@
+{
+  "active_slice": {
+    "description": "Run the current combined recovery path, retain the first failing transition, and preserve matched unsafe controls",
+    "next_action": "Construct and run the disposable baseline replay at the current merged revision.",
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "pw06-baseline-replay",
+    "status": "executing",
+    "target_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0.0,
+    "spend_used_usd": 0.0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 1,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "enforced-planning-108-pw06",
+  "cursor_revision": 1,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "enforced-planning#108:prewrite-pw-06-recovery-resume",
+  "lifecycle_state": "active",
+  "observations": [],
+  "plan_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "plan-108-pw06-recovery-resume",
+    "repository": "BrianMills2718/enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/plan-108-pw06-recovery-resume"
+  }
+}

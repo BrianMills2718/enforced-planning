@@ -43,10 +43,26 @@
   },
   "authentic_clients": {
     "claude_code": {
-      "session_id": "b9a47612-b536-48c2-887c-e3dc0b51b342",
-      "result": "pass for the negative control",
-      "observed": "Claude Code ran installed session_status.py, then its attempted canonical-checkout marker write was denied and an independent filesystem check confirmed the marker was absent.",
-      "cost_usd": 0.2630644
+      "session_ids": [
+        "b9a47612-b536-48c2-887c-e3dc0b51b342",
+        "22c7f0cc-57a8-4c47-bc1f-c8f57f210774"
+      ],
+      "result": "authentic claimed-lane edit, out-of-scope denial, interrupted session, cross-client recovery, exact restoration, and clean close all observed",
+      "observations": [
+        "The earlier negative control ran installed session_status.py, then Claude Code's attempted canonical-checkout marker write was denied and an independent filesystem check confirmed the marker was absent.",
+        "Session 22c7f0cc-57a8-4c47-bc1f-c8f57f210774 created the disposable pw06-claude-authentic-20260916a claim/worktree and appended PW06_CLAUDE_AUTHORIZED to its claimed README.md.",
+        "Its attempted out-of-scope PW06_CLAUDE_DENIED_MARKER Bash write was denied; an independent filesystem check confirmed the marker was absent.",
+        "A resumed invocation reattached the exact lane, but the prewrite gate denied git restore -- README.md twice even though README.md was claimed and in scope; project-meta issue 2071 retains that false-positive defect.",
+        "A subsequent Claude invocation using --max-budget-usd 0.08 reported total_cost_usd 1.31472575 without completing cleanup; project-meta issue 2073 retains the budget-control defect and no further model calls were made.",
+        "After deployed enforced-planning revision 48ee6b41b70dce93145a093e3e6f429d619638dd added explicit session-ended takeover, installed session_resume.py transferred the ended Claude lane to this Codex session. Codex removed only PW06_CLAUDE_AUTHORIZED, verified the worktree clean and denied marker absent, then session_close.py removed the worktree and branch and released the claim with branch_ancestor evidence."
+      ],
+      "cost_usd": 1.79669215,
+      "recovery_revision": "48ee6b41b70dce93145a093e3e6f429d619638dd",
+      "concerns": [
+        "https://github.com/BrianMills2718/project-meta/issues/2071",
+        "https://github.com/BrianMills2718/project-meta/issues/2073",
+        "https://github.com/BrianMills2718/project-meta/issues/2074"
+      ]
     },
     "codex": {
       "session_ids": [
@@ -121,8 +137,13 @@
     "status": "not accepted",
     "remaining": [
       "Restart this app/API Codex thread and repeat its out-of-scope exec command so the additional matcher is verified on that exact runtime surface, not only fresh Codex CLI.",
-      "Exercise ended and unhealthy claim variants, authorized and denied edits, closeout, and post-close reads.",
-      "Retain authentic Codex and Claude Code sequences in addition to subprocess evidence."
+      "Run the same complete claimed-lane, authorized edit, denied edit, interrupted recovery, closeout, and post-close sequence in a fresh Codex CLI thread. This requires new spend authority because observed external model spend is already above the plan cap."
     ]
+  },
+  "policy_deviation": {
+    "spend_cap_usd": 1.0,
+    "observed_total_cost_usd": 2.05975655,
+    "cause": "Claude CLI reported total_cost_usd 1.31472575 for an invocation launched with --max-budget-usd 0.08.",
+    "response": "Stopped all further external model calls, retained issue 2073, and moved the execution cursor to a human-owned spend boundary."
   }
 }

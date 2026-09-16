@@ -403,6 +403,22 @@ def _parse_native_mailbox_command(
 
     if "\n" in command or "\r" in command:
         raise ValueError("mailbox command must be exactly one line")
+    workdir_prefix = "/usr/bin/env -C "
+    if command.startswith(workdir_prefix):
+        wrapped = command[len(workdir_prefix) :]
+        raw_workdir, separator, mailbox_command = wrapped.partition(" /usr/bin/python3 ")
+        if separator == "":
+            raise ValueError("mailbox workdir wrapper has no canonical Python command")
+        if re.fullmatch(r"/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+", raw_workdir) is None:
+            raise ValueError("mailbox workdir must be one safe absolute path token")
+        workdir = Path(raw_workdir)
+        try:
+            resolved_workdir = workdir.resolve(strict=True)
+        except OSError as exc:
+            raise ValueError("mailbox workdir does not exist") from exc
+        if not resolved_workdir.is_dir() or str(resolved_workdir) != raw_workdir:
+            raise ValueError("mailbox workdir must be an existing canonical directory")
+        command = f"/usr/bin/python3 {mailbox_command}"
     script = (REPO_ROOT / "scripts" / "coordination_messages.py").resolve()
     prefix = f"/usr/bin/python3 {script} "
     if not command.startswith(prefix):

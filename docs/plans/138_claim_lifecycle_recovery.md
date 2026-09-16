@@ -5,7 +5,7 @@ dependencies_reviewed: "2026-09-15"
 ---
 # Plan #138: Claim Lifecycle Recovery
 
-**Status:** Complete
+**Status:** Complete — original create/reject/end/reconcile scope; recovery-and-resume follow-up belongs to Plan #108 PW-06
 **Type:** maintenance
 **Priority:** Critical
 **phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
@@ -129,6 +129,20 @@ the canonical recovery command. Maintenance bootstrap also stores a verified
   --reconcile-missing-worktree` for that session-ended claim. The closeout
   archived and released the claim, deleted its branch, and reported
   `worktree_action: not_attempted_absent_recorded_worktree`.
+
+## Follow-up boundary (2026-09-16)
+
+The completed evidence above proves rejection of invalid creation and exact
+termination/reconciliation of unhealthy ownership. It does not prove that an
+agent can subsequently bootstrap or resume, make an authorized edit, and close
+cleanly through all configured hooks. Keep the original completion evidence;
+do not treat it as acceptance of that larger workflow.
+
+[Plan #108 PW-06](108_prewrite_claim_enforcement.md#pw-06--complete-recovery-and-resume-through-the-combined-hooks)
+owns that follow-up, including Codex/Claude parity, failure injection, truthful
+partial-state reporting, and matched unsafe-write controls. Further Plan #108
+rollout depends on its acceptance. There is no second recovery implementation
+or separate execution queue under this completed plan.
 
 ## Files Affected
 

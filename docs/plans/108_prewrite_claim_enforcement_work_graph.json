@@ -868,14 +868,14 @@
       "id": "prewrite-pw-04-governed-fleet-enforcement",
       "initiative_id": "coordination-integrity",
       "goal_id": "prewrite-claim-enforcement",
-      "design_revision": "plan-108-v3",
-      "spec_revision": "prewrite-pw-04-v1",
+      "design_revision": "plan-108-v4",
+      "spec_revision": "prewrite-pw-04-v2",
       "title": "Promote every authorized active governed repository to hard pre-write enforcement",
       "class": "integration",
       "objective": "Make unclaimed native edits fail before mutation across the authorized governed fleet, with explicit exceptions instead of implicit off state.",
       "profile": "standard",
       "execution_class": "independently_executable",
-      "claimability": "ready_for_execution",
+      "claimability": "blocked_dependencies",
       "authorization_mode": "registry_claim",
       "scope": {
         "included": [
@@ -895,6 +895,7 @@
       },
       "inputs": [
         {"kind": "work_unit_output", "id": "prewrite-pw-03-enforce-promotion", "revision": "accepted"},
+        {"kind": "work_unit_output", "id": "prewrite-pw-06-recovery-resume", "revision": "accepted"},
         {"kind": "authority", "id": "project-meta/PROJECT_GRAPH.json", "revision": "fresh-default-branch"}
       ],
       "outputs": [
@@ -905,7 +906,8 @@
         "Representative native denial and exact-claim allow receipts"
       ],
       "dependencies": [
-        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet promotion starts only after the fixed repository pilot proves denial and allow through the real native boundary with retained enforce-mode readback."}
+        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Fleet promotion starts only after the fixed repository pilot proves denial and allow through the real native boundary with retained enforce-mode readback."},
+        {"unit_id": "prewrite-pw-06-recovery-resume", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Further rollout waits until the combined hooks permit recovery, resumed authorized work, and closure in both clients while unsafe writes remain denied."}
       ],
       "conflict_surfaces": [
         {"kind": "external_system", "target": "Project Meta active governed-repository inventory", "access": "read", "coordination_key": "prewrite-governed-fleet-promotion"},
@@ -925,10 +927,77 @@
           "negative_control": "An unauthorized, archived, missing, dirty, or actively claimed repository remains unchanged and is reported explicitly rather than counted as enforced."
         }
       ],
+      "readiness": {"status": "blocked", "required_approval_types": [], "approvals": [], "failed_guards": ["prewrite-pw-06-recovery-resume must be accepted before further rollout"]},
+      "claim_policy": {"eligibility_rule": "PW-03 and PW-06 accepted; each target matches the frozen governance manifest and receives one exact non-overlapping claim before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
+      "status": "blocked",
+      "record_version": 3
+    },
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "prewrite-pw-06-recovery-resume",
+      "initiative_id": "coordination-integrity",
+      "goal_id": "prewrite-claim-enforcement",
+      "design_revision": "plan-108-v4",
+      "spec_revision": "prewrite-pw-06-v1",
+      "title": "Prove blocked-to-recovered-to-resumed work through both clients",
+      "class": "integration",
+      "objective": "Extend the existing typed lifecycle until the complete PW-06 sequence admits authorized work after recovery and denies unsafe writes through the combined hooks.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "authorization_mode": "registry_claim",
+      "scope": {
+        "included": [
+          "Plan 108 PW-06 canonical sequence and failure behavior table",
+          "Existing prewrite request/decision, bootstrap, and claim/tracker lifecycle seams",
+          "Source-owner and disposable installed-consumer evidence",
+          "Authentic Codex and Claude combined-hook execution",
+          "Separately scoped dependent consumer fixes only for demonstrated blockers"
+        ],
+        "excluded": [
+          "General policy engine, parallel action schema, or new registry",
+          "Blocking contextual-agent activation",
+          "Further fleet rollout or unapproved host deployment",
+          "Discarding unrelated work or changing planned provenance to bypass admission"
+        ]
+      },
+      "inputs": [
+        {"kind": "work_unit_output", "id": "prewrite-pw-03-enforce-promotion", "revision": "accepted"},
+        {"kind": "authority", "id": "docs/plans/108_prewrite_claim_enforcement.md#pw-06--complete-recovery-and-resume-through-the-combined-hooks", "revision": "plan-108-v4"},
+        {"kind": "authority", "id": "docs/plans/138_claim_lifecycle_recovery.md", "revision": "original-scope-complete"}
+      ],
+      "outputs": [
+        "Baseline and candidate complete recovery-and-resume traces with exact case membership",
+        "Authorized diff and unchanged denied target evidence in each client",
+        "Contended/interrupted-state retry and truthful partial-failure evidence",
+        "Bounded owned-seam fixes, rollback references, and incident feedback"
+      ],
+      "dependencies": [
+        {"unit_id": "prewrite-pw-03-enforce-promotion", "type": "hard", "gate": {"type": "unit_status", "required_status": "accepted"}, "rationale": "Build on the accepted native write boundary without repeating its implementation."}
+      ],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning claim/bootstrap/prewrite modules, scripts/prewrite_claim_gate.py, and affected tests", "repository": "enforced-planning", "access": "write", "coordination_key": "prewrite-recovery-resume"},
+        {"kind": "external_system", "target": "Agent Skills client wiring and Project Meta learning writer when a reproduced transition requires a dependent fix", "access": "write", "coordination_key": "prewrite-recovery-resume-consumers"}
+      ],
+      "acceptance": [
+        {
+          "id": "PW06-A1",
+          "criterion": "Execute the full Plan 108 PW-06 help/status, recovery, bootstrap/resume, authorized edit, unsafe controls, closure, and post-close reads through each client's combined hooks without manual bypass or false provenance.",
+          "evidence_required": ["Baseline first failing transition", "Authentic Codex and Claude traces at recorded revisions", "Actual authorized diff and unchanged out-of-scope/foreign-session targets", "Verified terminal claim/tracker/worktree/branch state"],
+          "negative_control": "Foreign identity, out-of-scope writes, and shell mutation appended to recovery remain denied; component-only evidence cannot satisfy acceptance."
+        },
+        {
+          "id": "PW06-A2",
+          "criterion": "Exercise the PW-06 failure table with retries that converge to consistent ownership, retain user work, preserve required reading, and distinguish durable success from cleanup failure; record any unavailable client as unverified.",
+          "evidence_required": ["Contention and interruption replays", "Oversized required-document complete-reading evidence", "Durable-write/cleanup-failure residual-state readback", "Affected tests, source-owner dogfood, and installed-consumer evidence"],
+          "negative_control": "Unavailable authority never admits a new ordinary write, duplicate retry work is detected, and unavailable/uncertain semantic advice cannot add a blocking condition or grant authority."
+        }
+      ],
       "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
-      "claim_policy": {"eligibility_rule": "PW-03 accepted; each target matches the frozen governance manifest and receives one exact non-overlapping claim before mutation.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
+      "claim_policy": {"eligibility_rule": "PW-03 accepted; claim exact owner paths for the reproduced transition, and separately claim any dependent consumer repair. Live host activation retains its separate authority boundary.", "lease_policy": "renewable", "lease_duration_minutes": 1440, "max_active_per_claimant": 1, "named_owner_id": null},
       "status": "ready",
-      "record_version": 2
+      "record_version": 1
     }
   ]
 }

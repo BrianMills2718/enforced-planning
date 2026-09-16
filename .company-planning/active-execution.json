@@ -1,12 +1,12 @@
 {
   "active_slice": {
-    "description": "Run the current combined recovery path, retain the first failing transition, and preserve matched unsafe controls",
-    "next_action": "Construct and run the disposable baseline replay at the current merged revision.",
+    "description": "Exercise exact recovery, rebootstrap or resume, authorized and denied edits, closeout, and post-close reads in a disposable governed consumer",
+    "next_action": "Extend the disposable composition test through the emitted recovery command, one exact replacement lane, edit controls, and terminal-state checks.",
     "requires_external_action": false,
     "requires_spend": false,
-    "slice_id": "pw06-baseline-replay",
+    "slice_id": "pw06-full-sequence-disposable",
     "status": "executing",
-    "target_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd"
+    "target_revision": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776"
   },
   "authority": {
     "external_action_authorized": false,
@@ -29,7 +29,7 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 1,
+  "cursor_revision": 2,
   "failure_state": {
     "boundary": null,
     "last_failure_ref": null,
@@ -37,7 +37,22 @@
   },
   "goal_ref": "enforced-planning#108:prewrite-pw-06-recovery-resume",
   "lifecycle_state": "active",
-  "observations": [],
+  "observations": [
+    {
+      "boundary": "ambiguous native-session denial to exact recovery",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#baseline",
+      "kind": "verification_failure",
+      "observation_id": "pw06-baseline-ambiguous-recovery",
+      "outcome": "fail"
+    },
+    {
+      "boundary": "ambiguous native-session denial to exact recovery",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#candidate",
+      "kind": "supporting_work",
+      "observation_id": "pw06-candidate-exact-recovery",
+      "outcome": "pass"
+    }
+  ],
   "plan_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd",
   "ready_alternatives": [],
   "record_type": "plan_execution_cursor",

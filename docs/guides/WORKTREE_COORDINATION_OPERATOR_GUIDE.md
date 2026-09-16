@@ -126,13 +126,15 @@ unrelated writers but cannot override another writer's overlapping claim.
 When maintenance must create a new file directly at the repository root,
 declare that literal in both `write_paths` and `new_files`. The transaction
 accepts at most 16 unique top-level filenames, creates each as an empty regular
-file only after the broad bootstrap claim and linked worktree exist, then
-narrows to the final declared paths before returning authority. It never infers
-file intent from an extension, and rejects nested, existing, undeclared,
+file only after an exact final-path reservation exists, then returns authority
+after the linked worktree and declared files satisfy that reservation. It never
+infers file intent from an extension, and rejects nested, existing, undeclared,
 delegated, or goal-bound `new_files`. A failure removes only empty files created
 by that attempt before rolling back the lane. The final claim retains the exact
 `new_files` declaration so later health checks can distinguish the still-new
-worktree file from an ambiguous missing top-level path.
+worktree file from an ambiguous missing top-level path. Because the transaction
+never claims `.` merely to create a declared root file, a disjoint healthy lane
+does not block this bootstrap; an overlapping exact path still does.
 
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,

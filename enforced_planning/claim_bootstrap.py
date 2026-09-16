@@ -2034,6 +2034,7 @@ def _execute_maintenance_worktree(
         *,
         start_revision: str | None,
         write_paths: list[str] | None = None,
+        declared_new_files: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create or refresh the primary claim around the Git artifact boundary."""
         selected_write_paths = request.write_paths if write_paths is None else write_paths
@@ -2070,6 +2071,7 @@ def _execute_maintenance_worktree(
                 else None
             ),
             target_worktree_path=str(worktree) if selected_bootstrap else None,
+            new_files=declared_new_files,
             verified_goal_default_revision=starting_head if goal_bound else None,
         )
 
@@ -2104,7 +2106,7 @@ def _execute_maintenance_worktree(
                 create_git_artifacts()
             payload = start_primary_session(
                 start_revision=starting_head if goal_bound else None,
-                write_paths=["."] if new_files else None,
+                declared_new_files=new_files or None,
             )
     except Exception as exc:
         if delegated:
@@ -2229,31 +2231,13 @@ def _execute_maintenance_worktree(
                 if target.exists() or target.is_symlink():
                     raise ClaimBootstrapError(f"declared new file already exists: {relative}")
                 target.touch(mode=0o644, exist_ok=False)
-            if new_files:
-                coordination_claims.narrow_claim(
-                    agent=agent,
-                    project=request.project,
-                    scope=request.scope,
-                    session_id=owner_session_id,
-                    write_paths=request.write_paths,
-                    require_native_session_binding=True,
-                    known_new_files=new_files,
-                    start_revision=starting_head,
-                )
-                def attach_start_revision(tracker: dict[str, Any]) -> None:
-                    tracker_claim = tracker.get("claim")
-                    if not isinstance(tracker_claim, dict):
-                        raise ValueError("maintenance tracker is missing its claim section")
-                    tracker_claim["start_revision"] = starting_head
-
-                session_contracts.mutate_session_tracker(tracker_path, attach_start_revision)
             # The initial claim authorizes Git artifact creation. Once those
             # exact artifacts exist, attach the already-resolved remote-default
             # revision so closeout can measure concurrent arrivals precisely.
-            if new_files:
-                payload = {**payload, "action": "updated", "start_revision": starting_head}
-            else:
-                payload = start_primary_session(start_revision=starting_head)
+            payload = start_primary_session(
+                start_revision=starting_head,
+                declared_new_files=new_files or None,
+            )
         lock_reconciliation = _reconcile_canonical_after_claim(
             repo,
             session_id=session_id,

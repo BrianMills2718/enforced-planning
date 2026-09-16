@@ -512,7 +512,7 @@ def _validate_session_ended_closeout_reconciliation(
     expected_tracker_sha256: str | None,
     tracker_absent: bool = False,
 ) -> dict[str, Any]:
-    """Authorize terminal closeout without transferring predecessor write custody.
+    """Authorize terminal closeout without transferring write custody.
 
     ``tracker_absent`` (issue #2010) replaces the tracker digest with verified
     absence: a claim whose tracker never existed has no tracker bytes to bind,
@@ -523,14 +523,15 @@ def _validate_session_ended_closeout_reconciliation(
     -- never ``claim.agent``, the predecessor's client. ``close_session()``'s
     outer ``agent`` argument cannot serve this purpose: it selects which
     agent-keyed claim file to load and must stay bound to the claim's own
-    owner (``claim.agent``) even during cross-client reconciliation. The
-    operator guide's own "exact ownerless session-ended closeout" section
-    describes this path as "a different native runtime" inheriting a stranded
-    lane; binding the native-marker check to claim.agent instead made that
-    structurally impossible -- a Claude Code session closing a stranded Codex
-    claim was checked for a live Codex native marker it can never have, and
-    refused with a message only a Codex runtime could satisfy
-    (lrn-20260902T182546895692Z-f56b908b6b).
+    owner (``claim.agent``) even during cross-client reconciliation. The actor
+    may be either the runtime that explicitly ended its own claim or a later
+    runtime reconciling stranded residue. In both cases the terminal status,
+    exact claim/tracker bytes, Git state, and merge/recovery evidence remain
+    mandatory. Binding the native-marker check to claim.agent previously made
+    cross-client cleanup structurally impossible
+    (lrn-20260902T182546895692Z-f56b908b6b); requiring a different actor later
+    created the inverse deadlock by preventing an owner from cleaning up the
+    claim it had just ended (lrn-20260916T050517958708Z-8b8b878dfe).
     """
 
     if not actor_session_id or ":" not in actor_session_id:
@@ -557,10 +558,8 @@ def _validate_session_ended_closeout_reconciliation(
             "Session-ended closeout reconciliation requires an exact session_ended claim; "
             f"found {claim.status!r}."
         )
-    if not claim.session_id or claim.session_id == resolved_actor:
-        raise ValueError(
-            "Session-ended closeout reconciliation is only for a different preserved predecessor session."
-        )
+    if not claim.session_id:
+        raise ValueError("Session-ended closeout reconciliation requires a recorded owner session_id.")
     if not claim.worktree_path:
         raise ValueError("Session-ended closeout reconciliation requires a recorded worktree path")
     recorded_worktree = Path(claim.worktree_path).expanduser().resolve()
@@ -597,6 +596,9 @@ def _validate_session_ended_closeout_reconciliation(
             "claim_status_before": claim.status,
             "predecessor_session_id": claim.session_id,
             "reconciliation_actor_session_id": resolved_actor,
+            "reconciliation_actor_relation": (
+                "owner" if claim.session_id == resolved_actor else "successor"
+            ),
             "recorded_worktree_path": str(recorded_worktree),
             "worktree_present_before": recorded_worktree.is_dir(),
             "claim_sha256": actual_claim_digest,
@@ -621,6 +623,9 @@ def _validate_session_ended_closeout_reconciliation(
         "claim_status_before": claim.status,
         "predecessor_session_id": claim.session_id,
         "reconciliation_actor_session_id": resolved_actor,
+        "reconciliation_actor_relation": (
+            "owner" if claim.session_id == resolved_actor else "successor"
+        ),
         "recorded_worktree_path": str(recorded_worktree),
         "worktree_present_before": recorded_worktree.is_dir(),
         "claim_sha256": actual_claim_digest,
@@ -2816,6 +2821,7 @@ def _validate_closeout_preflight(
     merge_commit: str | None,
     allow_discard_unique: bool,
     delete_branch: bool,
+    retain_canonical_default_branch: bool = False,
 ) -> CloseoutPreflight:
     """Validate merge or explicit recovery evidence before any closeout mutation."""
 
@@ -2858,7 +2864,7 @@ def _validate_closeout_preflight(
             "Unable to resolve the canonical default branch; configure origin/HEAD "
             "or create a local main/master ref before closeout."
         )
-    if branch == default_branch:
+    if branch == default_branch and not retain_canonical_default_branch:
         raise ValueError(f"Refusing to close the canonical default branch '{default_branch}' as a task lane.")
 
     branch_ref = f"refs/heads/{branch}"
@@ -5172,6 +5178,7 @@ def close_session(
             merge_commit=merge_commit,
             allow_discard_unique=allow_discard_unique,
             delete_branch=delete_branch,
+            retain_canonical_default_branch=canonical_root_reconciliation is not None,
         )
     mailbox_closeout = _resolve_active_mailbox_for_closeout(
         claim=claim,

@@ -2505,13 +2505,13 @@ but with its worktree removed before `session-close`, could not be released,
 reconciled, or resumed, and refused every later claim by that session in the
 project ("Preserved session-ended lane(s) still require disposition").
 
-### Exact ownerless session-ended closeout
+### Exact session-ended closeout without custody transfer
 
-When a different native runtime inherits a clean linked worktree whose claim is
-already `session_ended`, do not invent a predecessor PID and do not transfer
-write custody merely to remove merged residue. The successor may terminally
-close the lane with exact claim and tracker digests plus the ordinary merge or
-recovery evidence:
+When a runtime has explicitly ended its own claim, or a different runtime
+inherits a clean linked worktree whose claim is already `session_ended`, do not
+invent a predecessor PID and do not transfer write custody merely to remove
+merged residue. The owner or successor may terminally close the lane with exact
+claim and tracker digests plus the ordinary merge or recovery evidence:
 
 ```bash
 python scripts/session_close.py \
@@ -2524,16 +2524,17 @@ python scripts/session_close.py \
   --json
 ```
 
-This path is terminal reconciliation, not takeover. It requires a different
-exact native actor, non-canonical linked-worktree custody, one identity-matched
-tracker, byte-exact digests, and a valid pushed merge or durable recovery
-disposition. The original `session_ended` claim and tracker bytes remain intact
-until physical cleanup succeeds, so a retry can finish after partial cleanup
-even when the recorded worktree is then absent. It rejects live claims,
-canonical-root custody, digest drift, dirty state, unique unpreserved commits,
-and invalid Git evidence before lifecycle mutation. Unmerged work that must
-continue still requires the sanctioned custody-transfer path and its process
-fencing.
+This path is terminal reconciliation, not takeover. It requires an exact native
+actor, non-canonical linked-worktree custody, one identity-matched tracker,
+byte-exact digests, and a valid pushed merge or durable recovery disposition.
+The actor may be the claim's recorded owner or a successor; `session_ended` is
+the termination boundary in either case. The preserved claim and tracker bytes
+remain intact until physical cleanup succeeds, so a retry can finish after
+partial cleanup even when the recorded worktree is then absent. It rejects live
+claims, canonical-root custody, digest drift, dirty state, unique unpreserved
+commits, and invalid Git evidence before lifecycle mutation. Unmerged work that
+must continue still requires the sanctioned custody-transfer path and its
+process fencing.
 
 The acting client does not have to match the stranded claim's own client: a
 Claude Code session may terminally close a stranded Codex lane, and vice

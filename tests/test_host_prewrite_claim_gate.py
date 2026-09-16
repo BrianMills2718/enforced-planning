@@ -13,7 +13,7 @@ from types import ModuleType
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-from enforced_planning import coordination_claims, session_lifecycle
+from enforced_planning import coordination_claims, prewrite_claim_fast, session_lifecycle
 from enforced_planning.prewrite_claim_fast import (
     _argv_is_read_only,
     _bash_declared_paths,
@@ -633,6 +633,18 @@ def test_pytest_node_selector_retains_only_its_file_path() -> None:
 def test_session_close_scope_branch_and_recovery_ref_are_identifiers() -> None:
     command = (
         "/usr/bin/env -C /repo/worktrees/lane /usr/bin/python3 scripts/session_close.py "
+        "--agent codex --project enforced-planning --scope runtime/install-fix "
+        "--worktree-path /repo/worktrees/lane --branch runtime/install-fix "
+        "--disposition merged --recovery-ref refs/recovery/runtime/install-fix"
+    )
+
+    assert _bash_declared_paths(command) == ("/repo/worktrees/lane",)
+
+
+def test_absolute_installed_session_close_keeps_scope_and_branch_as_identifiers() -> None:
+    installed_close = Path(prewrite_claim_fast.__file__).resolve().parents[1] / "scripts/session_close.py"
+    command = (
+        f"/usr/bin/env -C /repo/worktrees/lane /usr/bin/python3 {installed_close} "
         "--agent codex --project enforced-planning --scope runtime/install-fix "
         "--worktree-path /repo/worktrees/lane --branch runtime/install-fix "
         "--disposition merged --recovery-ref refs/recovery/runtime/install-fix"

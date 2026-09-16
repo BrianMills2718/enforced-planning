@@ -136,6 +136,15 @@ worktree file from an ambiguous missing top-level path. Because the transaction
 never claims `.` merely to create a declared root file, a disjoint healthy lane
 does not block this bootstrap; an overlapping exact path still does.
 
+An exact top-level file that already exists at the freshly fetched starting
+revision remains a narrow reservation even when the canonical checkout is
+temporarily behind that revision. The bootstrap retains the verified starting
+commit and classifies the path from that Git tree; it does not widen to `.` or
+depend on the canonical checkout's current filesystem view. This keeps a
+disjoint active lane unblocked while the canonical checkout is intentionally
+stale; exact-path overlap checks still apply normally. Directory reservations
+remain broad and still require their ordinary broad-scope contract.
+
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,
 worktree, exact-session claim, tracker, and projection transactionally; failure

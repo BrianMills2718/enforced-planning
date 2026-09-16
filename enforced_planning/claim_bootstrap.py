@@ -2073,6 +2073,7 @@ def _execute_maintenance_worktree(
             target_worktree_path=str(worktree) if selected_bootstrap else None,
             new_files=declared_new_files,
             verified_goal_default_revision=starting_head if goal_bound else None,
+            verified_maintenance_default_revision=(starting_head if not goal_bound else None),
         )
 
     try:
@@ -2105,7 +2106,7 @@ def _execute_maintenance_worktree(
             if goal_bound:
                 create_git_artifacts()
             payload = start_primary_session(
-                start_revision=starting_head if goal_bound else None,
+                start_revision=starting_head,
                 declared_new_files=new_files or None,
             )
     except Exception as exc:

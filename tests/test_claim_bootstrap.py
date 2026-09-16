@@ -1369,6 +1369,53 @@ def test_new_root_file_bootstrap_keeps_exact_scope_beside_healthy_disjoint_write
     assert created.new_files == ("Makefile.worktree",)
 
 
+def test_existing_root_file_at_fresh_start_revision_is_exact_when_canonical_is_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    stale_head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    (repo / "Makefile.worktree").write_text("fresh contract\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "Makefile.worktree"], check=True, capture_output=True)
+    subprocess.run(
+        [
+            "git", "-C", str(repo), "-c", "user.name=Test User",
+            "-c", "user.email=test@example.invalid", "commit", "-m", "fresh root contract",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    fresh_head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(repo), "reset", "--hard", stale_head], check=True, capture_output=True)
+    monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", lambda _repo, _authority: fresh_head)
+
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(
+        repo,
+        write_paths=["Makefile.worktree"],
+    )))
+    receipt = claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    assert (worktree / "Makefile.worktree").read_text(encoding="utf-8") == "fresh contract\n"
+    assert not (repo / "Makefile.worktree").exists()
+    claim = claim_bootstrap.coordination_claims.check_claims(repo.name)[0]
+    assert claim.start_revision == fresh_head == receipt["result"]["start_revision"]
+    assert claim.write_paths == ["Makefile.worktree"]
+    assert claim.broad_scope_mode is None
+    assert claim_bootstrap.coordination_claims.claim_health_issues(claim) == []
+
+
 @pytest.mark.parametrize(
     "updates",
     [

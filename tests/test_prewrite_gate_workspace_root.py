@@ -240,6 +240,38 @@ def test_enforce_allows_read_only_bash_from_workspace_root(
     assert decision["reason_code"] == "bash_read_only"
 
 
+def test_session_ended_owner_closeout_is_claimless_control_command(
+    tmp_path: Path,
+) -> None:
+    """An owner may reconcile its own explicitly ended claim from the workspace root."""
+
+    _workspace, _worktree, claims_dir = _governed_repo(
+        tmp_path,
+        claim_session=CLAIM_SESSION,
+    )
+    claim_path = claims_dir / "claude-code_workspace-root-test_workspace-root-lane.yaml"
+    claim = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    claim["status"] = "session_ended"
+    claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
+    command = (
+        f"/usr/bin/python3 {prewrite_claim_gate.REPO_ROOT / 'scripts' / 'session_close.py'} "
+        "--agent claude-code --project workspace-root-test --scope workspace-root-lane "
+        f"--session-id {CLAIM_SESSION} --reconcile-session-ended "
+        f"--claim-sha256 {'a' * 64} --tracker-sha256 {'b' * 64} --json"
+    )
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session=CLAIM_SESSION,
+    )
+
+    assert classification == "native_closeout"
+
+
 # --------------------------------------------------------------------------
 # The gate must not become a no-op: governed targets still enforce.
 # --------------------------------------------------------------------------

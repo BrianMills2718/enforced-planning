@@ -2586,6 +2586,51 @@ def test_bound_worktree_allows_exact_installed_canonical_sync(
     assert decision["reason_code"] == "exact_live_claim"
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr list --repo BrianMills2718/project-meta --json number,url",
+        "gh issue list -R BrianMills2718/project-meta --state all",
+        (
+            "/usr/bin/python3 scripts/concern_issue.py open "
+            "--repo BrianMills2718/project-meta --key canonical-sync "
+            "--title 'Canonical sync failed' --body 'Observed failure' "
+            "--source agent-runtime"
+        ),
+    ],
+)
+def test_bound_worktree_treats_github_repo_slug_as_identifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    workspace, _repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    bound = f"/usr/bin/env -C {worktree} {command}"
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=workspace, tool="Bash", tool_input={"command": bound}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "exact_live_claim"
+
+
+def test_github_body_file_remains_a_claimed_path() -> None:
+    command = (
+        "gh pr create --repo BrianMills2718/project-meta "
+        "--body-file /tmp/pr-body.md"
+    )
+
+    assert _bash_declared_paths(command) == ("/tmp/pr-body.md",)
+
+
 def test_bound_worktree_command_denies_repo_relative_path_outside_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

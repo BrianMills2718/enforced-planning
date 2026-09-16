@@ -451,6 +451,12 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
         make_lifecycle_paths = _make_lifecycle_declared_paths(effective_argv)
         if make_lifecycle_paths is not None:
             return make_lifecycle_paths
+        github_paths = _github_declared_paths(effective_argv)
+        if github_paths is not None:
+            return github_paths
+        concern_paths = _concern_issue_declared_paths(effective_argv)
+        if concern_paths is not None:
+            return concern_paths
 
     pytest_node_paths: dict[str, str] = {}
     if commands is not None:
@@ -548,6 +554,65 @@ def _bash_effective_argv(argv: tuple[str, ...]) -> tuple[str, ...]:
     if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
         return argv[3:]
     return argv
+
+
+def _paths_except_identifier_options(
+    argv: tuple[str, ...],
+    *,
+    start: int,
+    identifier_options: frozenset[str],
+) -> tuple[str, ...]:
+    """Return path-shaped operands while skipping typed identifier values."""
+
+    paths: list[str] = []
+    index = start
+    while index < len(argv):
+        token = argv[index]
+        option, separator, inline_value = token.partition("=")
+        if option in identifier_options:
+            index += 1 if separator else 2
+            continue
+        candidate = inline_value if separator and token.startswith("-") else token
+        if _path_shaped(candidate):
+            paths.append(candidate)
+        index += 1
+    return tuple(dict.fromkeys(paths))
+
+
+def _github_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Treat GitHub ``owner/repo`` selectors as identifiers, not paths."""
+
+    if not argv or Path(argv[0]).name != "gh":
+        return None
+    return _paths_except_identifier_options(
+        argv,
+        start=1,
+        identifier_options=frozenset({"--repo", "-R"}),
+    )
+
+
+def _concern_issue_declared_paths(argv: tuple[str, ...]) -> tuple[str, ...] | None:
+    """Classify concern-register arguments by their typed CLI contract."""
+
+    if len(argv) < 3 or Path(argv[0]).name not in {"python", "python3", "python3.12"}:
+        return None
+    if argv[1] not in {"scripts/concern_issue.py", "scripts/meta/concern_issue.py"}:
+        return None
+    return _paths_except_identifier_options(
+        argv,
+        start=2,
+        identifier_options=frozenset(
+            {
+                "--body",
+                "--evidence",
+                "--key",
+                "--occurrence",
+                "--repo",
+                "--source",
+                "--title",
+            }
+        ),
+    )
 
 
 _LIFECYCLE_IDENTIFIER_OPTIONS = {

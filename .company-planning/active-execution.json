@@ -1,10 +1,10 @@
 {
   "active_slice": {
-    "description": "Repair the authentic Codex exec_command coverage gap, then resume the PW-06 lane and repeat the negative control",
-    "next_action": "Preserve and end the current PW-06 claim, repair the Codex matcher in Agent Skills, deploy it, resume this retained lane, and rerun the authentic out-of-scope command.",
+    "description": "Exercise bounded claim-registry contention and interruption recovery, then retain exact retry evidence",
+    "next_action": "Reproduce the unbounded registry-writer lock in a separate implementation lane, add a bounded timeout and retry probe, merge it, resume PW-06, and retain the result.",
     "requires_external_action": false,
-    "requires_spend": true,
-    "slice_id": "pw06-authentic-codex-command-coverage",
+    "requires_spend": false,
+    "slice_id": "pw06-contention-interruption",
     "status": "executing",
     "target_revision": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776"
   },
@@ -29,9 +29,9 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 3,
+  "cursor_revision": 4,
   "failure_state": {
-    "boundary": "authentic Codex exec_command out-of-scope write",
+    "boundary": "current Codex app/API exec command prewrite coverage",
     "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
     "same_boundary_failures": 1
   },
@@ -60,11 +60,25 @@
       "outcome": "pass"
     },
     {
-      "boundary": "Codex exec_command out-of-scope write denial",
+      "boundary": "current Codex app/API out-of-scope write denial",
       "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
       "kind": "verification_failure",
-      "observation_id": "pw06-authentic-codex-negative-control",
+      "observation_id": "pw06-authentic-codex-app-negative-control",
       "outcome": "fail"
+    },
+    {
+      "boundary": "fresh Codex CLI unclaimed write denial",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
+      "kind": "authentic_result",
+      "observation_id": "pw06-authentic-codex-cli-negative-control",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "installed session end, separate repair lane, and exact retained-lane resume",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
+      "kind": "authentic_result",
+      "observation_id": "pw06-authentic-parent-recovery-resume",
+      "outcome": "pass"
     }
   ],
   "plan_revision": "b54a20c375f57a2f24319ecf69f0a77f243e4cbd",

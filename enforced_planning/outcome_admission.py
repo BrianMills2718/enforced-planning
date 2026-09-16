@@ -594,7 +594,8 @@ def has_sanctioned_maintenance_claim_identity(claim: coordination_claims.ClaimRe
         or not claim.worktree_path
         or len(claim.projects) != 1
         or not claim.source_file
-        or claim.start_revision is not None
+        or not isinstance(claim.start_revision, str)
+        or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", claim.start_revision) is None
         or any(
             value is not None
             for value in (
@@ -725,6 +726,7 @@ def is_sanctioned_maintenance_claim_payload(
         "session_name": claim.session_name,
         "broader_goal": claim.broader_goal,
         "tracker_path": str(resolved_tracker_path),
+        "start_revision": claim.start_revision,
     }
     current_phase = tracker.get("current_phase")
     return (

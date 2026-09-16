@@ -532,6 +532,7 @@ def _maintenance_claim(tmp_path: Path) -> coordination_claims.ClaimRecord:
         notes=None,
         plan_ref="UNPLANNED",
         source_file=str(tmp_path / "claim.yaml"),
+        start_revision="a" * 40,
         schema_version=3,
     )
     tracker_path.write_text(
@@ -551,6 +552,7 @@ def _maintenance_claim(tmp_path: Path) -> coordination_claims.ClaimRecord:
                     "session_name": claim.session_name,
                     "broader_goal": claim.broader_goal,
                     "tracker_path": claim.tracker_path,
+                    "start_revision": claim.start_revision,
                 },
                 "tracker": {
                     "current_phase": "maintenance",
@@ -588,7 +590,8 @@ def test_sanctioned_maintenance_claim_requires_exact_typed_tracker(tmp_path: Pat
         ("parallel_root_authorized", True),
         ("projects", ["enforced-planning", "foreign-project"]),
         ("source_file", None),
-        ("start_revision", "a" * 40),
+        ("start_revision", None),
+        ("start_revision", "not-a-revision"),
     ],
 )
 def test_sanctioned_maintenance_claim_rejects_nonmaintenance_identity(

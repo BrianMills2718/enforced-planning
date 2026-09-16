@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "scenario_id": "plan-138-claim-lifecycle-recovery",
+  "contract": {
+    "schema_version": "1.0.0",
+    "outcome_id": "claim-lifecycle-root-repair",
+    "owner_class": "brian",
+    "project_id": "enforced-planning",
+    "lineage_id": "plan-138-claim-lifecycle-recovery",
+    "predecessor_lineage_ids": [],
+    "intended_consumer": "Coding agents using sanctioned claim bootstrap and recovery",
+    "outcome": "Claim creation cannot report success for a missing checkout, and a malformed claim cannot block its own exact recovery path.",
+    "canonical_journey": {
+      "starting_state": "A native session has no claim, or owns a claim whose recorded worktree is missing.",
+      "input": "An exact typed session-start or self-owned session-end request.",
+      "action": "Attempt invalid session creation, then exercise exact recovery for an unhealthy claim.",
+      "observable_result": "Invalid creation fails before writing state, while exact self-owned recovery remains admitted.",
+      "failure_signal": "A missing checkout produces a live claim or the unhealthy claim prevents its own recovery command."
+    },
+    "baseline_revision": "812e2c5e4c0fde7ddcd030c8333411067c0105a2",
+    "allowed_scope": [
+      "docs/plans/138_claim_lifecycle_recovery.md",
+      "docs/plans/138_claim_lifecycle_recovery_work_graph.json",
+      "examples/owner-real-outcome-admission/plan138-claim-lifecycle-recovery.json",
+      "enforced_planning/claim_bootstrap.py",
+      "enforced_planning/outcome_admission.py",
+      "scripts/prewrite_claim_gate.py",
+      "tests/test_claim_bootstrap.py",
+      "tests/test_host_prewrite_claim_gate.py",
+      "tests/test_outcome_admission.py"
+    ],
+    "progress_dimensions": ["claim creation", "recovery reachability", "maintenance admission"]
+  },
+  "receipts": [],
+  "request": {
+    "schema_version": "1.0.0",
+    "operation": "product_write",
+    "target_path": "enforced_planning/claim_bootstrap.py",
+    "ordinary_approval": true,
+    "approval_text": "Brian approved resolving the claim lifecycle defect at the root on 2026-09-15."
+  }
+}

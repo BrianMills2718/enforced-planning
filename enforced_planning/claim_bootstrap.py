@@ -603,6 +603,38 @@ def _repository_authority(
         raise ClaimBootstrapError(str(exc)) from exc
 
 
+def _validate_existing_session_worktree(request: SessionStartOrUpdateRequest) -> None:
+    """Prove an ordinary session upsert names one existing Git checkout."""
+
+    repo = Path(request.repo_root).resolve()
+    worktree = Path(request.worktree_path).resolve()
+    if not worktree.is_dir():
+        raise ClaimBootstrapError("worktree_path is not an existing Git checkout")
+
+    repo_identity = _git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    worktree_identity = _git(
+        worktree,
+        "rev-parse",
+        "--show-toplevel",
+        "--path-format=absolute",
+        "--git-common-dir",
+        "--abbrev-ref",
+        "HEAD",
+    )
+    if repo_identity.returncode != 0 or worktree_identity.returncode != 0:
+        raise ClaimBootstrapError("worktree_path is not an existing Git checkout")
+    identity_lines = [line.strip() for line in worktree_identity.stdout.splitlines() if line.strip()]
+    if len(identity_lines) != 3:
+        raise ClaimBootstrapError("worktree_path Git identity is incomplete")
+    observed_worktree, observed_common_dir, observed_branch = identity_lines
+    if Path(observed_worktree).resolve() != worktree:
+        raise ClaimBootstrapError("worktree_path does not match its Git top-level checkout")
+    if Path(observed_common_dir).resolve() != Path(repo_identity.stdout.strip()).resolve():
+        raise ClaimBootstrapError("worktree_path belongs to a different Git repository")
+    if observed_branch != request.branch:
+        raise ClaimBootstrapError("worktree_path is checked out on a different branch")
+
+
 def _fresh_remote_default_revision(
     repo: Path,
     authority: RepositoryAuthority | MaintenanceWorktreeAuthority,
@@ -1045,6 +1077,7 @@ def execute_request(request: ClaimBootstrapRequest) -> dict[str, Any]:
             scope=request.scope,
             allow_absent=True,
         )
+        _validate_existing_session_worktree(request)
         payload = session_lifecycle.start_session(
             agent=agent,
             project=request.project,

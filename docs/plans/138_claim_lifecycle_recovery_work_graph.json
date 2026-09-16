@@ -1,0 +1,38 @@
+{
+  "units": [
+    {
+      "schema_version": "1.0",
+      "record_type": "work_unit",
+      "id": "clr-01-root-repair",
+      "initiative_id": "agentic-engineering",
+      "goal_id": "claim-lifecycle-root-repair",
+      "design_revision": "plan-138-bootstrap-v1",
+      "spec_revision": "plan-138-work-graph-v1",
+      "title": "Prevent invalid claims and preserve self-owned recovery",
+      "class": "implementation",
+      "objective": "Repair claim creation, maintenance admission, and exact recovery as one tested lifecycle.",
+      "profile": "standard",
+      "execution_class": "independently_executable",
+      "claimability": "ready_for_execution",
+      "scope": {"included": ["claim bootstrap", "maintenance admission", "native recovery", "focused tests"], "excluded": ["fleet rollout", "unrelated redesign"]},
+      "inputs": [{"kind": "reproduced_failure", "id": "missing-worktree-self-lock", "revision": "codex-session-2026-09-15"}],
+      "outputs": ["validated claim creation", "reachable exact recovery", "both-sign regression evidence"],
+      "dependencies": [],
+      "conflict_surfaces": [
+        {"kind": "repository_path", "target": "enforced_planning/claim_bootstrap.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "enforced_planning/outcome_admission.py", "repository": "enforced-planning", "access": "exclusive"},
+        {"kind": "repository_path", "target": "scripts/prewrite_claim_gate.py", "repository": "enforced-planning", "access": "exclusive"}
+      ],
+      "acceptance": [
+        {"id": "CLR01-A1", "criterion": "Invalid Git identity is rejected before durable claim state.", "evidence_required": ["missing-worktree test", "valid-worktree control"], "negative_control": "An absolute nonexistent path cannot become a live claim."},
+        {"id": "CLR01-A2", "criterion": "An unhealthy claim cannot block its exact self-owned recovery.", "evidence_required": ["missing-worktree recovery test"], "negative_control": "Foreign or composed commands remain denied."}
+      ],
+      "readiness": {"status": "ready", "required_approval_types": [], "approvals": [], "failed_guards": []},
+      "authorization_mode": "registry_claim",
+      "status": "ready",
+      "record_version": 1,
+      "created_at": "2026-09-15T23:45:00Z",
+      "updated_at": "2026-09-15T23:45:00Z"
+    }
+  ]
+}

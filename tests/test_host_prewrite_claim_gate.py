@@ -1035,6 +1035,65 @@ def test_host_gate_admits_exact_native_closeout_for_merged_claim(
     assert decision["reason_code"] == "native_closeout_command"
 
 
+def test_host_gate_admits_exact_native_session_end_for_unhealthy_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    monkeypatch.setattr(prewrite_claim_gate, "REPO_ROOT", repo)
+    _git(repo, "worktree", "remove", "--force", str(worktree))
+    command = (
+        f"/usr/bin/python3 {repo / 'scripts' / 'session_end.py'} "
+        "--agent claude-code --session-id claude-code:host-gate-test "
+        "--reason 'recover missing worktree claim' --json"
+    )
+    payload = _payload(cwd=repo, tool="Bash", tool_input={"command": command})
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        payload,
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0, decision
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "native_closeout_command"
+
+
+@pytest.mark.parametrize(
+    "command_suffix",
+    [
+        "--agent codex --session-id claude-code:host-gate-test --json",
+        "--agent claude-code --session-id claude-code:other --json",
+        "--agent claude-code --session-id claude-code:host-gate-test --json && touch escaped",
+    ],
+)
+def test_host_gate_rejects_non_self_owned_native_session_end(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command_suffix: str,
+) -> None:
+    repo = tmp_path / "runtime"
+    (repo / "scripts").mkdir(parents=True)
+    monkeypatch.setattr(prewrite_claim_gate, "REPO_ROOT", repo)
+    command = f"/usr/bin/python3 {repo / 'scripts' / 'session_end.py'} {command_suffix}"
+
+    classification = prewrite_claim_gate._special_unclaimed_command(
+        command,
+        client="claude-code",
+        claims_dir=tmp_path / "claims",
+        projection_path=tmp_path / "projection.json",
+        subagent_event=False,
+        native_session="claude-code:host-gate-test",
+    )
+
+    assert classification is False
+
+
 def test_host_gate_admits_exact_make_closeout_for_merged_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

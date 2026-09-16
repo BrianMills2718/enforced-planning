@@ -123,6 +123,15 @@ absolute paths, glob patterns, and mixed broad/narrow declarations are rejected.
 Narrow creation uses the same registry overlap checks: it can coexist with
 unrelated writers but cannot override another writer's overlapping claim.
 
+When maintenance must create a new file directly at the repository root,
+declare that literal in both `write_paths` and `new_files`. The transaction
+accepts at most 16 unique top-level filenames, creates each as an empty regular
+file only after the broad bootstrap claim and linked worktree exist, then
+narrows to the final declared paths before returning authority. It never infers
+file intent from an extension, and rejects nested, existing, undeclared,
+delegated, or goal-bound `new_files`. A failure removes only empty files created
+by that attempt before rolling back the lane.
+
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,
 worktree, exact-session claim, tracker, and projection transactionally; failure

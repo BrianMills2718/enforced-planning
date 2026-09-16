@@ -1241,6 +1241,8 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
         projection_path=projection_path,
         receipt_path=tmp_path / "inside-receipts.jsonl",
     )
+
+
     outside = prewrite_claim_fast.evaluate_prewrite_fast(
         {
             "session_id": "native-123",
@@ -1285,6 +1287,47 @@ def test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projec
             receipt_path=tmp_path / "admitted-receipts.jsonl",
         )
         assert admitted["decision"] == "allow"
+
+
+def test_maintenance_bootstrap_creates_declared_new_root_file_then_narrows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    request = claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(
+        repo,
+        write_paths=["Makefile.worktree", "src/adapter.py"],
+        new_files=["Makefile.worktree"],
+    )))
+
+    receipt = claim_bootstrap.execute_request(request)
+
+    worktree = repo / "worktrees" / "fix" / "safe-lane"
+    assert (worktree / "Makefile.worktree").read_bytes() == b""
+    claim = claim_bootstrap.coordination_claims.check_claims(repo.name)[0]
+    assert claim.write_paths == ["Makefile.worktree", "src/adapter.py"]
+    assert claim.broad_scope_mode is None
+    assert claim.target_worktree_path is None
+    assert receipt["result"]["bootstrap_requires_narrowing"] is False
+    assert receipt["result"]["new_files_created"] == ["Makefile.worktree"]
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"write_paths": ["src/adapter.py"], "new_files": ["Makefile.worktree"]},
+        {"write_paths": ["new/root.txt"], "new_files": ["new/root.txt"]},
+        {"write_paths": ["Makefile.worktree"], "new_files": ["Makefile.worktree", "Makefile.worktree"]},
+        {"write_paths": ["."], "new_files": ["Makefile.worktree"]},
+    ],
+)
+def test_maintenance_bootstrap_rejects_ambiguous_new_file_contract(
+    tmp_path: Path,
+    updates: dict[str, object],
+) -> None:
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError):
+        claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(tmp_path, **updates)))
 
 
 def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority(

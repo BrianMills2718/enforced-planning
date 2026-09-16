@@ -1,10 +1,10 @@
 {
   "active_slice": {
-    "description": "Exercise semantic-service failure behavior so advisory model outages cannot become opaque hard blocks",
-    "next_action": "Locate the semantic hook service boundary, force an unavailable/error response through its authentic adapter, and verify the configured fail-open or fail-closed disposition is explicit and recoverable.",
+    "description": "Retain authentic oversized required-authority behavior: full identity and readability verification, bounded excerpt injection, and gate clearance",
+    "next_action": "Trace the reported oversized-document repair to its source and installed hook, rerun its focused suite, and execute a live gate-clear probe that distinguishes full-document verification from bounded excerpt delivery.",
     "requires_external_action": false,
     "requires_spend": false,
-    "slice_id": "pw06-semantic-service-failure",
+    "slice_id": "pw06-oversized-required-authority",
     "status": "executing",
     "target_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4"
   },
@@ -29,7 +29,7 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 6,
+  "cursor_revision": 7,
   "failure_state": {
     "boundary": "current Codex app/API exec command prewrite coverage",
     "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
@@ -92,6 +92,13 @@
       "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#durable_write_cleanup",
       "kind": "authentic_result",
       "observation_id": "pw06-durable-write-cleanup",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "semantic-service absence at the synchronous installed gate",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#semantic_service_failure",
+      "kind": "authentic_result",
+      "observation_id": "pw06-semantic-service-unavailable",
       "outcome": "pass"
     }
   ],

@@ -127,6 +127,13 @@ require tool-specific config keys in `meta-process.yaml`. Codex and Claude Code
 resolve runtime identity through their adapters and populate the same claim and
 tracker contract.
 
+Claim-registry writer contention is also not configurable. Mutations acquire
+`~/.claude/coordination/.claims.lock` for at most five seconds by default. If
+the lock remains owned, `ClaimRegistryLockTimeout` reports the lock path,
+confirms that no claim state changed, and directs the caller to retry after the
+current writer releases it. The lock file's age is not ownership evidence;
+inspect the live `flock` holder rather than deleting the file.
+
 An unused claimed lane remains active when its branch tip is exactly its retained
 `start_revision`, even if an unrelated default-branch commit makes that tip an
 ancestor of the current default. This is lifecycle identity, not a configurable

@@ -8,6 +8,7 @@ dependencies_reviewed: "2026-09-15"
 **Status:** In Progress
 **Type:** maintenance
 **Priority:** Critical
+**phase_ref:** "Phase 9: Fleet Adoption and Framework Maintenance"
 **goal_ref:** "claim-lifecycle-root-repair"
 **Blocked By:** None
 **Landscape disposition:** linked

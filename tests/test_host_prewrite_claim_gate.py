@@ -2557,6 +2557,35 @@ def test_bound_workspace_root_command_still_denies_path_outside_claimed_worktree
     assert decision["reason_code"] == "bash_path_outside_worktree"
 
 
+def test_bound_worktree_allows_exact_installed_canonical_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    workspace, repo, worktree, claims_dir, _claim_path = _fixture(tmp_path)
+    script = (
+        Path.home()
+        / ".codex/runtime/enforced-planning/scripts/worktree-coordination/canonical_lock.py"
+    )
+    command = (
+        f"/usr/bin/env -C {worktree} /usr/bin/python3 {script} "
+        f"--sync {repo} --json"
+    )
+
+    code, decision = _run_cli(
+        monkeypatch,
+        capsys,
+        tmp_path,
+        _payload(cwd=workspace, tool="Bash", tool_input={"command": command}),
+        claims_dir=claims_dir,
+        projection_path=tmp_path / "projection.json",
+    )
+
+    assert code == 0
+    assert decision["decision"] == "allow"
+    assert decision["reason_code"] == "exact_live_claim"
+
+
 def test_bound_worktree_command_denies_repo_relative_path_outside_claim(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

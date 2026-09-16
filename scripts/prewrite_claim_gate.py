@@ -583,8 +583,13 @@ def _parse_native_closeout_command(
             args = parser(tokens[2:])
     except SystemExit as exc:
         raise ValueError("closeout command does not match the canonical CLI grammar") from exc
-    if native_session is None or args.agent != client:
+    cross_client_reconciliation = bool(getattr(args, "reconcile_session_ended", False))
+    if native_session is None:
         raise ValueError("closeout agent does not match the ambient native client")
+    if args.agent != client and not cross_client_reconciliation:
+        raise ValueError("closeout agent does not match the ambient native client")
+    if cross_client_reconciliation and args.session_id != native_session:
+        raise ValueError("cross-client reconciliation must name the ambient native session")
     if tokens[1] == str(finish_script):
         if not args.allow_dirty_handoff or args.release_claim:
             raise ValueError("session-finish bypass is restricted to dirty handoff recovery")
@@ -604,7 +609,11 @@ def _parse_native_closeout_command(
         )
         if claim.agent == args.agent
         and claim.scope == args.scope
-        and claim.session_id == native_session
+        and (
+            claim.session_id == native_session
+            if not cross_client_reconciliation
+            else claim.session_id != native_session
+        )
         and (
             claim.is_live()
             or (

@@ -306,10 +306,6 @@ def validate_completed_receipt(payload: Any, path: Path) -> str | None:
             return f"invalid {field_name!r} (got {type(value).__name__})"
     if payload["record_type"] != "hook_invocation_receipt" or payload["phase"] != "completed":
         return "invalid contract identity (record_type/phase)"
-    try:
-        _normalize_details(payload.get("details"))
-    except HookReceiptError as exc:
-        return str(exc)
     if path.parent.name != payload["receipt_id"]:
         return "path/identity mismatch (directory name != receipt_id)"
     return None

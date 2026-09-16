@@ -20,6 +20,7 @@ from enforced_planning.prewrite_claim_fast import (
     _bash_declared_paths,
     _bash_target_is_unprovable,
     evaluate_prewrite_fast,
+    native_mutation_worktree,
 )
 from enforced_planning.prewrite_claim_projection import write_projection
 from scripts import prewrite_claim_gate
@@ -189,6 +190,21 @@ def test_file_tools_resolve_claim_from_target_when_cwd_is_workspace_root(
     assert decision["reason_code"] == "exact_live_claim"
     assert decision["worktree_path"] == str(worktree)
     assert decision["normalized_target_paths"] == [suffix]
+
+
+def test_native_mutation_worktree_resolves_target_without_writing_receipt(tmp_path: Path) -> None:
+    workspace, _repo, worktree, _claims_dir, _claim_path = _fixture(tmp_path)
+    receipt = tmp_path / "receipts.jsonl"
+    payload = _payload(
+        cwd=workspace,
+        tool="Write",
+        tool_input={"file_path": str(worktree / "src" / "new.py")},
+    )
+
+    resolved = native_mutation_worktree(payload, client="claude-code")
+
+    assert resolved == worktree.resolve()
+    assert not receipt.exists()
 
 
 def test_target_claim_rejects_wrong_session_and_stale_heartbeat(tmp_path: Path) -> None:

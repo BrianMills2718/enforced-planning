@@ -1816,6 +1816,23 @@ def evaluate_prewrite_fast(
     )
 
 
+def native_mutation_worktree(payload: dict[str, Any], *, client: str) -> Path:
+    """Resolve the Git worktree named by one native mutation event.
+
+    This is target discovery only: it writes no receipt and grants no mutation
+    authority. Consumers must still resolve a healthy exact-session claim and
+    run their own output-path admission. Post-event consumers may pass their
+    native payload; target syntax is normalized as the corresponding pre-event.
+    """
+
+    request = adapt_native_payload(
+        dict(payload, hook_event_name="PreToolUse"),
+        client=client,
+    )
+    context = _repository_context(request)
+    return Path(context["worktree_path"])
+
+
 __all__ = [
     "DEFAULT_CLAIMS_DIR",
     "DEFAULT_PROJECTION_PATH",
@@ -1825,6 +1842,7 @@ __all__ = [
     "classify_bash_command",
     "evaluate_prewrite_fast",
     "evaluate_request_fast",
+    "native_mutation_worktree",
     "projection_path_for",
     "registry_digest",
 ]

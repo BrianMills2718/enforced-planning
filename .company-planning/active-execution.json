@@ -1,12 +1,12 @@
 {
   "active_slice": {
-    "description": "Exercise bounded claim-registry contention and interruption recovery, then retain exact retry evidence",
-    "next_action": "Reproduce the unbounded registry-writer lock in a separate implementation lane, add a bounded timeout and retry probe, merge it, resume PW-06, and retain the result.",
+    "description": "Exercise durable-write cleanup after a partial success so no staged duplicate or stale lock can masquerade as a clean completion",
+    "next_action": "Reproduce the learning-writer index-lock incident in a disposable repository, then verify a bounded repair leaves one durable entry, no staged duplicate, and a truthful result.",
     "requires_external_action": false,
     "requires_spend": false,
-    "slice_id": "pw06-contention-interruption",
+    "slice_id": "pw06-durable-write-cleanup",
     "status": "executing",
-    "target_revision": "aacabad1c1a881f0ab53fb5c21a4b8522ceea776"
+    "target_revision": "e7efe1c8a37ac4816e80ab5a290ea0f86abcb3b4"
   },
   "authority": {
     "external_action_authorized": false,
@@ -29,7 +29,7 @@
     "verifier_outcome": null
   },
   "cursor_id": "enforced-planning-108-pw06",
-  "cursor_revision": 4,
+  "cursor_revision": 5,
   "failure_state": {
     "boundary": "current Codex app/API exec command prewrite coverage",
     "last_failure_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
@@ -78,6 +78,13 @@
       "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#authentic_clients.codex",
       "kind": "authentic_result",
       "observation_id": "pw06-authentic-parent-recovery-resume",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "claim-registry writer contention and interrupted mutation recovery",
+      "evidence_ref": "docs/evidence/plan108_pw06_recovery_resume.json#contention_interruption",
+      "kind": "authentic_result",
+      "observation_id": "pw06-bounded-contention-interruption",
       "outcome": "pass"
     }
   ],

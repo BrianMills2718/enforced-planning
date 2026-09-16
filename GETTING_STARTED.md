@@ -75,6 +75,13 @@ python scripts/install_governed_repo.py --repo-root /path/to/your/project --writ
 python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict-governed
 ```
 
+Run the installer with `--check --json` before opening a narrow maintenance
+lane. Its `planned_write_paths` field names the actual repository files the
+installer would change; action labels such as `sync:Makefile.worktree` identify
+a managed component and are not file paths. When write mode runs inside a
+native claimed lane, it refuses the entire write if any planned path falls
+outside that lane's declared scope.
+
 Equivalent convenience wrapper:
 
 ```bash

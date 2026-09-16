@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from scripts import install_governed_repo
+
 
 PROJECT_META_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_META_ROOT / "scripts" / "install_governed_repo.py"
@@ -1916,6 +1918,8 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
     payload = json.loads(result.stdout)
     assert "append:Makefile.status" in payload["actions"]
     assert "append:Makefile.worktree" in payload["actions"]
+    assert "Makefile" in payload["planned_write_paths"]
+    assert "Makefile.worktree" not in payload["planned_write_paths"]
     makefile_text = (tmp_path / "Makefile").read_text(encoding="utf-8")
     assert "PROJECT_STATUS_SCRIPT ?= scripts/meta/project_status.py" in makefile_text
     assert "$(PROJECT_STATUS_SCRIPT) --repo-root ." in makefile_text
@@ -1925,6 +1929,90 @@ def test_install_governed_repo_appends_makefile_meta_block_when_missing(
     assert "# >>> META-PROCESS WORKTREE TARGETS >>>" in makefile_text
     assert "# <<< META-PROCESS WORKTREE TARGETS <<<" in makefile_text
     assert '$(MAKE) session-close BRANCH="$(BRANCH)"' in makefile_text
+
+
+def test_installer_refuses_planned_paths_outside_current_native_claim(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "installer-test")
+    claim = install_governed_repo.coordination_claims.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="sync/runtime",
+        intent="sync one runtime module",
+        claim_type="program",
+        write_paths=["enforced_planning/coordination_claims.py"],
+        repo_root=str(tmp_path),
+        worktree_path=str(tmp_path),
+        branch="sync/runtime",
+        session_id="codex:installer-test",
+        session_name="sync-runtime",
+        broader_goal="Sync one runtime module",
+        tracker_path=str(tmp_path / "tracker.yaml"),
+        status="active",
+        schema_version=6,
+    )
+    monkeypatch.setattr(
+        install_governed_repo.coordination_claims,
+        "list_claims",
+        lambda **_kwargs: [claim],
+    )
+
+    blockers = install_governed_repo._native_claim_write_blockers(
+        tmp_path,
+        ["Makefile", "enforced_planning/coordination_claims.py"],
+    )
+
+    assert blockers == [
+        "installer planned write paths exceed the current native claim demo:sync/runtime: Makefile"
+    ]
+
+
+def test_installer_write_is_atomic_when_native_claim_omits_a_planned_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _write_minimal_claude(tmp_path)
+    makefile = tmp_path / "Makefile"
+    original = "help:\n\t@echo unchanged\n"
+    makefile.write_text(original, encoding="utf-8")
+    monkeypatch.setenv("CODEX_THREAD_ID", "installer-test")
+    claim = install_governed_repo.coordination_claims.build_candidate_claim(
+        agent="codex",
+        project="demo",
+        scope="sync/runtime",
+        intent="sync one runtime module",
+        claim_type="program",
+        write_paths=["enforced_planning/coordination_claims.py"],
+        repo_root=str(tmp_path),
+        worktree_path=str(tmp_path),
+        branch="sync/runtime",
+        session_id="codex:installer-test",
+        session_name="sync-runtime",
+        broader_goal="Sync one runtime module",
+        tracker_path=str(tmp_path / "tracker.yaml"),
+        status="active",
+        schema_version=6,
+    )
+    monkeypatch.setattr(
+        install_governed_repo.coordination_claims,
+        "list_claims",
+        lambda **_kwargs: [claim],
+    )
+
+    payload = install_governed_repo.install_or_plan(
+        tmp_path,
+        write=True,
+        skip_hook_wiring=True,
+        worktree_only=False,
+        relationship_context_only=False,
+    )
+
+    assert any("installer planned write paths exceed" in blocker for blocker in payload["blockers"])
+    assert "Makefile" in payload["planned_write_paths"]
+    assert payload["applied_actions"] == []
+    assert makefile.read_text(encoding="utf-8") == original
 
 
 def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: Path) -> None:

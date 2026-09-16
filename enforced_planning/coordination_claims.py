@@ -2320,11 +2320,7 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         if possible_broad:
             issues.append("legacy_broad_scope_unclassified")
         return issues
-    verified_new_files = _regular_top_level_files_at_revision(
-        claim.repo_root,
-        claim.start_revision,
-        list(claim.write_paths),
-    )
+    verified_new_files: set[str] = set()
     worktree = Path(claim.target_worktree_path or claim.worktree_path or "")
     canonical_root = Path(claim.repo_root or "")
     staged_worktree = (
@@ -2336,6 +2332,24 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         and Path(claim.worktree_path or "").resolve(strict=False)
         == (Path(claim.repo_root or "") / "worktrees" / Path(claim.branch or "")).resolve(strict=False)
     )
+    for path in claim.write_paths:
+        normalized = _normalize_repo_path(path)
+        created = worktree / normalized
+        if (
+            normalized not in {"", ".", ".."}
+            and "/" not in normalized
+            and created.is_file()
+            and not created.is_symlink()
+        ):
+            verified_new_files.add(normalized)
+    if staged_worktree:
+        verified_new_files.update(
+            _regular_top_level_files_at_revision(
+                claim.repo_root,
+                claim.start_revision,
+                list(claim.write_paths),
+            )
+        )
     for path in claim.new_files:
         created = worktree / path
         canonical = canonical_root / path

@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "shared_owner": {
+    "revision": "60db99cc83535bfca1aa565893288ab241662a51",
+    "pull_request": 28,
+    "focused_tests": {"passed": 3, "failed": 0},
+    "target_checkpoint_strict_lint_after_fix": {"findings": 0, "exit_code": 0}
+  },
+  "source_custody": {
+    "active_source_envelopes": 8,
+    "total_source_envelopes_including_superseded_history": 17,
+    "hash_algorithm": "sha256",
+    "reverse_manifest": ".wiki/state/reverse-manifest.json",
+    "lineage_behavior": "Active derived pages cite corrected successors; immutable predecessors remain file-backed and expose superseded_by edges."
+  },
+  "secondary_query": {
+    "receipt": ".wiki/state/query-receipt.json",
+    "budget_bytes": 4096,
+    "selected_results": 6,
+    "selected_context_bytes": 2661,
+    "estimated_tokens": 666,
+    "excluded_by_budget": 0,
+    "truncated": false,
+    "all_results_file_backed": true
+  },
+  "positive_lint": {
+    "command": "wiki.py --workspace . --json lint --strict",
+    "findings": 0,
+    "flywheel_proposals": 0,
+    "exit_code": 0
+  },
+  "negative_controls": [
+    {
+      "id": "broken-link",
+      "workspace": "disposable clone of checkpoint 5b40ea3126fcacc2cac97a3b6e2e3aca160539dc",
+      "injection": "[[plan254-deliberately-missing-page]] in wiki/README.md",
+      "expected": "nonzero actionable lint",
+      "observed": {"exit_code": 1, "codes": ["stale-reverse-manifest", "broken-wikilink"], "broken_link_owner": "wiki-curator"}
+    },
+    {
+      "id": "archive-exclusion",
+      "query": "front-half-first smoke budget",
+      "live_results": 0,
+      "injected_disposable_results": 1,
+      "injected_file_back": "wiki/log.md",
+      "interpretation": "The default search excludes the retired historical phrase, and the same check detects it when deliberately leaked into a current page."
+    },
+    {
+      "id": "goal-inference",
+      "receipt": "goal_requirement_concerns.json#negative_control",
+      "observed": "implementation-only inferred intent rejected"
+    }
+  ],
+  "recovery": {
+    "method": "Git object recovery from the target start revision or repository history",
+    "retired_files": 7,
+    "external_archive_required": false
+  },
+  "source_safe_exit": {
+    "wiki_pages_plain_markdown": true,
+    "native_authority_paths_unchanged": true,
+    "removing_wiki_tooling_would_not_remove_native_authority": true
+  }
+}

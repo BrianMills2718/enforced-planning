@@ -1,0 +1,60 @@
+{
+  "query": "human-owned goals requirements current plan architecture evidence",
+  "schema_version": 1,
+  "selected": [
+    {
+      "file_back": {
+        "path": "wiki/goal-and-requirements.md",
+        "sha256": "677f815bf30c29e43f5c8d486815ca52295749f6615a3070f274afd4b620fc1c"
+      },
+      "path": "wiki/goal-and-requirements.md"
+    },
+    {
+      "file_back": {
+        "path": "wiki/architecture-and-capabilities.md",
+        "sha256": "2859778493964b3b4a908797a059778c8607974dfb099046bb622c3706c20e59"
+      },
+      "path": "wiki/architecture-and-capabilities.md"
+    },
+    {
+      "file_back": {
+        "path": "wiki/README.md",
+        "sha256": "5aca9817f270d2266c1bdc053e8618c33da9117c15e7c252fbbc63ad2c93d933"
+      },
+      "path": "wiki/README.md"
+    },
+    {
+      "file_back": {
+        "path": "wiki/evidence-and-verification.md",
+        "sha256": "42cc746dace04534fb510cc6cfa611bfa80fe5dc3a4c690a0f3f2bb2b348139c"
+      },
+      "path": "wiki/evidence-and-verification.md"
+    },
+    {
+      "file_back": {
+        "path": "wiki/current-work.md",
+        "sha256": "9316af927855b4ac8c5aad2b74e8c0415dcd42f8aac2c72d9967ccb7880f8055"
+      },
+      "path": "wiki/current-work.md"
+    },
+    {
+      "file_back": {
+        "path": "wiki/log.md",
+        "sha256": "6784e26bde06186171490b04f406c7d468b15580828fc56f326dc425aed286c3"
+      },
+      "path": "wiki/log.md"
+    }
+  ],
+  "telemetry": {
+    "budget_bytes": 4096,
+    "candidates_considered": 6,
+    "estimated_tokens": 666,
+    "excluded_by_budget": 0,
+    "excluded_by_limit": 0,
+    "matched_candidates": 6,
+    "selected_context_bytes": 2661,
+    "selected_results": 6,
+    "token_estimator": "utf8-bytes-ceil-div-4",
+    "truncated": false
+  }
+}

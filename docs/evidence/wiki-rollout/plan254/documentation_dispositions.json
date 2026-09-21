@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "universe": {
+    "revision": "ac43081d4f7d1e5c75f228255b51082353d11815",
+    "selector": "git ls-tree -r --name-only <revision> filtered to *.md",
+    "count": 251
+  },
+  "ordered_disposition_rules": [
+    {
+      "disposition": "retired_git",
+      "count": 7,
+      "paths": [
+        "docs/ops/2026-07-09-plan59-worktree-lifecycle-progress.md",
+        "docs/ops/SPRINT_2026_04_03_AC14_NEXT_CHAIN.md",
+        "docs/ops/SPRINT_2026_04_03_ALL_ISSUES.md",
+        "docs/ops/SPRINT_2026_04_03_AUDIT_FOLLOWUP.md",
+        "docs/ops/SPRINT_2026_04_04_MAC_MINI_CONTINUOUS_AUTOMATION.md",
+        "docs/ops/SPRINT_2026_04_05_COORDINATION_COMPLETION.md",
+        "docs/ops/SPRINT_2026_04_05_COORDINATION_NEXT_CHAIN.md"
+      ],
+      "reason": "Explicitly dated sprint/progress history is not current authority or an active queue; Git preserves exact recovery."
+    },
+    {
+      "disposition": "review_required",
+      "count": 244,
+      "selector": "Every baseline-universe path not matched by retired_git.",
+      "reason": "No unreviewed baseline document is silently declared canonical, redundant, or safe to remove. Later lifecycle passes must promote, consolidate, retire, archive, or retain it with evidence."
+    },
+    {
+      "disposition": "keep_derived_navigation",
+      "count": 6,
+      "selector": "Post-baseline wiki/*.md excluding wiki/_*.",
+      "reason": "These pages form the new root-reachable derived navigation graph and do not replace native authority."
+    }
+  ],
+  "excluded_non_active_layers": [
+    "raw/** immutable source envelopes",
+    ".wiki/** mechanism state and receipts",
+    "wiki/_* generated indexes and schema"
+  ],
+  "reconciliation": {
+    "baseline_assigned_exactly_once": 251,
+    "post_rollout_active_documents": 250,
+    "unassigned_baseline_documents": 0,
+    "multiply_assigned_baseline_documents": 0
+  }
+}

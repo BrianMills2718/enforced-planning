@@ -47,7 +47,7 @@ language, wiki format, or authority source.[^plan128]
 - Plan validation: [`enforced_planning/plan_validation.py`](../enforced_planning/plan_validation.py)
 - Effective profile: [`enforced_planning/effective_project_profile.py`](../enforced_planning/effective_project_profile.py)
 - Installer tests: [`tests/test_install_governed_repo.py`](../tests/test_install_governed_repo.py)
-- Coordination tests: [`tests/test_coordination_claims.py`](../tests/test_coordination_claims.py)
+- Coordination tests: [`tests/test_check_coordination_claims.py`](../tests/test_check_coordination_claims.py)
 
 Return to [[README]] or follow [[current-work]] and
 [[evidence-and-verification]].

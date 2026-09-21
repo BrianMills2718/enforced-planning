@@ -2,9 +2,9 @@
   "files": {
     ".wiki/state/reverse-manifest.json": "d362d69a07e8784232ff815f43fa70f427656ede26fd91fd93ee677e7e413115",
     "wiki/_backlinks.json": "9b80bd1feda40b92b4fe0741bc20ea7ed66cb90fa9236d93dc6518b49f839b06",
-    "wiki/_catalog.md": "a3e4fb310594cdd63c1a0e36a98463ed4b5d267ad0ea8465a1bd0e787e0e64ea",
-    "wiki/_sources.md": "a14dea80ef67c2cd7ae184b2ce142d01c46b3028ce99550a0498343a9ac7db9e"
+    "wiki/_catalog.md": "7c3489f5b1eeb8a34e50a228c28e324d8ef78ff2dc6a608d6be6c7a616bc7bc6",
+    "wiki/_sources.md": "04ccade486d50127c1770b8a49a1a528a51579b6328553178c7cbd7ffd27edcb"
   },
-  "generated_at": "2026-09-02T06:44:27Z",
+  "generated_at": "2026-09-02T07:25:43Z",
   "schema_version": 1
 }

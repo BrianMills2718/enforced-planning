@@ -22,3 +22,14 @@ sources: [src-repository-fe0693bf70aa-ba174ff4, src-repository-6b5684f88799-03d4
 
 This is a compact wiki-maintenance record, not project development history.
 Use Git for the latter.
+
+## 2026-09-02 — Enforced Planning rollout
+
+- Corrected the first malformed Git origins by capturing new immutable source
+  envelopes and linking them through `supersedes`; the earlier envelopes remain
+  inspectable history rather than active evidence.
+- Repaired the shared owner's freshness lint in `wiki_methodology` PR #28 so
+  superseded predecessors remain in the reverse manifest without blocking the
+  current source frontier.
+- Retired seven historical sprint/progress files through Git and kept this log
+  limited to wiki maintenance rather than project development history.

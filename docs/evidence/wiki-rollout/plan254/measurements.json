@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "target_start_revision": "ac43081d4f7d1e5c75f228255b51082353d11815",
+  "active_agent_facing_markdown_definition": "Tracked *.md excluding raw/** immutable captures, .wiki/** mechanism state, and wiki/_* generated indexes.",
+  "before": {
+    "active_documents": 251,
+    "active_bytes": 2053324,
+    "historical_sprint_or_progress_files_in_active_tree": 7,
+    "integrated_wiki_pages": 0,
+    "authentic_root_has_wiki_route": false,
+    "duplicate_authority_introduced_by_wiki": 0,
+    "broken_wikilinks": "not_applicable_no_wiki",
+    "orphan_wiki_pages": "not_applicable_no_wiki"
+  },
+  "after": {
+    "active_documents": 250,
+    "active_bytes": 2021053,
+    "active_document_delta": -1,
+    "active_byte_delta": -32271,
+    "historical_sprint_or_progress_files_in_active_tree": 0,
+    "retired_documents": 7,
+    "retired_bytes": 46651,
+    "integrated_wiki_pages": 6,
+    "authentic_root_has_wiki_route": true,
+    "duplicate_authority_introduced_by_wiki": 0,
+    "broken_wikilinks": 0,
+    "orphan_wiki_pages": 0
+  },
+  "separate_source_custody_measure": {
+    "all_tracked_markdown_documents": 289,
+    "all_tracked_markdown_bytes": 2336674,
+    "interpretation": "The larger total includes immutable source copies and generated provenance pages; these are excluded from normal agent navigation and default wiki search."
+  },
+  "default_orientation": {
+    "before_root_readme_bytes": 11076,
+    "after_root_plus_wiki_entry_bytes": 14472,
+    "interpretation": "Orientation is not claimed to use fewer bytes. It is claimed to reach the required fact classes deterministically without initial search while overall active documentation shrinks."
+  }
+}

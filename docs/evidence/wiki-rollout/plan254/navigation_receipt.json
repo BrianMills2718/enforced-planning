@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "authentic_entrypoint": "README.md",
+  "before_revision": "ac43081d4f7d1e5c75f228255b51082353d11815",
+  "before": {
+    "integrated_graph_entrypoint": false,
+    "initial_search_required_for_complete_route": true,
+    "reason": "README linked the operating model and getting-started material but had no single route spanning goals, active plans, ADRs, capabilities, code, and evidence."
+  },
+  "after_routes": [
+    {"fact_class": "goals_and_requirements", "route": ["README.md", "wiki/README.md", "wiki/goal-and-requirements.md", "CLAUDE.md"], "hops": 3},
+    {"fact_class": "active_plans", "route": ["README.md", "wiki/README.md", "wiki/current-work.md", "ROADMAP.md"], "hops": 3},
+    {"fact_class": "governing_adr", "route": ["README.md", "wiki/README.md", "wiki/architecture-and-capabilities.md", "adr/0005-hierarchical-context-compression.md"], "hops": 3},
+    {"fact_class": "capability_code", "route": ["README.md", "wiki/README.md", "wiki/architecture-and-capabilities.md", "enforced_planning/session_lifecycle.py"], "hops": 3},
+    {"fact_class": "verification_evidence", "route": ["README.md", "wiki/README.md", "wiki/evidence-and-verification.md", "tests/test_session_lifecycle.py"], "hops": 3}
+  ],
+  "maximum_hops": 3,
+  "dead_ends": 0,
+  "initial_keyword_or_vector_search_used": false,
+  "secondary_fallback": ".wiki/state/query-receipt.json"
+}

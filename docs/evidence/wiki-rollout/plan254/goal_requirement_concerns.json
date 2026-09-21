@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "authority_rule": "Goals and requirements may come only from explicit human statements or native decision authority. Code, tests, wiki prose, keyword search, and RAG are implementation or discovery evidence and cannot silently create intent.",
+  "negative_control": {
+    "candidate_goal": "Maximize uninterrupted agent autonomy even when no human-reviewed goal or requirement exists.",
+    "candidate_basis": "Plausible inference from coordination and automation implementation.",
+    "decision": "rejected_and_routed_for_human_review",
+    "reason": "No human or native decision authority states this goal, and it conflicts with the upstream-human-review boundary."
+  },
+  "concerns": [
+    {
+      "id": "P254-EP-GOAL-001",
+      "status": "open_nonblocking",
+      "importance": "critical_if_future_goal_changes_depend_on_it",
+      "confidence": 0.86,
+      "observation": "The project goal and intent boundary are consistent across CLAUDE.md, README.md, and PLANNING_OPERATING_MODEL.md, but there is no single separately named native goal-and-requirements authority.",
+      "recommendation": "At the next human-owned intent revision, add one concise, explicitly reviewed project-goal and non-negotiable-requirements section to the existing native authority stack; keep the wiki derived from it.",
+      "tradeoffs": "A single section reduces silent drift but adds one coupling surface that must be updated deliberately.",
+      "alternatives": [
+        "Keep the distributed authority and require agents to reconcile all three files on every goal-sensitive change.",
+        "Create a dedicated REQUIREMENTS.md, which is clearer but adds another canonical document and therefore more sprawl risk."
+      ],
+      "cleanup_safety": "Does not block retirement of the seven explicitly historical sprint/progress files."
+    }
+  ]
+}

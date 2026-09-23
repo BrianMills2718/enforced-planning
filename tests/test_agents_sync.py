@@ -71,6 +71,31 @@ def _write_repo_scaffold(repo_root: Path) -> None:
     )
 
 
+def test_authored_agents_only_passes_both_sync_entrypoints(tmp_path: Path) -> None:
+    """An authored AGENTS-only repo must not require a generated projection."""
+    (tmp_path / "AGENTS.md").write_text("# Authored rules\n", encoding="utf-8")
+    for script in (CHECK_SCRIPT, REPO_ROOT / "scripts" / "meta" / "check_agents_sync.py"):
+        result = subprocess.run(
+            [sys.executable, str(script), "--check", "--repo-root", str(tmp_path)],
+            capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "authored instruction source" in result.stdout
+
+
+def test_generated_agents_without_source_is_rejected(tmp_path: Path) -> None:
+    """Deleting CLAUDE must not bless its incomplete old projection."""
+    (tmp_path / "AGENTS.md").write_text(
+        "<!-- GENERATED FILE: DO NOT EDIT DIRECTLY -->\n# Incomplete\n", encoding="utf-8"
+    )
+    result = subprocess.run(
+        [sys.executable, str(CHECK_SCRIPT), "--check", "--repo-root", str(tmp_path)],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 1
+    assert "still declares itself generated" in result.stdout
+
+
 def _write_repo_scaffold_with_heading_aliases(repo_root: Path) -> None:
     """Create a governed repo scaffold that uses supported CLAUDE heading aliases."""
 

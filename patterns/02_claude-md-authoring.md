@@ -1,4 +1,4 @@
-# Pattern: CLAUDE.md Authoring
+# Pattern: AGENTS.md Authoring
 
 ## Problem
 
@@ -12,7 +12,7 @@ Result: Wasted time correcting the AI, inconsistent code, violated principles.
 
 ## Solution
 
-Create a `CLAUDE.md` file at project root that AI assistants automatically read. Include:
+Create a `AGENTS.md` file at project root that AI assistants automatically read. Include:
 1. Project overview (what this is, what it's NOT)
 2. Key commands (how to build, test, run)
 3. Design principles (fail loud, no magic numbers, etc.)
@@ -23,12 +23,12 @@ Create a `CLAUDE.md` file at project root that AI assistants automatically read.
 
 | File | Purpose |
 |------|---------|
-| `CLAUDE.md` | Root context file (always loaded) |
-| `*/CLAUDE.md` | Directory-specific context (loaded when working in that directory) |
+| `AGENTS.md` | Root context file (always loaded) |
+| `*/AGENTS.md` | Directory-specific context (loaded when working in that directory) |
 
 ## Setup
 
-### 1. Create root CLAUDE.md
+### 1. Create root AGENTS.md
 
 ```markdown
 # Project Name - Claude Code Context
@@ -86,7 +86,7 @@ python -m mypy src/           # Type check
 ### 2. Add directory-specific context (optional)
 
 ```markdown
-# src/CLAUDE.md
+# src/AGENTS.md
 
 ## This Directory
 
@@ -107,7 +107,7 @@ Source code for [component].
 
 ### 3. Keep it lean
 
-The root CLAUDE.md is **always in context**. Every token counts:
+The root AGENTS.md is **always in context**. Every token counts:
 - Reference other docs, don't duplicate
 - Use tables for dense information
 - Omit obvious things
@@ -128,8 +128,8 @@ Review and update when:
 ### Maintenance
 
 ```bash
-# Check if CLAUDE.md references exist
-grep -r "See \`" CLAUDE.md | while read line; do
+# Check if AGENTS.md references exist
+grep -r "See \`" AGENTS.md | while read line; do
   # Verify referenced files exist
 done
 ```
@@ -159,8 +159,8 @@ done
 
 | Section | Target Size |
 |---------|-------------|
-| Root CLAUDE.md | 200-400 lines |
-| Directory CLAUDE.md | 50-100 lines |
+| Root AGENTS.md | 200-400 lines |
+| Directory AGENTS.md | 50-100 lines |
 | Any single section | <50 lines |
 
 ## Customization
@@ -187,88 +187,39 @@ Add coordination sections:
 
 ```
 monorepo/
-  CLAUDE.md           # Repo-wide context
+  AGENTS.md           # Repo-wide context
   packages/
-    api/CLAUDE.md     # API-specific
-    web/CLAUDE.md     # Web-specific
+    api/AGENTS.md     # API-specific
+    web/AGENTS.md     # Web-specific
 ```
 
 ### For different AI tools
 
 | Tool | File Name | Notes |
 |------|-----------|-------|
-| Claude Code | `CLAUDE.md` | Auto-loaded |
-| Codex | `AGENTS.md` | Prefer generated projection from canonical `CLAUDE.md`; do not hand-maintain divergent rules |
+| Claude Code | `AGENTS.md` | Auto-loaded when the project has no CLAUDE.md |
+| Codex | `AGENTS.md` | Auto-loaded as the authored project instruction |
 | Cursor | `.cursorrules` | Different format |
 | GitHub Copilot | No equivalent | Use comments |
 
-### Canonical vs generated governance
+### Canonical instructions
 
-For repos that need both Claude Code and Codex support:
+Author `AGENTS.md` once for Claude Code and Codex. Keep
+`scripts/relationships.yaml` as the machine-readable coupling and
+required-reading graph. Existing repositories can retain a legacy
+`CLAUDE.md` while migrating, but new repositories use authored `AGENTS.md`.
 
-- Keep `CLAUDE.md` as the canonical human-readable governance file.
-- Keep `scripts/relationships.yaml` as the canonical machine-readable coupling
-  and required-reading graph.
-- Generate `AGENTS.md` from those canonical sources instead of maintaining it
-  separately.
-- Treat the generated `AGENTS.md` as a compact projection plus sync marker:
-  it should surface the highest-signal always-on guidance, point readers back
-  to `scripts/relationships.yaml`, and fail drift checks when canonical inputs
-  change. It does not need to inline the full relationships graph.
+## Validation
 
-This keeps Codex-compatible instructions available without creating a second
-governance authority that drifts from `CLAUDE.md`.
-
-## Enforcement (Plan #244)
-
-CLAUDE.md files can be enforced via `check_claude_md.py`:
-
-### Three validation types
-
-| Check | What it catches |
-|-------|----------------|
-| **Existence** | Directories with 2+ tracked files missing a CLAUDE.md |
-| **Coverage** | CLAUDE.md files that don't reference all files in their directory |
-| **Phantom** | CLAUDE.md references to files that no longer exist |
-
-### Pre-commit integration (progressive)
-
-```bash
-# In pre-commit hook — only checks directories touched by staged files
-python scripts/check_claude_md.py --staged --strict
-```
-
-Progressive enforcement means existing stale files don't block unrelated commits.
-But touching a directory forces you to bring its CLAUDE.md current.
-
-### Full audit
-
-```bash
-# CI or periodic audit — checks every directory
-python scripts/check_claude_md.py --all --strict
-
-# Human-friendly output
-python scripts/check_claude_md.py --suggest
-```
-
-### Configuration
-
-Exemptions in `scripts/relationships.yaml` under `claude_md:`:
-
-```yaml
-claude_md:
-  exempt_dirs:
-    - "*/static/*"        # Asset directories
-    - ".github/*"         # GitHub config
-  exempt_files:
-    - "CLAUDE.md"         # Doesn't self-reference
-    - ".gitignore"        # Infrastructure
-```
+Use `scripts/check_agents_sync.py --check` to validate the root authored file
+in an AGENTS-only repository. In a repository that maintains a subtree
+registry, use `scripts/check_subtree_instructions.py` with that registry to
+check that registered directories contain `AGENTS.md` and no legacy
+`CLAUDE.md`. The legacy `CLAUDE.md` path remains supported during migration.
 
 ## Limitations
 
 - **Token cost** - Large files consume context window
-- **Tool-specific** - Different AI tools use different files
 - **Not enforced** - AI may still ignore instructions; use deterministic
   validators and hooks for correctness-critical guarantees
 
@@ -286,7 +237,7 @@ claude_md:
 ### Minimal (small project)
 
 ```markdown
-# MyApp - Claude Context
+# MyApp - Project Instructions
 
 Python CLI tool for X.
 
@@ -302,10 +253,10 @@ pip install -e . && pytest
 
 ### Full (large project)
 
-See this project's [CLAUDE.md](../../CLAUDE.md) for a complete example.
+See this project's [AGENTS.md](../../AGENTS.md) for a complete example.
 
 ## See Also
 
-- [Claim system pattern](worktree-coordination/18_claim-system.md) - Coordination tables in CLAUDE.md
-- [Plan workflow pattern](15_plan-workflow.md) - Linking CLAUDE.md to plans
+- [Claim system pattern](worktree-coordination/18_claim-system.md) - Coordination tables in AGENTS.md
+- [Plan workflow pattern](15_plan-workflow.md) - Linking AGENTS.md to plans
 - [Uncertainty Tracking](29_uncertainty-tracking.md) - Session continuity across sessions

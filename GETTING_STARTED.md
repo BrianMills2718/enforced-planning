@@ -236,7 +236,7 @@ make outcome-bootstrap \
   TASK="Create the bounded Plan 124 bootstrap" \
   SESSION_GOAL=deliver-the-selected-source-outcome \
   SESSION_PHASE="adopt plan and allocate outcome" \
-  SESSION_WRITE_PATHS="docs/plans/124_example.md docs/plans/124_example_work_graph.json docs/plans/CLAUDE.md ROADMAP.md"
+  SESSION_WRITE_PATHS="docs/plans/124_example.md docs/plans/124_example_work_graph.json docs/plans/AGENTS.md ROADMAP.md"
 ```
 
 The target rejects empty, mixed-Plan, traversal, source, test, evidence, or

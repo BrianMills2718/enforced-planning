@@ -43,7 +43,7 @@
 - id: plan-status
   name: Plan status sync
   description: >
-    Syncs plan status in docs/plans/CLAUDE.md index based on plan file
+    Syncs plan status in docs/plans/AGENTS.md index based on plan file
     frontmatter. Keeps the plan index consistent with individual plan files.
   language: python
   entry: python scripts/sync_plan_status.py

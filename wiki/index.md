@@ -14,11 +14,11 @@ Portable governed-repo framework for AI-assisted development: installs planning 
 
 ## Read next
 
-- [Operating rules](../CLAUDE.md)
+- [Operating rules](../AGENTS.md)
 - [Operating rules (Codex mirror)](../AGENTS.md)
 - [Project overview](../README.md)
 - [Roadmap](../roadmap/README.md)
-- [Active plan queue](../docs/plans/CLAUDE.md)
+- [Active plan queue](../docs/plans/AGENTS.md)
 
 ## Coverage and unknowns
 

@@ -71,13 +71,13 @@ class GovernedTaskV1(StrictModel):
     source_path: str = "src/hello_app.py"
     task_id: str = "hello-app-add-name"
     title: str = "Add an optional --name argument"
-    authority_path: Literal["CLAUDE.md"] = "CLAUDE.md"
+    authority_path: Literal["AGENTS.md", "CLAUDE.md"] = "AGENTS.md"
     plan_glob: Literal["docs/plans/[0-9][0-9]_*.md"] = "docs/plans/[0-9][0-9]_*.md"
     allowed_paths: list[str] = Field(
         default_factory=lambda: [
             "README.md",
             "src/hello_app.py",
-            "docs/plans/CLAUDE.md",
+            "docs/plans/AGENTS.md",
             "docs/plans/[0-9][0-9]_*.md",
         ]
     )
@@ -125,7 +125,7 @@ class GovernedTaskV1(StrictModel):
         required_paths = {
             "README.md",
             self.source_path,
-            "docs/plans/CLAUDE.md",
+            f"docs/plans/{self.authority_path}",
             self.plan_glob,
         }
         if not required_paths.issubset(self.allowed_paths):
@@ -428,11 +428,11 @@ This repository is the disposable consumer for `{contract.title}`.
 ## Authority
 
 1. The current user request and `governed-task.json` define the feature outcome.
-2. This `CLAUDE.md` defines repository working rules.
+2. This `{contract.authority_path}` defines repository working rules.
 3. The active bounded plan under `docs/plans/` defines execution and checks.
 
-`AGENTS.md`, generated instructions, audits, and receipts are derived or
-evidence surfaces; they do not replace this authority.
+Generated instructions, audits, and receipts are derived or evidence surfaces;
+they do not replace this authority.
 
 ## Working Rules
 
@@ -469,7 +469,7 @@ make verify
 ## References
 
 - `governed-task.json` — bounded feature and allowed-write contract.
-- `docs/plans/CLAUDE.md` — current plan index.
+- `docs/plans/{contract.authority_path}` — current plan index.
 - `README.md` — public usage documentation.
 """
 
@@ -714,7 +714,7 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
     plan_paths = [
         path
         for path in changed
-        if fnmatch.fnmatchcase(path, contract.plan_glob) and path != "docs/plans/CLAUDE.md"
+        if fnmatch.fnmatchcase(path, contract.plan_glob) and path != f"docs/plans/{contract.authority_path}"
     ]
     plan_path = task_root / plan_paths[0] if len(plan_paths) == 1 else None
     plan_content = plan_path.read_text(encoding="utf-8") if plan_path and plan_path.is_file() else ""
@@ -739,17 +739,17 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
         )
     )
     authority = _extract_section(plan_content, "Authority Used")
-    authority_ok = "`CLAUDE.md`" in authority and "generated/instructions.md" not in authority
+    authority_ok = f"`{contract.authority_path}`" in authority and "generated/instructions.md" not in authority
     checks.append(
         _check_result(
             "plan_authority",
             authority_ok,
-            "CLAUDE.md is the declared authority" if authority_ok else f"invalid authority section: {authority!r}",
+            f"{contract.authority_path} is the declared authority" if authority_ok else f"invalid authority section: {authority!r}",
             observed=authority or None,
         )
     )
 
-    index_path = task_root / "docs" / "plans" / "CLAUDE.md"
+    index_path = task_root / "docs" / "plans" / contract.authority_path
     index_content = index_path.read_text(encoding="utf-8") if index_path.is_file() else ""
     indexed = bool(plan_paths) and Path(plan_paths[0]).name in index_content
     checks.append(
@@ -775,7 +775,7 @@ def _collect_checks(task_root: Path, contract: GovernedTaskV1) -> list[CheckResu
         )
     )
 
-    governed_files = ["CLAUDE.md", "AGENTS.md", "meta-process.yaml", "scripts/meta/validate_plan.py"]
+    governed_files = [contract.authority_path, "AGENTS.md", "meta-process.yaml", "scripts/meta/validate_plan.py"]
     missing_governance = [path for path in governed_files if not (task_root / path).exists()]
     checks.append(
         _check_result(
@@ -1016,7 +1016,7 @@ def prepare_governed_task(
     _write(source_path, _baseline_source(contract))
     _write(task_root / "tests" / "test_cli.py", _acceptance_tests(contract))
     _write(task_root / "README.md", _baseline_readme(contract))
-    _write(task_root / "CLAUDE.md", _consumer_authority(contract))
+    _write(task_root / contract.authority_path, _consumer_authority(contract))
     _write(task_root / "Makefile", _baseline_makefile())
     _write(task_root / TASK_CONTRACT_FILE, contract.model_dump_json(indent=2))
     _write(task_root / ".gitignore", f"{STATE_DIRECTORY}/\n__pycache__/\n*.pyc\n")

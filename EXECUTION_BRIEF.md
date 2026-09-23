@@ -30,7 +30,7 @@ frontier.
   - detailed canonical planning methodology
 - [ROADMAP.md](ROADMAP.md)
   - current proof, active gap, phase map, and rollout order
-- [docs/plans/CLAUDE.md](docs/plans/CLAUDE.md)
+- [docs/plans/AGENTS.md](docs/plans/AGENTS.md)
   - active numbered implementation queue
 
 ## Rules

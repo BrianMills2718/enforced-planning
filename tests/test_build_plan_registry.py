@@ -161,6 +161,14 @@ class TestFindPlanIndex:
         assert result is not None
         assert result.name == "CLAUDE.md"
 
+    def test_prefers_authored_agents_index_when_legacy_index_also_exists(self, tmp_path):
+        repo = make_governed_repo(tmp_path, "both-indexes")
+        agents = repo / "docs" / "plans" / "AGENTS.md"
+        agents.write_text("| 9 | Current Plan | High | 📋 Planned | None |\n")
+        assert find_plan_index(repo) == agents
+        registry = build_registry(tmp_path)
+        assert [plan["plan_num"] for plan in registry["projects"]["both-indexes"]["plans"]] == [9]
+
     def test_returns_none_if_no_plans_dir(self, tmp_path):
         repo = tmp_path / "no-plans"
         repo.mkdir()

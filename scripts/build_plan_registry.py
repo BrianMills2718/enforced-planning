@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a cross-repo plan registry from all governed repos.
 
-Scans a projects directory for repos containing docs/plans/CLAUDE.md and
+Scans a projects directory for repos containing docs/plans/AGENTS.md or legacy CLAUDE.md and
 produces a JSON registry of all plans: their numbers, titles, statuses,
 and dependency references.
 
@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 
-# Pattern for plan table rows in CLAUDE.md plan index files
+# Pattern for plan table rows in AGENTS.md or legacy CLAUDE.md plan indexes
 # Matches: | N | Title | Priority | Status | Blocks |
 # or:      | N | Title (path) | Priority | Status | Blocks |
 PLAN_ROW_RE = re.compile(
@@ -37,7 +37,7 @@ PLAN_ROW_RE = re.compile(
 META_PROCESS_MARKER = "meta-process.yaml"
 
 # Files where plan tables live
-PLAN_INDEX_NAMES = ["CLAUDE.md"]
+PLAN_INDEX_NAMES = ["AGENTS.md", "CLAUDE.md"]
 
 
 def _extract_plan_title(raw_cell: str) -> str:
@@ -67,7 +67,7 @@ def _extract_status(raw_cell: str) -> str:
 
 
 def parse_plan_index(plan_index_path: Path, project: str) -> list[dict[str, Any]]:
-    """Parse a docs/plans/CLAUDE.md file and return a list of plan entries.
+    """Parse a docs/plans/AGENTS.md or legacy CLAUDE.md file and return a list of plan entries.
 
     Each entry has: {project, plan_num, title, status, priority, blocks}.
     """

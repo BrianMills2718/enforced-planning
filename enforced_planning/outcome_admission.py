@@ -97,7 +97,7 @@ _PLAN_WORK_GRAPH_RE = re.compile(r"^docs/plans/(?P<plan>[1-9][0-9]*)_[a-z0-9_]+_
 _BOOTSTRAP_EXAMPLE_RE = re.compile(
     r"^examples/owner-real-outcome-admission/plan(?P<plan>[1-9][0-9]*)-[a-z0-9-]+\.json$"
 )
-_SHARED_BOOTSTRAP_PATHS = frozenset({"docs/plans/CLAUDE.md", "ROADMAP.md"})
+_SHARED_BOOTSTRAP_PATHS = frozenset({"docs/plans/AGENTS.md", "docs/plans/CLAUDE.md", "ROADMAP.md"})
 DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH = Path.home() / ".claude" / "coordination" / "outcome-admission-v1.jsonl"
 DEFAULT_SELECTION_PENDING_ACTIVATION_RECEIPT_PATH = (
     Path.home() / ".claude" / "coordination" / "selection-pending-activation-v1.jsonl"

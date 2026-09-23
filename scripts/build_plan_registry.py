@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a cross-repo plan registry from all governed repos.
 
-Scans a projects directory for repos containing docs/plans/CLAUDE.md and
+Scans a projects directory for repos containing docs/plans/AGENTS.md or legacy CLAUDE.md and
 produces a JSON registry of all plans: their numbers, titles, statuses,
 and dependency references.
 
@@ -37,7 +37,7 @@ PLAN_ROW_RE = re.compile(
 META_PROCESS_MARKER = "meta-process.yaml"
 
 # Files where plan tables live
-PLAN_INDEX_NAMES = ["CLAUDE.md"]
+PLAN_INDEX_NAMES = ["AGENTS.md", "CLAUDE.md"]
 
 
 def _extract_plan_title(raw_cell: str) -> str:

@@ -6,11 +6,12 @@ This tool composes the existing governed-repo rollout primitives:
 - scaffolds the minimum plan/doc graph surface when absent
 - syncs canonical local validators into the target repo
 - installs read-gating hook wiring
-- refreshes generated ``AGENTS.md`` from canonical inputs
+- refreshes legacy generated ``AGENTS.md`` from canonical inputs while
+  preserving authored ``AGENTS.md`` in migrated repositories
 - re-audits the repo so rollout ends with an explicit governed/partial result
 
-It does not invent a repo-specific ``CLAUDE.md``. The target repo must already
-declare its canonical governance source.
+It does not invent repo-specific root instructions. The target repo must
+already declare its canonical governance source.
 """
 
 from __future__ import annotations
@@ -380,6 +381,16 @@ SCAFFOLD_TEMPLATES: dict[str, str] = {
 }
 
 
+def _has_authored_agents(repo_root: Path) -> bool:
+    """Return whether AGENTS.md is a regular authored source, not an old projection."""
+    path = repo_root / "AGENTS.md"
+    return (
+        path.is_file()
+        and not path.is_symlink()
+        and "<!-- GENERATED FILE: DO NOT EDIT DIRECTLY -->" not in path.read_text(encoding="utf-8")
+    )
+
+
 @dataclass(frozen=True)
 class InstallPlan:
     """Computed installer actions plus the file writes needed to realize them."""
@@ -658,8 +669,9 @@ def _plan_static_support(
     blockers: list[str] = []
 
     claude_path = repo_root / "CLAUDE.md"
-    if not claude_path.exists():
-        blockers.append("missing canonical CLAUDE.md")
+    agents_only = not claude_path.is_file() and _has_authored_agents(repo_root)
+    if not claude_path.is_file() and not agents_only:
+        blockers.append("missing canonical CLAUDE.md or authored AGENTS.md")
 
     if (
         not worktree_only
@@ -669,6 +681,8 @@ def _plan_static_support(
         and not coordination_claims_only
     ):
         for target_relpath, source_relpath in SCAFFOLD_TEMPLATES.items():
+            if agents_only and target_relpath.endswith("/CLAUDE.md"):
+                target_relpath = target_relpath.removesuffix("CLAUDE.md") + "AGENTS.md"
             target_path = repo_root / target_relpath
             if target_path.exists():
                 continue
@@ -801,8 +815,10 @@ def _plan_agents_refresh(
     actions: list[str] = []
     blockers: list[str] = []
     claude_path = repo_root / "CLAUDE.md"
-    if not claude_path.exists():
-        blockers.append("missing canonical CLAUDE.md")
+    if not claude_path.is_file() and _has_authored_agents(repo_root):
+        return actions, blockers
+    if not claude_path.is_file():
+        blockers.append("missing canonical CLAUDE.md or authored AGENTS.md")
         return actions, blockers
     if not relationships_present_or_planned:
         blockers.append("missing scripts/relationships.yaml for AGENTS generation")
@@ -818,6 +834,8 @@ def _needs_agents_refresh(
 ) -> bool:
     """Return True when AGENTS.md should be refreshed for the target repo."""
     agents = pre_audit["checks"]["agents_md"]
+    if pre_audit["checks"]["instruction_source"]["path"] == "AGENTS.md" and agents["in_sync"] is True:
+        return False
     if relationships_will_change:
         return True
     if not agents["present"]:

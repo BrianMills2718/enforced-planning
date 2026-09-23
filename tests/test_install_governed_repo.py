@@ -2757,7 +2757,54 @@ def test_install_governed_repo_fails_loud_without_claude_md(tmp_path: Path) -> N
 
     assert result.returncode == 1
     payload = json.loads(result.stdout)
-    assert "missing canonical CLAUDE.md" in payload["blockers"]
+    assert "missing canonical CLAUDE.md or authored AGENTS.md" in payload["blockers"]
+
+
+def test_agents_only_target_is_not_overwritten_or_given_claude_scaffold(tmp_path: Path) -> None:
+    """An AGENTS-only consumer keeps its authored rules during an install plan."""
+    (tmp_path / "AGENTS.md").write_text("# Authored rules\n", encoding="utf-8")
+
+    result = _run("--repo-root", str(tmp_path), "--json", cwd=PROJECT_META_ROOT)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["blockers"] == []
+    assert "scaffold:docs/plans/AGENTS.md" in payload["actions"]
+    assert "scaffold:docs/plans/CLAUDE.md" not in payload["actions"]
+    assert "render:AGENTS.md" not in payload["actions"]
+    assert "AGENTS.md" not in payload["planned_write_paths"]
+    assert payload["pre_audit"]["checks"]["agents_md"]["in_sync"] is True
+
+
+def test_orphaned_generated_agents_is_not_accepted_as_canonical(tmp_path: Path) -> None:
+    """A former projection without its source must fail before installation."""
+    (tmp_path / "AGENTS.md").write_text(
+        "<!-- GENERATED FILE: DO NOT EDIT DIRECTLY -->\n# Incomplete\n",
+        encoding="utf-8",
+    )
+
+    result = _run("--repo-root", str(tmp_path), "--write", "--json", cwd=PROJECT_META_ROOT)
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert "missing canonical CLAUDE.md or authored AGENTS.md" in payload["blockers"]
+    assert payload["pre_audit"]["checks"]["agents_md"]["in_sync"] is False
+
+
+def test_audit_refresh_preserves_authored_agents(tmp_path: Path) -> None:
+    """A refresh request must not render over an AGENTS-only source."""
+    instructions = tmp_path / "AGENTS.md"
+    instructions.write_text("# Authored rules\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(PROJECT_META_ROOT / "scripts" / "audit_governed_repo.py"),
+         "--repo-root", str(tmp_path), "--refresh-agents", "--json"],
+        cwd=PROJECT_META_ROOT, capture_output=True, text=True, check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["actions"] == ["preserved:AGENTS.md"]
+    assert instructions.read_text(encoding="utf-8") == "# Authored rules\n"
 
 
 def test_install_governed_repo_rejects_write_and_dry_run(tmp_path: Path) -> None:

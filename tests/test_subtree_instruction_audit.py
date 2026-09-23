@@ -52,6 +52,67 @@ def _run_check(
     )
 
 
+def test_agents_only_subtree_is_accepted(tmp_path: Path) -> None:
+    """A migrated repo can use AGENTS.md at root and in included subtrees."""
+    (tmp_path / "AGENTS.md").write_text("# Root\n", encoding="utf-8")
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "AGENTS.md").write_text("# Docs\n", encoding="utf-8")
+    _write_registry(
+        tmp_path,
+        'version: 1\nclassification_depth: 1\nincluded:\n'
+        '  - path: "docs"\n    reason: "Docs subtree."\n'
+        'excluded:\n  - path: "scripts"\n    reason: "Fixture registry."\n',
+    )
+
+    result = _run_check(tmp_path)
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["errors"] == []
+    assert (docs_dir / "AGENTS.md").read_text() == "# Docs\n"
+
+
+def test_agents_only_subtree_requires_agents_and_rejects_claude(tmp_path: Path) -> None:
+    """The migrated mode detects missing instructions and old filename residue."""
+    (tmp_path / "AGENTS.md").write_text("# Root\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "CLAUDE.md").write_text("# Old\n", encoding="utf-8")
+    _write_registry(
+        tmp_path,
+        'version: 1\nclassification_depth: 1\nincluded:\n'
+        '  - path: "docs"\n    reason: "Docs subtree."\n'
+        'excluded:\n  - path: "scripts"\n    reason: "Fixture registry."\n',
+    )
+
+    result = _run_check(tmp_path)
+
+    assert result.returncode == 1
+    errors = json.loads(result.stdout)["errors"]
+    assert "docs: missing AGENTS.md" in errors
+    assert "docs: CLAUDE.md remains in an AGENTS-only repo" in errors
+
+
+def test_agents_only_cleanup_never_deletes_instruction_file(tmp_path: Path) -> None:
+    """A legacy cleanup flag cannot delete a migrated nested AGENTS.md."""
+    (tmp_path / "AGENTS.md").write_text("# Root\n", encoding="utf-8")
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "AGENTS.md").write_text("# Docs\n", encoding="utf-8")
+    _write_registry(
+        tmp_path,
+        'version: 1\nclassification_depth: 1\nincluded:\n'
+        '  - path: "docs"\n    reason: "Docs subtree."\n'
+        'excluded:\n  - path: "scripts"\n    reason: "Fixture registry."\n',
+    )
+
+    result = _run_check(tmp_path, cleanup_stale_agents=True)
+
+    assert result.returncode == 1
+    assert "--cleanup-stale-agents is unsafe" in result.stdout
+    assert (docs_dir / "AGENTS.md").read_text() == "# Docs\n"
+
+
 def test_subtree_audit_reports_unclassified_directories(tmp_path: Path) -> None:
     """Directories within audit depth must be explicitly included or excluded."""
 

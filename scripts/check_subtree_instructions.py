@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""Audit nested subtree instruction coverage and CLAUDE.md presence.
+"""Audit nested subtree instruction coverage during AGENTS.md migration.
 
 This validator enforces the subtree-instruction contract for any governed repo:
 
 1. meaningful operational directories are classified explicitly,
-2. included directories carry a local ``CLAUDE.md``,
+2. included directories carry the root-selected instruction filename,
 3. excluded or unclassified directories do not silently drift into the system.
 
-``AGENTS.md`` is a **root-level artifact only** — it is generated (not
-symlinked) at the repo root by ``render_agents_md.py``.  Subdirectories
-must NOT have ``AGENTS.md`` files (neither symlinks nor regular files).
-The default audit is read-only. Use ``--cleanup-stale-agents`` to remove
-old symlink-based subdirectory mirrors left by earlier versions.
-The ``--sync-agents`` flag is retained for backward compatibility but is
-now a no-op that emits a deprecation warning.
+When the root has ``CLAUDE.md``, the legacy subtree rule applies and nested
+``AGENTS.md`` mirrors are reported. When the root has only ``AGENTS.md``,
+included subtrees require ``AGENTS.md`` and must not retain ``CLAUDE.md``.
+The default audit is read-only. ``--cleanup-stale-agents`` only works in
+legacy mode, where it removes redundant old mirrors. ``--sync-agents`` is a
+deprecated no-op.
 """
 
 from __future__ import annotations
@@ -362,6 +361,8 @@ def sweep_subdirectory_agents(
 def _audit_included_directory(
     repo_root: Path,
     relpath: str,
+    *,
+    agents_only: bool = False,
 ) -> DirectoryAudit:
     """Audit one included subtree directory."""
 
@@ -387,15 +388,19 @@ def _audit_included_directory(
     agents_is_symlink = agents_path.is_symlink()
     agents_target = os.readlink(agents_path) if agents_path.is_symlink() else None
 
-    if not claude_present:
-        errors.append(f"{relpath}: missing CLAUDE.md")
-    # AGENTS.md in subdirectories is no longer required or expected.
-    # If one exists as a regular file, warn but don't fail.
-    if agents_present:
-        errors.append(
-            f"{relpath}: AGENTS.md should not exist in subdirectories "
-            "(root-level artifact only); remove it"
-        )
+    if agents_only:
+        if not agents_present or not agents_path.exists():
+            errors.append(f"{relpath}: missing AGENTS.md")
+        if claude_present or claude_path.is_symlink():
+            errors.append(f"{relpath}: CLAUDE.md remains in an AGENTS-only repo")
+    else:
+        if not claude_present:
+            errors.append(f"{relpath}: missing CLAUDE.md")
+        if agents_present:
+            errors.append(
+                f"{relpath}: AGENTS.md should not exist in subdirectories "
+                "(root-level artifact only); remove it"
+            )
 
     return DirectoryAudit(
         path=relpath,
@@ -415,20 +420,14 @@ def audit_subtree_instructions(
     sync_agents: bool = False,
     cleanup_stale_agents: bool = False,
 ) -> SubtreeAuditResult:
-    """Audit subtree instruction coverage for one repo root.
+    """Audit the root-selected subtree instruction filename without guessing."""
 
-    The ``sync_agents`` parameter is accepted for backward compatibility
-    but is now a no-op (with deprecation warning).  AGENTS.md is a
-    root-level artifact only; subdirectories should not have one. Cleanup
-    requires the explicit ``cleanup_stale_agents`` flag.
-    """
+    agents_only = not (repo_root / "CLAUDE.md").exists() and (repo_root / "AGENTS.md").exists()
 
     if sync_agents:
         warnings.warn(
             "--sync-agents is deprecated and now a no-op. "
-            "AGENTS.md is a root-level artifact only; subdirectory "
-            "AGENTS.md symlinks are no longer created. Use "
-            "--cleanup-stale-agents to remove existing stale symlinks.",
+            "Instruction files are not created by this audit.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -470,32 +469,39 @@ def audit_subtree_instructions(
         directory_path = repo_root / entry.path
         if not directory_path.is_dir():
             continue
-        # Only check for CLAUDE.md in excluded dirs; AGENTS.md is root-only.
-        if (directory_path / "CLAUDE.md").exists():
-            conflict = f"{entry.path}: excluded directory should not contain CLAUDE.md"
-            result.excluded_conflicts.append(conflict)
-            result.errors.append(conflict)
+        for filename in (("AGENTS.md", "CLAUDE.md") if agents_only else ("CLAUDE.md",)):
+            candidate = directory_path / filename
+            if candidate.exists() or candidate.is_symlink():
+                conflict = f"{entry.path}: excluded directory should not contain {filename}"
+                result.excluded_conflicts.append(conflict)
+                result.errors.append(conflict)
 
-    redundant, distinct = sweep_subdirectory_agents(
-        repo_root, remove=cleanup_stale_agents
-    )
-    for relpath in redundant:
+    if agents_only:
         if cleanup_stale_agents:
-            result.actions.append(f"removed-subdirectory-agents:{relpath}")
-        else:
             result.errors.append(
-                f"{relpath}: subdirectory AGENTS.md duplicates its CLAUDE.md and is "
-                "read by no client; run --cleanup-stale-agents to remove it"
+                "--cleanup-stale-agents is unsafe for an AGENTS-only repo; no files removed"
             )
-    for relpath in distinct:
-        result.errors.append(
-            f"{relpath}: subdirectory AGENTS.md is read by no client, but its "
-            "content is not in the CLAUDE.md beside it. Merge it there, then "
-            "remove this file; cleanup will not delete it."
+    else:
+        redundant, distinct = sweep_subdirectory_agents(
+            repo_root, remove=cleanup_stale_agents
         )
+        for relpath in redundant:
+            if cleanup_stale_agents:
+                result.actions.append(f"removed-subdirectory-agents:{relpath}")
+            else:
+                result.errors.append(
+                    f"{relpath}: subdirectory AGENTS.md duplicates its CLAUDE.md and is "
+                    "read by no client; run --cleanup-stale-agents to remove it"
+                )
+        for relpath in distinct:
+            result.errors.append(
+                f"{relpath}: subdirectory AGENTS.md is read by no client, but its "
+                "content is not in the CLAUDE.md beside it. Merge it there, then "
+                "remove this file; cleanup will not delete it."
+            )
 
     for entry in registry.included:
-        directory_audit = _audit_included_directory(repo_root, entry.path)
+        directory_audit = _audit_included_directory(repo_root, entry.path, agents_only=agents_only)
         result.directories.append(directory_audit)
         result.errors.extend(directory_audit.errors)
 

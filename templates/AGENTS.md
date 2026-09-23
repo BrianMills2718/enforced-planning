@@ -5,7 +5,7 @@ repos.
 
 ## Use This Directory For
 
-- root and subtree `CLAUDE.md` templates
+- root and subtree instruction templates (`AGENTS.md` for new repos)
 - example config files
 - portable markdown and makefile fragments
 

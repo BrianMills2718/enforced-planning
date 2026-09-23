@@ -560,7 +560,7 @@ def update_plan_index(
 
     Returns True if updated successfully.
     """
-    index_file = plans_dir / "CLAUDE.md"
+    index_file = plans_dir / ("AGENTS.md" if (plans_dir / "AGENTS.md").exists() else "CLAUDE.md")
     if not index_file.exists():
         return False
 

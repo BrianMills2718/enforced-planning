@@ -163,7 +163,7 @@ def check_file_existence(root: Path) -> list[str]:
             errors.append(f"Missing template: templates/{t}")
 
     # Key documentation files
-    for doc in ["README.md", "GETTING_STARTED.md", "CLAUDE.md", "ISSUES.md"]:
+    for doc in ["README.md", "GETTING_STARTED.md", "AGENTS.md", "ISSUES.md"]:
         if not (root / doc).exists():
             errors.append(f"Missing documentation: {doc}")
 
@@ -312,7 +312,7 @@ def check_plan_surface_coherence(root: Path) -> list[str]:
     """Verify plan index status agrees with the underlying plan files."""
     errors: list[str] = []
 
-    index_path = root / "docs" / "plans" / "CLAUDE.md"
+    index_path = root / "docs" / "plans" / "AGENTS.md"
     content = index_path.read_text(encoding="utf-8")
 
     for line in content.splitlines():
@@ -330,7 +330,7 @@ def check_plan_surface_coherence(root: Path) -> list[str]:
         relpath = match.group(1)
         plan_path = index_path.parent / relpath
         if not plan_path.exists():
-            errors.append(f"docs/plans/CLAUDE.md: listed plan file missing: {relpath}")
+            errors.append(f"docs/plans/AGENTS.md: listed plan file missing: {relpath}")
             continue
 
         plan_text = plan_path.read_text(encoding="utf-8")
@@ -344,13 +344,13 @@ def check_plan_surface_coherence(root: Path) -> list[str]:
 
         if "✅ Complete" in row_status and "complete" not in file_status.lower():
             errors.append(
-                f"docs/plans/CLAUDE.md vs {relpath}: index says complete but plan says '{file_status}'"
+                f"docs/plans/AGENTS.md vs {relpath}: index says complete but plan says '{file_status}'"
             )
         if "🚧 In Progress" in row_status and not any(
             token in file_status.lower() for token in ("progress", "partial")
         ):
             errors.append(
-                f"docs/plans/CLAUDE.md vs {relpath}: index says in progress but plan says '{file_status}'"
+                f"docs/plans/AGENTS.md vs {relpath}: index says in progress but plan says '{file_status}'"
             )
 
     return errors

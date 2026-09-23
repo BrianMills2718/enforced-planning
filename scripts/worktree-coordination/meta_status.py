@@ -257,9 +257,9 @@ def get_recent_commits(limit: int = 5) -> list[dict]:
 
 
 def get_review_status() -> list[dict]:
-    """Get PR review status from CLAUDE.md Awaiting Review table."""
+    """Get PR review status from the root instruction file Awaiting Review table."""
     import re
-    claude_md = Path("CLAUDE.md")
+    claude_md = next((path for path in (Path("AGENTS.md"), Path("CLAUDE.md")) if path.exists()), Path("AGENTS.md"))
     if not claude_md.exists():
         return []
 

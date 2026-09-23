@@ -161,7 +161,7 @@ if __name__ == "__main__":
 '''
 
 
-def _plan(*, authority: str = "CLAUDE.md", status: str = "Complete") -> str:
+def _plan(*, authority: str = "AGENTS.md", status: str = "Complete") -> str:
     """Return the bounded consumer plan fixture."""
 
     return f"""# Plan #1: Add Optional Name
@@ -187,7 +187,7 @@ existing default.
 - `src/hello_app.py`
 - `README.md`
 - `docs/plans/01_add_optional_name.md`
-- `docs/plans/CLAUDE.md`
+- `docs/plans/AGENTS.md`
 
 ## Required Tests
 
@@ -205,7 +205,7 @@ existing default.
 def _complete_task(
     task_root: Path,
     *,
-    authority: str = "CLAUDE.md",
+    authority: str = "AGENTS.md",
     unexpected_path: str | None = None,
 ) -> None:
     """Create and commit a result candidate inside the disposable consumer."""
@@ -233,7 +233,7 @@ python src/hello_app.py --name Ada
     plan_path = task_root / "docs" / "plans" / "01_add_optional_name.md"
     plan_path.parent.mkdir(parents=True, exist_ok=True)
     plan_path.write_text(_plan(authority=authority), encoding="utf-8")
-    index_path = task_root / "docs" / "plans" / "CLAUDE.md"
+    index_path = task_root / "docs" / "plans" / "AGENTS.md"
     index_path.write_text(
         "# Implementation Plans\n\n- [Plan #1: Add Optional Name](01_add_optional_name.md) — Complete\n",
         encoding="utf-8",
@@ -328,7 +328,8 @@ def test_prepare_creates_governed_failing_baseline(tmp_path: Path) -> None:
     assert receipt.initial_probe_verdict == "fail"
     assert receipt.baseline_revision == _git(task_root, "rev-parse", "governed-task-baseline")
     assert _git(task_root, "status", "--porcelain") == ""
-    assert (task_root / "AGENTS.md").exists()
+    assert (task_root / "AGENTS.md").is_file()
+    assert not (task_root / "CLAUDE.md").exists()
     assert (task_root / "governed-task.json").exists()
     task_contract = (task_root / "governed-task.json").read_text(encoding="utf-8")
     assert "/home/brian" not in task_contract
@@ -440,7 +441,7 @@ def test_repeated_unchanged_failure_requires_course_checkpoint(tmp_path: Path) -
     checkpoint = record_course_checkpoint(
         task_root,
         prior_assumption="The feature might already be available through the generated instructions.",
-        changed_assumption="Executed behavior and CLAUDE.md are authoritative; the option is absent.",
+        changed_assumption="Executed behavior and AGENTS.md are authoritative; the option is absent.",
         next_tactic="Implement the option in source and verify both CLI paths.",
     )
     assert checkpoint.after_attempt == 2
@@ -621,7 +622,7 @@ def test_cli_json_prepare_probe_checkpoint_and_verify(tmp_path: Path) -> None:
             "--prior-assumption",
             "Generated orientation might define behavior.",
             "--changed-assumption",
-            "The executable source and CLAUDE.md define current behavior.",
+            "The executable source and AGENTS.md define current behavior.",
             "--next-tactic",
             "Change source, then execute both exact commands.",
         ],

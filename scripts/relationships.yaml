@@ -2,7 +2,7 @@
 
 required_reading:
   defaults:
-    - CLAUDE.md
+    - AGENTS.md
 
 governance: []
 couplings:
@@ -65,7 +65,7 @@ couplings:
 
   - description: >-
       The session lifecycle CLI surface (start/heartbeat/status/end/finish/
-      close). CLAUDE.md's Commands section is this repo's own documented
+      close). AGENTS.md's Commands section is this repo's own documented
       entrypoint list for these scripts.
     sources:
       - "scripts/session_start.py"
@@ -76,7 +76,7 @@ couplings:
       - "scripts/session_finish.py"
       - "scripts/session_close.py"
     docs:
-      - "CLAUDE.md"
+      - "AGENTS.md"
       - "docs/plans/132_overbroad_claim_narrowing.md"
 architecture: []
 adrs: {}
@@ -94,7 +94,7 @@ documents:
       anchored_to: PLANNING_OPERATING_MODEL.md
       reason: Owns the current control-plane queue, proof frontier, and phase map; retained compatibility pointers route their stale state summaries here.
     lifecycle_source: document_status
-  - path: CLAUDE.md
+  - path: AGENTS.md
     role: authority
     justification:
       anchored_to: PLANNING_OPERATING_MODEL.md

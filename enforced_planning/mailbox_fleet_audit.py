@@ -199,7 +199,7 @@ def _git_is_dirty(repo_root: Path) -> bool | None:
 
 
 def _authority_known(repo_root: Path) -> bool:
-    return (repo_root / "CLAUDE.md").is_file() and (repo_root / "meta-process.yaml").is_file()
+    return any((repo_root / name).is_file() for name in ("AGENTS.md", "CLAUDE.md")) and (repo_root / "meta-process.yaml").is_file()
 
 
 def _repair_paths(repo_root: Path) -> tuple[str, ...]:

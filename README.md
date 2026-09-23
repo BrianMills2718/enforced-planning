@@ -10,7 +10,7 @@ A portable framework for coordinating AI coding assistants on shared codebases.
 > Claude Code and Codex are current `native-interactive` tools for the hook
 > surfaces certified for each client, including read-first context and
 > prewrite claim enforcement. Generic terminal/CLI agents remain
-> `portable-governed` when they consume generated `AGENTS.md`, plan docs, and
+> `portable-governed` when they consume authored `AGENTS.md`, plan docs, and
 > deterministic validators through the normal repo interface. See
 > [docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md](docs/designs/PHASE8_TOOL_SUPPORT_MATRIX.md).
 
@@ -74,7 +74,7 @@ that primitive rather than a second installer authority.
 
 ## Quick Start
 
-1. In the target repo, author a canonical `CLAUDE.md`.
+1. In the target repo, author a canonical `AGENTS.md`.
 2. From this framework repo, run:
 
 ```bash
@@ -87,7 +87,7 @@ python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict
 ```bash
 cd /path/to/your/project
 python scripts/meta/check_agents_sync.py --repo-root . --check
-python scripts/meta/file_context.py --json CLAUDE.md
+python scripts/meta/file_context.py --json AGENTS.md
 ```
 
 If the repo also opts into sanctioned worktree coordination, the installed
@@ -130,12 +130,11 @@ For the shortest adoption path, continue with
 
 The minimum mechanical governed-repo contract is:
 
-- `CLAUDE.md`
+- `AGENTS.md`
 - `meta-process.yaml`
-- `docs/plans/CLAUDE.md`
+- `docs/plans/AGENTS.md`
 - `docs/plans/TEMPLATE.md`
 - `scripts/relationships.yaml`
-- generated `AGENTS.md`
 - installed validator/support files under `scripts/meta/`
 - installed session lifecycle entrypoints under `scripts/meta/` when worktree coordination is enabled
 - read-gating surfaces under `.claude/hooks/` and `.claude/settings.json`
@@ -174,12 +173,12 @@ The canonical minimum installer produces an installed repo shaped like this:
 ```text
 your-project/
 ├── AGENTS.md
-├── CLAUDE.md
+├── AGENTS.md
 ├── Makefile
 ├── meta-process.yaml
 ├── docs/
 │   └── plans/
-│       ├── CLAUDE.md
+│       ├── AGENTS.md
 │       └── TEMPLATE.md
 ├── enforced_planning/
 │   ├── __init__.py

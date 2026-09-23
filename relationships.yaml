@@ -17,7 +17,7 @@ coupling_types:
 
 required_reading:
   defaults:
-    - CLAUDE.md
+    - AGENTS.md
     - PLANNING_OPERATING_MODEL.md
 
 governance:

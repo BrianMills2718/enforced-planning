@@ -9,7 +9,7 @@ from pathlib import Path
 
 from enforced_planning.hook_wiring import CODEX_MAILBOX_HOOK, MAILBOX_HOOK
 from enforced_planning.mailbox_delivery import CLAUDE_HOOK_REQUIREMENTS, CODEX_HOOK_REQUIREMENTS
-from enforced_planning.mailbox_fleet_audit import MailboxFleetAuditRequestV1, _portable_path, audit_mailbox_fleet
+from enforced_planning.mailbox_fleet_audit import MailboxFleetAuditRequestV1, _authority_known, _portable_path, audit_mailbox_fleet
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -192,3 +192,12 @@ def test_fleet_audit_cli_emits_json_and_does_not_modify_registered_repositories(
     assert payload["write_performed"] is False
     assert payload["reports"][0]["classification"] == "drifted"
     assert sorted(path.relative_to(drifted).as_posix() for path in drifted.rglob("*") if path.is_file()) == before
+
+
+def test_agents_only_repo_is_known_to_fleet_audit(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, "agents-only", configured=False)
+    (repo / "CLAUDE.md").unlink()
+    (repo / "AGENTS.md").write_text("# Authored instructions\n", encoding="utf-8")
+    assert _authority_known(repo)
+    (repo / "meta-process.yaml").unlink()
+    assert not _authority_known(repo)

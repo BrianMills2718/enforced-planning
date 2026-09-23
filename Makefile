@@ -119,8 +119,8 @@ infer-all:  ## Infer deps across all governed repos in SCAN_DIR (writes generate
 	  python scripts/infer_dependencies.py "$$repo" --output generated/inferred_$$name.json; \
 	done
 
-agents-md:  ## Regenerate AGENTS.md from CLAUDE.md (Codex-facing projection)
-	python scripts/render_agents_md.py --source CLAUDE.md --output AGENTS.md
+agents-md:  ## Validate authored AGENTS.md in this source repo
+	python scripts/check_agents_sync.py --check
 
 status:  ## Verify repository authority freshness and show branch status
 	@$(PROJECT_STATUS_PYTHON) $(PROJECT_STATUS_SCRIPT) --repo-root .

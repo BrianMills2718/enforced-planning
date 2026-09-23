@@ -603,11 +603,11 @@ def upgrade_repo(
         result.skip_reason = "local dirt detected; --write mode requires a clean working tree"
         return result
 
-    if not (repo_root / "CLAUDE.md").exists():
-        result.blockers.append("missing root CLAUDE.md (hard blocker)")
+    if not any((repo_root / name).is_file() for name in ("AGENTS.md", "CLAUDE.md")):
+        result.blockers.append("missing root AGENTS.md or CLAUDE.md (hard blocker)")
         result.classification = "legacy"
         result.skipped = True
-        result.skip_reason = "missing root CLAUDE.md"
+        result.skip_reason = "missing root AGENTS.md or CLAUDE.md"
         return result
 
     # Run install

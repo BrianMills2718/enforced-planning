@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Audit mechanical governed-repo contract signals and refresh AGENTS.md.
+"""Audit mechanical governed-repo contract signals and legacy AGENTS projections.
 
 This tool is the first executable rollout slice for Plan 09. It does not try
 to invent missing repo-specific governance. Instead, it checks whether the
-mechanical pieces of the governed-repo contract are present and, when the
-canonical inputs already exist, it can deterministically refresh ``AGENTS.md``.
+mechanical pieces of the governed-repo contract are present and, for legacy
+repositories with ``CLAUDE.md``, deterministically refresh ``AGENTS.md``.
 
 The audit is intentionally conservative:
 
@@ -103,7 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--claude-file",
         default="CLAUDE.md",
-        help="Repo-relative path to canonical CLAUDE.md.",
+        help="Repo-relative path to legacy canonical CLAUDE.md, when present.",
     )
     parser.add_argument(
         "--relationships-file",
@@ -113,7 +113,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--agents-file",
         default="AGENTS.md",
-        help="Repo-relative path to generated AGENTS.md.",
+        help="Repo-relative path to AGENTS.md.",
     )
     parser.add_argument(
         "--plans-dir",
@@ -368,7 +368,15 @@ def _audit_agents(
 
     claude_path = repo_root / claude_file
     if not claude_path.exists():
-        result["error"] = f"Canonical CLAUDE file is missing: {claude_path}"
+        if output_path.is_symlink() or not output_path.is_file():
+            result["error"] = f"Authored AGENTS file is missing: {output_path}"
+            result["in_sync"] = False
+            return result
+        if "<!-- GENERATED FILE: DO NOT EDIT DIRECTLY -->" in output_path.read_text(encoding="utf-8"):
+            result["error"] = f"AGENTS file still declares itself generated without a source: {output_path}"
+            result["in_sync"] = False
+            return result
+        result["in_sync"] = True
         return result
 
     resolve_inputs, render_agents_markdown = _load_repo_render_module(repo_root)
@@ -774,7 +782,17 @@ def _refresh_agents(
     relationships_file: str,
     agents_file: str,
 ) -> str:
-    """Render ``AGENTS.md`` for the target repo or fail loudly."""
+    """Render legacy AGENTS.md, preserving an authored AGENTS-only source."""
+    if not (repo_root / claude_file).is_file():
+        state = _audit_agents(
+            repo_root,
+            claude_file=claude_file,
+            relationships_file=relationships_file,
+            agents_file=agents_file,
+        )
+        if state["in_sync"] is True and state["refreshable"] is False:
+            return f"preserved:{agents_file}"
+        raise ValueError(state["error"] or f"Cannot refresh {agents_file} without {claude_file}")
     resolve_inputs, render_agents_markdown = _load_repo_render_module(repo_root)
     inputs = resolve_inputs(
         repo_root=repo_root,
@@ -799,7 +817,9 @@ def audit_repo(
 ) -> dict[str, Any]:
     """Audit a repo against the mechanical governed-repo contract surface."""
     plans_path = repo_root / plans_dir
-    plan_index = plans_path / "CLAUDE.md"
+    instruction_source = claude_file if (repo_root / claude_file).is_file() else agents_file
+    plan_instruction = "CLAUDE.md" if instruction_source == claude_file else "AGENTS.md"
+    plan_index = plans_path / plan_instruction
     config_path, config, config_error = _load_meta_process_config(repo_root)
     relationships_state = _analyze_relationships_linkage(
         repo_root, relationships_file=relationships_file
@@ -812,6 +832,10 @@ def audit_repo(
         "claude_md": {
             "present": (repo_root / claude_file).exists(),
             "path": claude_file,
+        },
+        "instruction_source": {
+            "present": (repo_root / instruction_source).is_file(),
+            "path": instruction_source,
         },
         "meta_process_yaml": {
             "present": config_path.exists(),
@@ -831,7 +855,7 @@ def audit_repo(
         },
         "plans_index": {
             "present": plan_index.exists(),
-            "path": f"{plans_dir}/CLAUDE.md",
+            "path": f"{plans_dir}/{plan_instruction}",
         },
         "agents_md": _audit_agents(
             repo_root,
@@ -866,8 +890,8 @@ def audit_repo(
     }
 
     missing_required: list[str] = []
-    if not checks["claude_md"]["present"]:
-        missing_required.append("canonical CLAUDE.md")
+    if not checks["instruction_source"]["present"]:
+        missing_required.append("canonical CLAUDE.md or authored AGENTS.md")
     meta_process = checks["meta_process_yaml"]
     if not meta_process["present"]:
         missing_required.append("meta-process.yaml")
@@ -882,11 +906,11 @@ def audit_repo(
     if not checks["plans_dir"]["present"]:
         missing_required.append("docs/plans/")
     if not checks["plans_index"]["present"]:
-        missing_required.append("docs/plans/CLAUDE.md")
+        missing_required.append(checks["plans_index"]["path"])
 
     agents = checks["agents_md"]
     if not agents["present"]:
-        missing_required.append("generated AGENTS.md")
+        missing_required.append("AGENTS.md")
     elif agents["in_sync"] is not True:
         missing_required.append("in-sync AGENTS.md")
 

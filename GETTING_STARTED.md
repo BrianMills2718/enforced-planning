@@ -37,9 +37,12 @@ Your target repo needs:
 
 - a git repository
 - Python 3.9+
-- a canonical `CLAUDE.md`
+- an authored root `AGENTS.md` (legacy repositories may still use canonical
+  `CLAUDE.md` with a generated `AGENTS.md` projection)
 
-The installer will not invent `CLAUDE.md` for you.
+The installer will not invent root project instructions for you. Start a new
+repository with `AGENTS.md`; migrate an existing `CLAUDE.md` only after
+comparing its content with the destination and checking both clients load it.
 
 Minimal example:
 
@@ -63,7 +66,7 @@ pytest -q
 
 ## References
 
-- `CLAUDE.md` - canonical governance
+- `AGENTS.md` - canonical governance
 ````
 
 ## Install The Minimum Governed-Repo Contract
@@ -122,7 +125,8 @@ the portable installer cannot guess where that owner is installed.
 After a successful minimum install, your repo should have:
 
 - `meta-process.yaml`
-- `docs/plans/CLAUDE.md`
+- `docs/plans/AGENTS.md` for an AGENTS-only repo, or the existing
+  `docs/plans/CLAUDE.md` during legacy migration
 - `docs/plans/TEMPLATE.md`
 - `scripts/relationships.yaml`
 - `scripts/meta/check_agents_sync.py`
@@ -156,7 +160,8 @@ After a successful minimum install, your repo should have:
 - `.claude/hooks/gate-edit.sh`
 - `.claude/hooks/track-reads.sh`
 - `.claude/settings.json`
-- generated `AGENTS.md`
+- authored root `AGENTS.md`, preserved by the installer; legacy repos receive
+  a generated projection from `CLAUDE.md`
 
 The default full installer synchronizes the hook receipt helpers together with
 the coordination hook, so a clean consumer can import and execute the installed
@@ -249,7 +254,7 @@ From your target repo root:
 
 ```bash
 python scripts/meta/check_agents_sync.py --repo-root . --check
-python scripts/meta/file_context.py --json CLAUDE.md
+python scripts/meta/file_context.py --json AGENTS.md
 ```
 
 From the framework repo, you can also re-run the mechanical audit:

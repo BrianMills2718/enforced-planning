@@ -64,7 +64,7 @@ Dry-run is required and should:
 
 - never modify files
 - report scaffold, install, and sync actions per repo
-- classify blockers such as missing `CLAUDE.md`, partial governed state, or
+- classify blockers such as missing authored instructions, partial governed state, or
   local dirt
 - produce one machine-readable report
 
@@ -117,7 +117,10 @@ Avoid "restore previous file snapshots in place" logic. Git already owns that.
 
 ### Missing canonical governance
 
-Missing root `CLAUDE.md` remains a hard blocker.
+Missing root instructions remain a hard blocker. Legacy consumers may still
+author `CLAUDE.md` and render `AGENTS.md`; migrated consumers author a regular
+`AGENTS.md` and do not regenerate it. The installer must preserve the authored
+AGENTS content and scaffold nested AGENTS instructions in that mode.
 
 ## Minimal First Slice
 

@@ -70,6 +70,17 @@ def evaluate_claim(candidate: ClaimRecord, *, active_claims: list[ClaimRecord] |
     return _impl.evaluate_claim(candidate, active_claims=active_claims)
 
 
+def list_abandoned_claims(
+    project: str | None = None,
+    *,
+    claims_dir: Path | None = None,
+    min_ahead: int = 1,
+) -> list[tuple[ClaimRecord, dict[str, Any]]]:
+    """Delegate abandoned-expired-claim detection while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.list_abandoned_claims(project, claims_dir=claims_dir, min_ahead=min_ahead)
+
+
 def build_candidate_claim(**kwargs: Any) -> ClaimRecord:
     """Delegate candidate claim construction to the package module."""
     return _impl.build_candidate_claim(**kwargs)

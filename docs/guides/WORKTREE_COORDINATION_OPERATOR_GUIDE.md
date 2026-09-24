@@ -21,13 +21,30 @@ coordination. Other documentation has narrower roles:
 | Hook-optimized projection | `~/.claude/coordination/prewrite-authority-v1.json` |
 | Current-work readout | `python scripts/meta/check_coordination_claims.py --list --json` |
 | Is another agent's claimed work still actually covered? | `python scripts/meta/check_coordination_claims.py --list-stale [--json]`, read-only |
+| Did any EXPIRED claim die with real unmerged branch progress nobody followed up on? | `python scripts/meta/check_coordination_claims.py --list-abandoned [--json] [--project PROJECT]`, read-only |
 | Consistency audit | `python scripts/check_coordination_consistency.py --repo PROJECT=/absolute/repo/path --verify-prewrite-projection --json` |
 | Repository policy | `meta-process.yaml` |
 | Worktree lifecycle | `make worktree*`, `scripts/meta/check_coordination_claims.py`, and `enforced_planning/worktree_lifecycle.yaml` |
 | Publication gate | `make push-check` / `scripts/meta/check_push_safety.py` |
 
-The installed pre-write gate admits the exact read-only `--check`, `--list`, and
-`--list-stale` claim commands even when the native session has no live claim.
+The installed pre-write gate admits the exact read-only `--check`, `--list`,
+`--list-stale`, and `--list-abandoned` claim commands even when the native
+session has no live claim.
+
+**`--list-stale` is blind to anything already expired.** `_load_claims()`
+(the loader behind `check_claims`/`--list`/`--list-stale`) drops every claim
+whose `expires_at` has passed *before* evaluation, so a claim that dies
+mid-task with real, never-merged commits behind it becomes permanently
+invisible to `--list-stale` the moment it expires -- not "stale," gone.
+Expired records stay on disk as read-only audit history until an explicit
+`--prune`/`--prune-stale` removes them; `--list-abandoned` is the only
+surface that looks at them first, cross-checking each one's actual git state
+(branch exists, ahead of default, not already a merged ancestor) so a false
+positive is never reported. Run `--list-abandoned` before `--prune`/
+`--prune-stale` on a registry that hasn't been checked in a while, not after
+-- pruning deletes the exact claim files it reads. (Root-caused 2026-09-24:
+project-meta issue #2155, after a 24-commit QC pipeline branch sat dead for
+9 days with nothing surfacing it.)
 It also admits the bounded qualitative skill-feedback logger so closeout can
 still report control friction. Mutation-capable claim operations and composed
 shell commands continue to require ordinary claim authority.

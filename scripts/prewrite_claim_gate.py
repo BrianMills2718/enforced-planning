@@ -987,6 +987,7 @@ def _parse_coordination_inspection_command(command: str) -> None:
     operation.add_argument("--check", action="store_true")
     operation.add_argument("--list", action="store_true")
     operation.add_argument("--list-stale", action="store_true")
+    operation.add_argument("--list-abandoned", action="store_true")
     parser.add_argument("--project")
     parser.add_argument("--json", action="store_true")
     try:

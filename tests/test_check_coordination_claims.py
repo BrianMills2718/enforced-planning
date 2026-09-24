@@ -5587,6 +5587,172 @@ def test_list_stale_also_reports_lifecycle_issues_not_just_heartbeat(
     assert (claims_dir / "orphaned-worktree.yaml").is_file()
 
 
+def test_list_stale_never_reports_an_expired_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Regression guard for the gap --list-abandoned exists to close:
+    --list-stale must never surface an already-expired claim, confirming
+    that path really is blind to exactly the case --list-abandoned covers."""
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-99-expired-with-progress"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "feature.txt").write_text("real work\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "feature.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "real unmerged work"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "expired-with-progress.yaml",
+        {
+            "claimed_at": "2026-04-01T08:00:00+00:00",
+            "expires_at": "2026-04-02T08:00:00+00:00",
+            "projects": ["demo"],
+            "intent": "Real work that died mid-task",
+            "claim_type": "write",
+            "plan_ref": "UNPLANNED",
+            "write_paths": ["README.md"],
+            "status": "active",
+            "agent": "codex",
+            "scope": "expired-with-progress",
+            "branch": "plan-99-expired-with-progress",
+            "repo_root": str(repo_root),
+            "worktree_path": str(repo_root),
+            "session_id": "codex:thread-dead",
+            "heartbeat_at": "2026-04-01T08:00:00+00:00",
+        },
+    )
+
+    exit_code = module.main(["--list-stale", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert payload == []
+
+
+def test_list_abandoned_reports_expired_claim_with_real_unmerged_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--list-abandoned must find exactly the claim --list-stale cannot see:
+    expired, real branch, real unmerged commits ahead of default."""
+    module = _load_module()
+    repo_root = tmp_path / "demo"
+    _init_git_repo(repo_root)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-99-expired-with-progress"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    for i in range(3):
+        (repo_root / f"feature-{i}.txt").write_text(f"real work {i}\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(repo_root), "add", f"feature-{i}.txt"], check=True, capture_output=True, text=True
+        )
+        subprocess.run(
+            ["git", "-C", str(repo_root), "commit", "-m", f"real unmerged work {i}"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+
+    claims_dir = tmp_path / "claims"
+    monkeypatch.setattr(module, "CLAIMS_DIR", claims_dir)
+    _write_claim(
+        claims_dir,
+        "expired-with-progress.yaml",
+        {
+            "claimed_at": "2026-04-01T08:00:00+00:00",
+            "expires_at": "2026-04-02T08:00:00+00:00",
+            "projects": ["demo"],
+            "intent": "Real work that died mid-task",
+            "claim_type": "write",
+            "plan_ref": "UNPLANNED",
+            "write_paths": ["README.md"],
+            "status": "active",
+            "agent": "codex",
+            "scope": "expired-with-progress",
+            "branch": "plan-99-expired-with-progress",
+            "repo_root": str(repo_root),
+            "worktree_path": str(repo_root),
+            "session_id": "codex:thread-dead",
+            "heartbeat_at": "2026-04-01T08:00:00+00:00",
+            "next_action": "resume from paused_for_review",
+        },
+    )
+    # A second expired claim whose branch was already merged must not appear:
+    # this exercises the false-positive guard, not just the true positive.
+    subprocess.run(
+        ["git", "-C", str(repo_root), "checkout", "-b", "plan-98-already-merged"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    (repo_root / "merged.txt").write_text("landed\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "merged.txt"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "commit", "-m", "landed work"], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo_root), "checkout", "main"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "merge", "--no-ff", "plan-98-already-merged", "-m", "merge landed work"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    _write_claim(
+        claims_dir,
+        "expired-already-merged.yaml",
+        {
+            "claimed_at": "2026-04-01T08:00:00+00:00",
+            "expires_at": "2026-04-02T08:00:00+00:00",
+            "projects": ["demo"],
+            "intent": "Work that landed before the claim expired",
+            "claim_type": "write",
+            "plan_ref": "UNPLANNED",
+            "write_paths": ["README.md"],
+            "status": "active",
+            "agent": "codex",
+            "scope": "expired-already-merged",
+            "branch": "plan-98-already-merged",
+            "repo_root": str(repo_root),
+            "worktree_path": str(repo_root),
+            "session_id": "codex:thread-landed",
+            "heartbeat_at": "2026-04-01T08:00:00+00:00",
+        },
+    )
+
+    exit_code = module.main(["--list-abandoned", "--json"])
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 0
+    assert len(payload) == 1
+    assert payload[0]["scope"] == "expired-with-progress"
+    assert payload[0]["branch"] == "plan-99-expired-with-progress"
+    assert payload[0]["ahead_of_default"] == 3
+    assert payload[0]["default_branch"] == "main"
+    assert payload[0]["next_action"] == "resume from paused_for_review"
+    # Read-only: the claim files are untouched.
+    assert (claims_dir / "expired-with-progress.yaml").is_file()
+    assert (claims_dir / "expired-already-merged.yaml").is_file()
+
+
 def test_unregistered_format_claim_files_surface_in_list(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -1545,6 +1545,109 @@ def claim_lifecycle_issues(claim: ClaimRecord) -> list[str]:
     return issues
 
 
+def _claim_branch_unmerged_progress(claim: ClaimRecord) -> dict[str, Any] | None:
+    """Return git evidence that a claim's branch holds real unmerged commits.
+
+    Returns `None` when there is no such evidence: the claim has no
+    branch/repo_root, the repo is unreachable, the branch no longer exists,
+    the branch is identical to the default branch, or the branch is already
+    a merged ancestor of the default branch. Deliberately reuses the same
+    git primitives as `claim_lifecycle_issues` (`_resolve_default_branch`,
+    `_default_integration_ref`, `_run_git`) rather than a second git-status
+    implementation.
+    """
+    if not claim.branch or not claim.repo_root:
+        return None
+    repo_root = Path(claim.repo_root).expanduser()
+    if not repo_root.is_dir():
+        return None
+    branch_ref = f"refs/heads/{claim.branch}"
+    branch_check = _run_git(repo_root, ["show-ref", "--verify", branch_ref])
+    if branch_check.returncode != 0:
+        return None
+    default_branch = _resolve_default_branch(repo_root)
+    if not default_branch or default_branch == claim.branch:
+        return None
+    default_ref = _default_integration_ref(repo_root, default_branch)
+    branch_sha = _run_git(repo_root, ["rev-parse", branch_ref])
+    default_sha = _run_git(repo_root, ["rev-parse", default_ref])
+    if branch_sha.returncode != 0 or default_sha.returncode != 0:
+        return None
+    if branch_sha.stdout.strip() == default_sha.stdout.strip():
+        return None
+    merged_check = _run_git(repo_root, ["merge-base", "--is-ancestor", branch_ref, default_ref])
+    if merged_check.returncode == 0:
+        return None
+    ahead = _run_git(repo_root, ["rev-list", "--count", f"{default_ref}..{branch_ref}"])
+    if ahead.returncode != 0:
+        return None
+    try:
+        ahead_count = int(ahead.stdout.strip() or "0")
+    except ValueError:
+        return None
+    if ahead_count <= 0:
+        return None
+    last_commit = _run_git(repo_root, ["log", "-1", "--format=%cI", branch_ref])
+    return {
+        "branch": claim.branch,
+        "default_branch": default_branch,
+        "ahead_of_default": ahead_count,
+        "last_commit_at": last_commit.stdout.strip() if last_commit.returncode == 0 else None,
+    }
+
+
+def list_abandoned_claims(
+    project: str | None = None,
+    *,
+    claims_dir: Path | None = None,
+    min_ahead: int = 1,
+) -> list[tuple[ClaimRecord, dict[str, Any]]]:
+    """Surface EXPIRED claims whose branch still holds real unmerged commits.
+
+    `_load_claims` (used by `check_claims`, `--list`, and `--list-stale`)
+    intentionally excludes every expired claim before evaluation -- expired
+    records stay on disk as read-only audit history until an explicit
+    `--prune`/`--prune-stale` removes them. That is correct for
+    conflict-checking (an expired claim should never block a new one), but it
+    has a real blind spot: a claim that dies mid-task with substantial real,
+    never-merged commits behind it becomes permanently invisible to every
+    listing the moment it expires -- exactly the kind of abandoned-but-valuable
+    work someone should be told about, not silently forgotten (observed
+    2026-09-24: a 24-commit NYC-QC-1 QC pipeline branch sat dead for 9 days
+    with no PR and no follow-up; see project-meta issue #2155).
+
+    This walks the claims directory without the expiry filter, keeps only
+    genuinely expired claims, and checks each one's actual git state so a
+    false positive (branch already merged, deleted, or never diverged) is
+    never reported. `--prune`/`--prune-stale` should run only after this,
+    not before -- they delete the exact claim files this function reads.
+    """
+    resolved_claims_dir = claims_dir or CLAIMS_DIR
+    if not resolved_claims_dir.exists():
+        return []
+    now = datetime.now(timezone.utc)
+    abandoned: list[tuple[ClaimRecord, dict[str, Any]]] = []
+    for claim_file in sorted(resolved_claims_dir.glob("*.yaml")):
+        try:
+            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        expires_at = _parse_iso_datetime(data.get("expires_at"))
+        if expires_at is None or expires_at >= now:
+            continue
+        claim = normalize_claim(data, source_file=str(claim_file))
+        if claim is None:
+            continue
+        if project and project not in claim.projects:
+            continue
+        progress = _claim_branch_unmerged_progress(claim)
+        if progress is not None and progress["ahead_of_default"] >= min_ahead:
+            abandoned.append((claim, progress))
+    return abandoned
+
+
 def claim_liveness_issues(
     claim: ClaimRecord,
     *,
@@ -4877,6 +4980,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "covering' before assuming a claim is abandoned."
         ),
     )
+    group.add_argument(
+        "--list-abandoned",
+        action="store_true",
+        help=(
+            "Report EXPIRED claims whose branch still holds real unmerged "
+            "commits (ahead of default, not already merged), read-only. "
+            "--list-stale never sees these: expired claims are excluded from "
+            "every other listing before evaluation. Use this to find "
+            "substantive work that died mid-task with nobody following up, "
+            "before --prune/--prune-stale deletes the claim record."
+        ),
+    )
     group.add_argument("--prune", action="store_true", help="Remove expired claims")
     group.add_argument(
         "--prune-stale",
@@ -5267,6 +5382,42 @@ def main(argv: list[str] | None = None) -> int:
         for claim, issues in stale:
             print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} — {', '.join(issues)}")
             print(f"    heartbeat_at: {claim.heartbeat_at}")
+        return 0
+
+    if args.list_abandoned:
+        abandoned = list_abandoned_claims(args.project)
+        if args.json:
+            print(
+                json.dumps(
+                    [
+                        {
+                            "agent": claim.agent,
+                            "project": claim.primary_project(),
+                            "scope": claim.scope,
+                            "intent": claim.intent,
+                            "repo_root": claim.repo_root,
+                            "expires_at": claim.expires_at,
+                            "next_action": claim.next_action,
+                            **progress,
+                        }
+                        for claim, progress in abandoned
+                    ],
+                    indent=2,
+                )
+            )
+            return 0
+        if not abandoned:
+            print("No expired claims with real unmerged branch progress.")
+            return 0
+        for claim, progress in abandoned:
+            print(f"  [{claim.agent}] {claim.primary_project()}:{claim.scope} — {claim.intent}")
+            print(
+                f"    branch: {progress['branch']} ({progress['ahead_of_default']} ahead of "
+                f"{progress['default_branch']}, last commit {progress['last_commit_at']})"
+            )
+            print(f"    expired: {claim.expires_at}")
+            if claim.next_action:
+                print(f"    next_action: {claim.next_action}")
         return 0
 
     if args.progress:

@@ -2283,9 +2283,12 @@ def classify_broad_write_paths(
             resolved.relative_to(resolved_root)
         except ValueError as exc:
             raise ValueError(f"broad path {path!r} escapes repo_root through symlink resolution") from exc
+        # A broken symlink is still an existing directory entry. It can be
+        # reserved exactly for repair after the resolved target passed the
+        # repository-containment check above.
         if not candidate.exists() and path in verified_files:
             continue
-        if not candidate.exists():
+        if not candidate.exists() and not candidate.is_symlink():
             raise ValueError(f"broad_scope_ambiguous: top-level path {path!r} does not exist")
         if candidate.is_dir():
             broad[path] = "existing_top_level_directory"

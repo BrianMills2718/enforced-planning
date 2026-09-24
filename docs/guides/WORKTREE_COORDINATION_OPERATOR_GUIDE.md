@@ -163,6 +163,11 @@ worktree exists, health checks use that checked-out file directly; Git-tree
 inspection is limited to the short pre-worktree reservation window so a global
 claim listing never walks unrelated repository histories.
 
+A broken top-level symlink is still an existing directory entry and may be
+reserved by its exact path for repair. The resolved link target must remain
+inside the repository. A truly missing top-level path remains ambiguous and
+requires the declared `new_files` transaction above.
+
 Before creating anything, bootstrap verifies the remote default, fetches its
 exact commit, and uses it as the lane base. It then creates the branch,
 worktree, exact-session claim, tracker, and projection transactionally; failure

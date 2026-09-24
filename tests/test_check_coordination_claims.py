@@ -288,6 +288,21 @@ def test_broad_classifier_rejects_nested_symlink_escape(tmp_path: Path) -> None:
         claims_impl.classify_broad_write_paths(str(repo), ["links/outside/file.py"])
 
 
+def test_broad_classifier_allows_exact_broken_symlink_repair(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "AGENTS.md").symlink_to("old-missing-instruction-file")
+
+    assert claims_impl.classify_broad_write_paths(str(repo), ["AGENTS.md"]) == {}
+    with pytest.raises(ValueError, match="broad_scope_ambiguous"):
+        claims_impl.classify_broad_write_paths(str(repo), ["truly-missing.md"])
+
+    (repo / "AGENTS.md").unlink()
+    (repo / "AGENTS.md").symlink_to(tmp_path / "outside-missing-file")
+    with pytest.raises(ValueError, match="escapes repo_root"):
+        claims_impl.classify_broad_write_paths(str(repo), ["AGENTS.md"])
+
+
 def test_atomic_narrow_replaces_subset_and_refreshes_projection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

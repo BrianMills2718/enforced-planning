@@ -401,3 +401,25 @@ def test_declared_timeout_unmatched_is_reported_not_guessed(tmp_path: Path) -> N
     assert declared["example-hook"]["declared_timeout_ms"] is None
     hook = summarize_hook_health(scan_hook_receipts(tmp_path), declared=declared)["hooks"][0]
     assert hook["p95_over_budget"] is None
+
+
+def test_boolean_schema_version_is_not_a_valid_integer(tmp_path: Path) -> None:
+    script = tmp_path / "hook.py"
+    script.write_text("print('hook')\n", encoding="utf-8")
+    invocation = start_hook_invocation(
+        hook_name="example-hook",
+        hook_version="7",
+        script_path=script,
+        payload={"session_id": "s", "hook_event_name": "PreToolUse"},
+        receipt_root=tmp_path / "receipts",
+    )
+    completed = invocation.complete(decision="allow", reason_code="ok")
+    payload = json.loads(completed.read_text(encoding="utf-8"))
+    payload["schema_version"] = True
+    completed.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(HookReceiptError, match="invalid 'schema_version'"):
+        load_completed_receipts(tmp_path / "receipts")
+    assert [record.reason for record in scan_hook_receipts(tmp_path / "receipts").malformed] == [
+        "invalid 'schema_version' (got bool)"
+    ]

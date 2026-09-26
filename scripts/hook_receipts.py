@@ -302,7 +302,12 @@ def validate_completed_receipt(payload: Any, path: Path) -> str | None:
         return "receipt is not a JSON object"
     for field_name, expected_type in COMPLETED_RECEIPT_FIELDS.items():
         value = payload.get(field_name)
-        if not isinstance(value, expected_type) or (isinstance(value, str) and not value.strip()):
+        if (
+            not isinstance(value, expected_type)
+            # bool subclasses int; a JSON true/false is never a valid integer field.
+            or isinstance(value, bool)
+            or (isinstance(value, str) and not value.strip())
+        ):
             return f"invalid {field_name!r} (got {type(value).__name__})"
     if payload["record_type"] != "hook_invocation_receipt" or payload["phase"] != "completed":
         return "invalid contract identity (record_type/phase)"

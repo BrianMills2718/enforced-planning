@@ -22,6 +22,7 @@ from enforced_planning.coordination_messages import (
     SessionInboxNotice,
 )
 from scripts import coordination_hook
+from scripts.hook_receipts import load_completed_receipts
 
 
 def test_meta_wrapper_bootstraps_script_imports_outside_repository(tmp_path: Path) -> None:
@@ -667,7 +668,7 @@ def test_root_override_derives_fixture_local_hook_receipts(monkeypatch, tmp_path
     )
 
     assert coordination_hook.main(["--claims-dir", str(tmp_path / "claims"), "--root", str(root)]) == 0
-    assert len(list((root.parent / "hook-invocations-v1").rglob("completed.json"))) == 1
+    assert len(load_completed_receipts(root.parent / "hook-invocations-v1")) == 1
 
 
 def test_session_start_skips_heartbeat_with_large_completed_registry(monkeypatch, tmp_path: Path) -> None:
@@ -1025,9 +1026,9 @@ def test_posttool_projection_failure_is_not_recorded_as_a_block(
     output = json.loads(capsys.readouterr().out)
     assert "decision" not in output, "PostToolUse must not render a denial"
 
-    completed = list(receipts.rglob("completed.json"))
+    completed = list(load_completed_receipts(receipts))
     assert len(completed) == 1
-    receipt = json.loads(completed[0].read_text(encoding="utf-8"))
+    receipt = completed[0]
     assert receipt["decision"] == "warn", (
         "the handler printed a warning and returned 0; recording that as a block "
         "makes the governance record overstate what AES actually did"
@@ -1084,7 +1085,7 @@ def test_stop_projection_failure_is_still_recorded_as_a_block(
         ["--claims-dir", str(tmp_path / "claims"), "--hook-receipt-dir", str(receipts)]
     ) == 0
 
-    receipt = json.loads(next(receipts.rglob("completed.json")).read_text(encoding="utf-8"))
+    receipt = load_completed_receipts(receipts)[0]
     assert receipt["decision"] == "block"
 
 

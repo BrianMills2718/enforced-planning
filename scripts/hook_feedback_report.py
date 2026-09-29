@@ -84,9 +84,11 @@ def _render_text(report: dict[str, Any], *, max_examples: int) -> str:
     lines.append("Hook invocation telemetry")
     lines.append(f"  receipt root: {health['receipt_root']}")
     lines.append(
-        "  scanned {dirs:,} receipt directories: {started:,} started, {completed:,} completed, "
+        "  scanned {dirs:,} legacy receipt directories and {journals:,} daily journals: "
+        "{started:,} started, {completed:,} completed, "
         "{orphan:,} orphaned starts, {bad:,} malformed".format(
             dirs=health["receipt_dir_count"],
+            journals=health["journal_file_count"],
             started=health["started_receipt_count"],
             completed=health["completed_receipt_count"],
             orphan=health["orphaned_start_count"],

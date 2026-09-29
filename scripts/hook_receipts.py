@@ -1,4 +1,4 @@
-"""Private, content-free lifecycle receipts shared by portable agent hooks."""
+"""Private hook receipts in append-only daily, session-hash-sharded journals."""
 
 from __future__ import annotations
 
@@ -17,6 +17,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - append mode remains the fallback on Windows.
+    fcntl = None
+
 DEFAULT_RECEIPT_ROOT = Path("~/.claude/coordination/hook-invocations-v1")
 DEFAULT_PREWRITE_EVENT_PATH = Path("~/.claude/coordination/prewrite-events-v1.jsonl")
 DEFAULT_SETTINGS_PATHS = (
@@ -27,6 +32,7 @@ DEFAULT_SETTINGS_PATHS = (
 DEFAULT_TIMEOUT_BUDGET_FRACTION = 0.6
 # Claude Code applies this timeout (seconds) when a hook entry declares none.
 HARNESS_DEFAULT_TIMEOUT_SECONDS = 60
+SESSION_SHARD_HEX = 2
 MAX_DETAIL_FIELDS = 12
 MAX_DETAIL_KEY_LENGTH = 64
 MAX_DETAIL_STRING_LENGTH = 256
@@ -40,7 +46,7 @@ COMPLETED_RECEIPT_FIELDS: dict[str, type | tuple[type, ...]] = {
     "phase": str,
     "decision": str,
     "reason_code": str,
-    "event_name": str,
+    "event_name": (str, type(None)),
     "observed_at": str,
 }
 
@@ -199,11 +205,48 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
         raise
 
 
+def _journal_path(receipt_root: Path, observed_at: datetime, session_digest: str) -> Path:
+    """Return the daily UTC shard for one session-digest bucket."""
+
+    shard = session_digest[:SESSION_SHARD_HEX]
+    return receipt_root / f"receipts-{observed_at.astimezone(UTC):%Y-%m-%d}-{shard}.jsonl"
+
+
+def _append_receipt_record(path: Path, payload: dict[str, Any]) -> None:
+    """Append one complete JSONL record while serializing concurrent writers."""
+
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT, 0o600)
+    locked = False
+    try:
+        os.fchmod(descriptor, 0o600)
+        if fcntl is not None:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            locked = True
+        size = os.lseek(descriptor, 0, os.SEEK_END)
+        if size:
+            os.lseek(descriptor, -1, os.SEEK_END)
+            if os.read(descriptor, 1) != b"\n":
+                os.write(descriptor, b"\n")
+                os.fsync(descriptor)
+        remaining = memoryview((json.dumps(payload, sort_keys=True) + "\n").encode("utf-8"))
+        while remaining:
+            written = os.write(descriptor, remaining)
+            if written <= 0:
+                raise OSError("short write while appending hook receipt")
+            remaining = remaining[written:]
+        os.fsync(descriptor)
+    finally:
+        if locked:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
 @dataclass(frozen=True)
 class HookInvocation:
     """One hook invocation whose missing completion receipt proves interruption."""
 
-    receipt_dir: Path
+    receipt_root: Path
     base_payload: dict[str, Any]
     started_ns: int
 
@@ -220,6 +263,7 @@ class HookInvocation:
         details: dict[str, Any] | None = None,
     ) -> Path:
         normalized_details = _normalize_details(details)
+        observed_at = datetime.now(UTC)
         payload = {
             **self.base_payload,
             "phase": "completed",
@@ -227,12 +271,12 @@ class HookInvocation:
             "reason_code": reason_code,
             "exit_status": exit_status,
             "elapsed_ms": round((time.monotonic_ns() - self.started_ns) / 1_000_000, 3),
-            "observed_at": datetime.now(UTC).isoformat(),
+            "observed_at": observed_at.isoformat(),
         }
         if normalized_details is not None:
             payload["details"] = normalized_details
-        path = self.receipt_dir / "completed.json"
-        _atomic_write(path, payload)
+        path = _journal_path(self.receipt_root, observed_at, str(self.base_payload["session_id_sha256"]))
+        _append_receipt_record(path, payload)
         return path
 
 
@@ -256,14 +300,14 @@ def start_hook_invocation(
         or ""
     )
     receipt_id = uuid.uuid4().hex
-    session_digest = _digest(session_id)[:32]
-    receipt_dir = receipt_root.expanduser().resolve() / session_digest / receipt_id
+    resolved_root = receipt_root.expanduser().resolve()
     report = payload.get("last_assistant_message")
     input_digest = _digest(json.dumps(payload, sort_keys=True, default=str))
     try:
         hook_digest = hashlib.sha256(script_path.read_bytes()).hexdigest()
     except OSError:
         hook_digest = None
+    session_digest = _digest(session_id)
     base = {
         "schema_version": 1,
         "record_type": "hook_invocation_receipt",
@@ -271,12 +315,13 @@ def start_hook_invocation(
         "hook_name": hook_name,
         "hook_version": hook_version,
         "hook_sha256": hook_digest,
-        "session_id_sha256": _digest(session_id),
+        "session_id_sha256": session_digest,
         "input_sha256": input_digest,
         "report_sha256": _digest(report) if isinstance(report, str) else None,
         "hook_run_id": correlation_id or None,
         "event_name": payload.get("hook_event_name"),
     }
+    observed_at = datetime.now(UTC)
     started = {
         **base,
         "phase": "started",
@@ -284,10 +329,10 @@ def start_hook_invocation(
         "reason_code": None,
         "exit_status": None,
         "elapsed_ms": 0.0,
-        "observed_at": datetime.now(UTC).isoformat(),
+        "observed_at": observed_at.isoformat(),
     }
-    _atomic_write(receipt_dir / "started.json", started)
-    return HookInvocation(receipt_dir=receipt_dir, base_payload=base, started_ns=started_ns)
+    _append_receipt_record(_journal_path(resolved_root, observed_at, session_digest), started)
+    return HookInvocation(receipt_root=resolved_root, base_payload=base, started_ns=started_ns)
 
 
 def validate_completed_receipt(payload: Any, path: Path) -> str | None:
@@ -309,10 +354,66 @@ def validate_completed_receipt(payload: Any, path: Path) -> str | None:
             or (isinstance(value, str) and not value.strip())
         ):
             return f"invalid {field_name!r} (got {type(value).__name__})"
+    if "event_name" not in payload:
+        return "invalid 'event_name' (missing)"
     if payload["record_type"] != "hook_invocation_receipt" or payload["phase"] != "completed":
         return "invalid contract identity (record_type/phase)"
-    if path.parent.name != payload["receipt_id"]:
+    if path.suffix != ".jsonl" and path.parent.name != payload["receipt_id"]:
         return "path/identity mismatch (directory name != receipt_id)"
+    return None
+
+
+def _iter_journal_records(root: Path):
+    """Yield (path, line number, record, parse error) from daily shards."""
+
+    for path in sorted(root.glob("receipts-*.jsonl")):
+        try:
+            with path.open("rb") as handle:
+                locked = False
+                try:
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
+                        locked = True
+                    for line_number, raw_line in enumerate(handle, start=1):
+                        if not raw_line.endswith(b"\n"):
+                            yield path, line_number, None, "incomplete final JSONL record"
+                            continue
+                        try:
+                            payload = json.loads(raw_line)
+                        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                            yield path, line_number, None, str(exc)
+                        else:
+                            yield path, line_number, payload, None
+                finally:
+                    if locked:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        except OSError as exc:
+            yield path, 0, None, f"unreadable journal ({exc.__class__.__name__}: {exc})"
+
+
+def validate_started_receipt(payload: Any) -> str | None:
+    """Return a defect for a malformed JSONL start event."""
+
+    if not isinstance(payload, dict):
+        return "receipt is not a JSON object"
+    for field_name, expected_type in {
+        "schema_version": int,
+        "record_type": str,
+        "receipt_id": str,
+        "hook_name": str,
+        "hook_version": str,
+        "phase": str,
+        "observed_at": str,
+    }.items():
+        value = payload.get(field_name)
+        if (
+            not isinstance(value, expected_type)
+            or isinstance(value, bool)
+            or (isinstance(value, str) and not value.strip())
+        ):
+            return f"invalid {field_name!r} (got {type(value).__name__})"
+    if payload["record_type"] != "hook_invocation_receipt" or payload["phase"] != "started":
+        return "invalid contract identity (record_type/phase)"
     return None
 
 
@@ -343,6 +444,18 @@ def load_completed_receipts(receipt_root: Path = DEFAULT_RECEIPT_ROOT) -> tuple[
                 raise HookReceiptError(f"completed hook receipt path/identity mismatch: {path}")
             raise HookReceiptError(f"completed hook receipt must be an object: {path}")
         loaded.append(payload)
+    for path, line_number, payload, parse_error in _iter_journal_records(root):
+        if parse_error is not None:
+            raise HookReceiptError(f"cannot parse hook receipt journal {path}:{line_number}: {parse_error}")
+        if not isinstance(payload, dict) or payload.get("phase") != "completed":
+            continue
+        reason = validate_completed_receipt(payload, path)
+        if reason is not None:
+            raise HookReceiptError(
+                f"completed hook receipt has invalid contract at {path}:{line_number}: {reason}"
+            )
+        loaded.append(payload)
+    loaded.sort(key=lambda payload: (str(payload.get("observed_at") or ""), str(payload.get("receipt_id") or "")))
     return tuple(loaded)
 
 
@@ -371,6 +484,7 @@ class ReceiptScan:
     started_count: int = 0
     started_by_hook: dict[str, int] = dataclasses_field(default_factory=dict)
     receipt_dir_count: int = 0
+    journal_file_count: int = 0
 
     @property
     def malformed_count(self) -> int:
@@ -387,7 +501,7 @@ def _read_json(path: Path) -> tuple[Any, str | None]:
 
 
 def scan_hook_receipts(receipt_root: Path = DEFAULT_RECEIPT_ROOT) -> ReceiptScan:
-    """Sweep every receipt directory without letting one bad record abort the run.
+    """Sweep legacy receipt directories and daily journals without aborting.
 
     A malformed record is *not* swallowed: it is retained in
     :attr:`ReceiptScan.malformed` with its exact path and defect reason so the
@@ -455,6 +569,79 @@ def scan_hook_receipts(receipt_root: Path = DEFAULT_RECEIPT_ROOT) -> ReceiptScan
             continue
         completed.append({**payload, "receipt_path": str(completed_path)})
 
+    journal_files = sorted(root.glob("receipts-*.jsonl"))
+    journal_starts: list[dict[str, Any]] = []
+    for journal_path, line_number, payload, parse_error in _iter_journal_records(root):
+        if parse_error is not None:
+            malformed.append(
+                MalformedReceipt(
+                    path=journal_path,
+                    reason=f"line {line_number}: {parse_error}",
+                    hook_name=None,
+                    phase="unknown",
+                )
+            )
+            continue
+        if not isinstance(payload, dict):
+            malformed.append(
+                MalformedReceipt(
+                    path=journal_path,
+                    reason=f"line {line_number}: receipt is not a JSON object",
+                    hook_name=None,
+                    phase="unknown",
+                )
+            )
+            continue
+        phase = payload.get("phase")
+        hook_name = payload.get("hook_name")
+        if phase == "started":
+            reason = validate_started_receipt(payload)
+            if reason is not None:
+                malformed.append(
+                    MalformedReceipt(
+                        path=journal_path,
+                        reason=f"line {line_number}: {reason}",
+                        hook_name=hook_name if isinstance(hook_name, str) else None,
+                        phase="started",
+                    )
+                )
+                continue
+            started_count += 1
+            started_hooks[str(hook_name or "<unknown>")] += 1
+            journal_starts.append({**payload, "receipt_path": f"{journal_path}#line={line_number}"})
+            continue
+        if phase != "completed":
+            malformed.append(
+                MalformedReceipt(
+                    path=journal_path,
+                    reason=f"line {line_number}: invalid phase {phase!r}",
+                    hook_name=hook_name if isinstance(hook_name, str) else None,
+                    phase=str(phase or "unknown"),
+                )
+            )
+            continue
+        reason = validate_completed_receipt(payload, journal_path)
+        if reason is not None:
+            salvaged = {key: payload.get(key) for key in ("decision", "reason_code", "exit_status", "hook_version")}
+            malformed.append(
+                MalformedReceipt(
+                    path=journal_path,
+                    reason=f"line {line_number}: {reason}",
+                    hook_name=hook_name if isinstance(hook_name, str) else None,
+                    phase="completed",
+                    salvaged=salvaged,
+                )
+            )
+            continue
+        completed.append({**payload, "receipt_path": f"{journal_path}#line={line_number}"})
+
+    completed_ids = {str(payload.get("receipt_id")) for payload in completed}
+    for payload in journal_starts:
+        if str(payload.get("receipt_id")) not in completed_ids:
+            orphans.append(payload)
+
+    completed.sort(key=lambda payload: (str(payload.get("observed_at") or ""), str(payload.get("receipt_id") or "")))
+
     return ReceiptScan(
         root=scan_root,
         completed=tuple(completed),
@@ -463,6 +650,7 @@ def scan_hook_receipts(receipt_root: Path = DEFAULT_RECEIPT_ROOT) -> ReceiptScan
         started_count=started_count,
         started_by_hook=dict(started_hooks),
         receipt_dir_count=len(receipt_dirs),
+        journal_file_count=len(journal_files),
     )
 
 
@@ -480,7 +668,7 @@ def group_hook_recurrences(
         key = (
             str(receipt["hook_name"]),
             str(receipt["hook_version"]),
-            str(receipt["event_name"]),
+            str(receipt.get("event_name") or "<unknown>"),
             str(receipt["decision"]),
             str(receipt["reason_code"]),
         )
@@ -761,6 +949,7 @@ def summarize_hook_health(
         "receipt_root": str(scan.root),
         "budget_fraction": budget_fraction,
         "receipt_dir_count": scan.receipt_dir_count,
+        "journal_file_count": scan.journal_file_count,
         "started_receipt_count": scan.started_count,
         "completed_receipt_count": len(scan.completed),
         "orphaned_start_count": len(scan.orphaned_starts),

@@ -24,6 +24,13 @@ from scripts.hook_receipts import (
 )
 
 
+def _journal_records(root: Path) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for path in sorted(root.glob("receipts-*.jsonl")):
+        records.extend(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line)
+    return records
+
+
 def test_started_then_completed_receipts_are_correlatable(tmp_path: Path) -> None:
     invocation = start_hook_invocation(
         hook_name="example-hook",
@@ -38,14 +45,14 @@ def test_started_then_completed_receipts_are_correlatable(tmp_path: Path) -> Non
         receipt_root=tmp_path,
     )
 
-    started = json.loads((invocation.receipt_dir / "started.json").read_text())
+    started, = _journal_records(tmp_path)
     assert started["phase"] == "started"
     assert started["hook_run_id"] == "stop:18:/config.toml"
     assert "secret-session-id" not in json.dumps(started)
     assert "private report text" not in json.dumps(started)
 
     invocation.complete(decision="allow", reason_code="terminal")
-    completed = json.loads((invocation.receipt_dir / "completed.json").read_text())
+    completed = _journal_records(tmp_path)[1]
     assert completed["receipt_id"] == started["receipt_id"]
     assert completed["decision"] == "allow"
     assert completed["elapsed_ms"] >= 0
@@ -66,7 +73,7 @@ def test_completed_receipt_accepts_bounded_scalar_details(tmp_path: Path) -> Non
         details={"status": "not_applicable", "attempt": 1, "visible": False},
     )
 
-    completed = json.loads((invocation.receipt_dir / "completed.json").read_text())
+    completed = load_completed_receipts(tmp_path)[0]
     assert completed["details"] == {
         "status": "not_applicable",
         "attempt": 1,
@@ -110,6 +117,58 @@ def test_reader_accepts_legacy_nested_details_in_v1_receipts(tmp_path: Path) -> 
     assert len(loaded) == 1
     assert loaded[0]["receipt_id"] == path.parent.name
     assert loaded[0]["details"]["continuation"]["state"] == "legacy"
+
+
+def test_daily_journal_supports_missing_event_name_and_preserves_started_events(tmp_path: Path) -> None:
+    invocation = start_hook_invocation(
+        hook_name="example-hook",
+        hook_version="1",
+        script_path=Path(__file__),
+        payload={"session_id": "s"},
+        receipt_root=tmp_path,
+    )
+    invocation.complete(decision="allow", reason_code="ok")
+
+    scan = scan_hook_receipts(tmp_path)
+    journal, = tmp_path.glob("receipts-*.jsonl")
+
+    assert len(_journal_records(tmp_path)) == 2
+    assert journal.stem.endswith(hashlib.sha256(b"s").hexdigest()[:2])
+    assert len(load_completed_receipts(tmp_path)) == 1
+    assert scan.started_count == 1
+    assert len(scan.completed) == 1
+    assert scan.malformed_count == 0
+    assert scan.orphaned_starts == ()
+    assert scan.receipt_dir_count == 0
+    assert scan.journal_file_count == 1
+    assert scan.completed[0]["event_name"] is None
+
+
+def test_daily_journal_reports_an_orphan_start(tmp_path: Path) -> None:
+    start_hook_invocation(
+        hook_name="interrupted-hook",
+        hook_version="1",
+        script_path=Path(__file__),
+        payload={"session_id": "s", "hook_event_name": "Stop"},
+        receipt_root=tmp_path,
+    )
+
+    scan = scan_hook_receipts(tmp_path)
+
+    assert scan.started_count == 1
+    assert len(scan.orphaned_starts) == 1
+    assert scan.orphaned_starts[0]["hook_name"] == "interrupted-hook"
+
+
+def test_daily_journal_reports_a_torn_final_line(tmp_path: Path) -> None:
+    path = tmp_path / "receipts-2026-09-29.jsonl"
+    path.write_bytes(b"{torn")
+
+    with pytest.raises(HookReceiptError, match="incomplete final JSONL record"):
+        load_completed_receipts(tmp_path)
+    scan = scan_hook_receipts(tmp_path)
+    assert scan.malformed_count == 1
+    assert scan.journal_file_count == 1
 
 
 def test_hook_feedback_report_groups_recurrence_and_steps_down(tmp_path: Path) -> None:
@@ -268,7 +327,10 @@ def test_scan_counts_malformed_receipt_instead_of_aborting(tmp_path: Path) -> No
 
     _write_receipt(tmp_path, "session-a", "a" * 32)
     _write_receipt(tmp_path, "session-a", "b" * 32)
-    bad_null = _write_receipt(tmp_path, "session-a", "c" * 32, event_name=None)
+    missing_event = _write_receipt(tmp_path, "session-a", "c" * 32)
+    invalid_payload = json.loads(missing_event.read_text(encoding="utf-8"))
+    del invalid_payload["event_name"]
+    missing_event.write_text(json.dumps(invalid_payload), encoding="utf-8")
     bad_json = tmp_path / "session-a" / ("d" * 32) / "completed.json"
     bad_json.parent.mkdir(parents=True)
     bad_json.write_text("{not json", encoding="utf-8")
@@ -282,7 +344,7 @@ def test_scan_counts_malformed_receipt_instead_of_aborting(tmp_path: Path) -> No
     assert len(scan.completed) == 2
     assert scan.malformed_count == 2
     reasons = {record.path: record.reason for record in scan.malformed}
-    assert reasons[bad_null].startswith("invalid 'event_name'")
+    assert reasons[missing_event].startswith("invalid 'event_name'")
     assert "unparseable JSON" in reasons[bad_json]
 
 
@@ -290,20 +352,23 @@ def test_scan_reports_malformed_outcomes_it_refused_to_count(tmp_path: Path) -> 
     """A malformed record must not silently subtract a real failure from the totals."""
 
     _write_receipt(tmp_path, "s", "a" * 32, exit_status=0)
-    _write_receipt(
+    missing_event = _write_receipt(
         tmp_path,
         "s",
         "b" * 32,
-        event_name=None,
         decision="block",
         reason_code="substantive_next_without_human",
         exit_status=2,
     )
+    malformed = json.loads(missing_event.read_text(encoding="utf-8"))
+    del malformed["event_name"]
+    missing_event.write_text(json.dumps(malformed), encoding="utf-8")
 
     scan = scan_hook_receipts(tmp_path)
     summary = summarize_hook_health(scan)
 
     assert summary["malformed_receipt_count"] == 1
+    assert any("invalid 'event_name'" in record.reason for record in scan.malformed)
     assert summary["malformed_by_hook"] == {"example-hook": 1}
     uncounted = summary["malformed_uncounted_outcomes"]
     assert uncounted[0]["count"] == 1
@@ -312,7 +377,7 @@ def test_scan_reports_malformed_outcomes_it_refused_to_count(tmp_path: Path) -> 
     hook = summary["hooks"][0]
     assert hook["nonzero_exit_count"] == 0
     assert hook["malformed_receipt_count"] == 1
-    # No started.json in this fixture, so the start count falls back to what the
+    # No started record in this fixture, so the start count falls back to what the
     # completion side proves: the good record plus the malformed one.
     assert hook["started_count"] == 2
 
@@ -414,12 +479,14 @@ def test_boolean_schema_version_is_not_a_valid_integer(tmp_path: Path) -> None:
         receipt_root=tmp_path / "receipts",
     )
     completed = invocation.complete(decision="allow", reason_code="ok")
-    payload = json.loads(completed.read_text(encoding="utf-8"))
+    lines = completed.read_text(encoding="utf-8").splitlines()
+    payload = json.loads(lines[1])
     payload["schema_version"] = True
-    completed.write_text(json.dumps(payload), encoding="utf-8")
+    lines[1] = json.dumps(payload)
+    completed.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     with pytest.raises(HookReceiptError, match="invalid 'schema_version'"):
         load_completed_receipts(tmp_path / "receipts")
     assert [record.reason for record in scan_hook_receipts(tmp_path / "receipts").malformed] == [
-        "invalid 'schema_version' (got bool)"
+        "line 2: invalid 'schema_version' (got bool)"
     ]

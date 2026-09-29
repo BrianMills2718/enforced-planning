@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml  # type: ignore[import-untyped]
 
 from scripts import policy_digest_hook
+from scripts.hook_receipts import load_completed_receipts
 
 
 def _repo(path: Path, name: str = "alpha") -> Path:
@@ -84,8 +85,7 @@ def _invoke(
 
 
 def _completed_receipts(receipt_dir: Path) -> list[dict]:
-    receipts = [json.loads(path.read_text(encoding="utf-8")) for path in receipt_dir.rglob("completed.json")]
-    return sorted(receipts, key=lambda receipt: receipt["observed_at"])
+    return list(load_completed_receipts(receipt_dir))
 
 
 def test_digest_is_project_scoped_compact_and_advisory(tmp_path, monkeypatch, capsys) -> None:

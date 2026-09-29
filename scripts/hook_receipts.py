@@ -902,7 +902,7 @@ def summarize_hook_health(
         hooks.append(
             {
                 "hook_name": name,
-                # Prefer the observed started.json count; fall back to what the
+                # Prefer the observed start-event count; fall back to what the
                 # completion side proves when no start receipt survives.
                 "started_count": scan.started_by_hook.get(name, completed_count + orphaned + malformed_per_hook[name]),
                 "completed_count": completed_count,

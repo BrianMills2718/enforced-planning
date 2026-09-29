@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import fnmatch
 import json
 import sys
@@ -130,7 +131,77 @@ def _imports(path: Path, module: str, is_init: bool) -> list[str]:
             found.append(target)
             # `from pkg import mod` - the name may itself be a module.
             found += [f"{target}.{alias.name}" for alias in node.names]
+    found += _string_imports(tree, module, is_init)
     return found
+
+
+_DOTTED = re.compile(r"\.*[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
+
+
+def _resolve_string_module(name: str, module: str, is_init: bool) -> str:
+    """Resolve an importlib-style module string, relative names included."""
+    level = len(name) - len(name.lstrip("."))
+    if not level:
+        return name
+    parts = module.split(".")
+    if is_init:
+        parts.append("_")  # __init__ addresses its own package
+    base = ".".join(parts[: len(parts) - level])
+    rest = name[level:]
+    return f"{base}.{rest}" if rest else base
+
+
+def _string_imports(tree: ast.Module, module: str, is_init: bool) -> list[str]:
+    """Modules imported by string, which plain import statements do not show.
+
+    Covers the three standard shapes: ``importlib.import_module("x")`` with a
+    literal, the same call with a module-level string constant (compatibility
+    aliases such as ``_TARGET = "pkg.mod"``), and PEP 562 lazy-export tables:
+    in a module that defines a module-level ``__getattr__``, every dotted string
+    in a module-level dict/tuple literal is a module it may load on demand.
+    """
+    constants: dict[str, str] = {}
+    has_module_getattr = False
+    table_strings: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "__getattr__":
+            has_module_getattr = True
+        value = getattr(node, "value", None)
+        targets = node.targets if isinstance(node, ast.Assign) else (
+            [node.target] if isinstance(node, ast.AnnAssign) else []
+        )
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    constants[target.id] = value.value
+        if isinstance(value, (ast.Dict, ast.Tuple, ast.List)):
+            for sub in ast.walk(value):
+                if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                    table_strings.append(sub.value)
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if name != "import_module":
+            continue
+        arg = node.args[0]
+        literal = (
+            arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+            else constants.get(arg.id) if isinstance(arg, ast.Name) else None
+        )
+        if literal and _DOTTED.match(literal):
+            found.append(_resolve_string_module(literal, module, is_init))
+    if has_module_getattr:
+        found += [
+            _resolve_string_module(text, module, is_init)
+            for text in table_strings
+            if _DOTTED.match(text) and (text.startswith(".") or "." in text)
+        ]
+    return found
+
+
 
 
 def analyse(root: Path, config: dict[str, Any]) -> Report:

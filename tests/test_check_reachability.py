@@ -107,3 +107,34 @@ def test_share_tolerance_absorbs_baseline_rounding() -> None:
     module = _load()
     assert module.SHARE_TOLERANCE >= 0.00005  # type: ignore[attr-defined]
     assert module.SHARE_TOLERANCE < 0.01  # type: ignore[attr-defined]
+
+
+def test_string_and_lazy_imports_count_as_edges(tmp_path: Path) -> None:
+    """importlib names, alias constants, and PEP 562 lazy tables are real imports.
+
+    Strings in a module without ``__getattr__`` are ordinary data, not imports.
+    """
+    sensor = _load()
+    lazy = tmp_path / "lazy.py"
+    lazy.write_text(
+        "import importlib\n"
+        '_LAZY = {"Thing": ".live", "Other": ("pkg.other", "Other")}\n'
+        "def __getattr__(name):\n"
+        "    return importlib.import_module(_LAZY[name])\n",
+        encoding="utf-8",
+    )
+    alias = tmp_path / "alias.py"
+    alias.write_text(
+        "import importlib, sys\n"
+        '_TARGET = "pkg.moved"\n'
+        "sys.modules[__name__] = importlib.import_module(_TARGET)\n",
+        encoding="utf-8",
+    )
+    data = tmp_path / "data.py"
+    data.write_text('LABELS = {"a": "pkg.not_a_module"}\n', encoding="utf-8")
+
+    lazy_imports = sensor._imports(lazy, "pkg.lazy", False)  # type: ignore[attr-defined]
+    assert "pkg.live" in lazy_imports
+    assert "pkg.other" in lazy_imports
+    assert "pkg.moved" in sensor._imports(alias, "pkg.alias", False)  # type: ignore[attr-defined]
+    assert "pkg.not_a_module" not in sensor._imports(data, "pkg.data", False)  # type: ignore[attr-defined]

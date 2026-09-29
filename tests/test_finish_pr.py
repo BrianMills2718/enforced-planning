@@ -47,6 +47,92 @@ def snapshot(module, sha=SHA_A, checks=(), base_sha=SHA_B):
     )
 
 
+def pr_api_payload(*, number=42, head_sha=SHA_A, merged=False, merge_sha=None):
+    return {
+        "number": number,
+        "state": "closed" if merged else "open",
+        "merged": merged,
+        "merge_commit_sha": merge_sha,
+        "base": {"sha": SHA_B, "ref": "main"},
+        "head": {"sha": head_sha, "ref": "feature"},
+    }
+
+
+def pr_view_payload(*, head_sha=SHA_A, state="OPEN", merge_sha=None):
+    merge_commit = {"oid": merge_sha} if merge_sha else None
+    return {
+        "headRefOid": head_sha,
+        "headRefName": "feature",
+        "baseRefName": "main",
+        "statusCheckRollup": [],
+        "mergeable": "MERGEABLE",
+        "state": state,
+        "mergeCommit": merge_commit,
+    }
+
+
+def test_fetch_pr_snapshot_uses_supported_fields_and_exact_api_base_sha(monkeypatch):
+    module = _load()
+    calls = []
+    results = iter([
+        completed([], stdout=json.dumps(pr_api_payload(merge_sha=SHA_C))),
+        completed([], stdout=json.dumps(pr_view_payload())),
+    ])
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+
+    result, merge_commit = module.fetch_pr_snapshot(42, "owner/repo", {"GH_CONFIG_DIR": "/tmp/gh"})
+
+    assert result == module.PrSnapshot(
+        SHA_B, SHA_A, "feature", "main", "OPEN", "MERGEABLE", ()
+    )
+    assert merge_commit is None
+    assert calls[0][0] == ["gh", "api", "repos/owner/repo/pulls/42"]
+    assert "baseRefOid" not in calls[1][0][-1]
+    assert calls[1][0][-1] == (
+        "headRefOid,headRefName,baseRefName,statusCheckRollup,"
+        "mergeable,state,mergeCommit"
+    )
+    assert all(call_kwargs["env"] == {"GH_CONFIG_DIR": "/tmp/gh"} for _, call_kwargs in calls)
+
+
+def test_fetch_pr_snapshot_rejects_inconsistent_api_and_view(monkeypatch):
+    module = _load()
+    results = iter([
+        completed([], stdout=json.dumps(pr_api_payload())),
+        completed([], stdout=json.dumps(pr_view_payload(head_sha=SHA_C))),
+    ])
+    monkeypatch.setattr(module, "run_cmd", lambda *_args, **_kwargs: next(results))
+
+    try:
+        module.fetch_pr_snapshot(42, "owner/repo", {})
+    except ValueError as exc:
+        assert "disagree about the PR head SHA" in str(exc)
+    else:
+        raise AssertionError("inconsistent GitHub snapshots must fail closed")
+
+
+def test_fetch_pr_snapshot_requires_matching_merge_commit_for_merged_pr(monkeypatch):
+    module = _load()
+    results = iter([
+        completed([], stdout=json.dumps(pr_api_payload(merged=True, merge_sha=SHA_C))),
+        completed([], stdout=json.dumps(pr_view_payload(state="MERGED", merge_sha=SHA_C))),
+    ])
+    monkeypatch.setattr(module, "run_cmd", lambda *_args, **_kwargs: next(results))
+
+    result, merge_commit = module.fetch_pr_snapshot(42, "owner/repo", {})
+
+    assert result.state == "MERGED"
+    assert result.base_sha == SHA_B
+    assert merge_commit == SHA_C
+
+
 def test_review_spec_must_be_absolute_and_outside_repository(
     tmp_path, monkeypatch
 ) -> None:

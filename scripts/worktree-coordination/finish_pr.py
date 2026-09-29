@@ -154,44 +154,97 @@ def github_repository_context() -> Iterator[tuple[str, dict[str, str]]]:
         yield repo_slug, isolated_env
 
 
+def _pr_api_command(pr_number: int, repo_slug: str) -> list[str]:
+    return ["gh", "api", f"repos/{repo_slug}/pulls/{pr_number}"]
+
+
 def _pr_view_command(pr_number: int, repo_slug: str) -> list[str]:
     return [
         "gh", "pr", "view", str(pr_number), "--repo", repo_slug, "--json",
-        "baseRefOid,headRefOid,headRefName,baseRefName,statusCheckRollup,mergeable,state,mergeCommit",
+        "headRefOid,headRefName,baseRefName,statusCheckRollup,mergeable,state,mergeCommit",
     ]
 
 
-def _parse_pr_snapshot(raw: str) -> tuple[PrSnapshot, str | None]:
+def _json_object(raw: str, source: str) -> dict[str, object]:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"GitHub returned invalid PR JSON: {exc}") from exc
+        raise ValueError(f"GitHub returned invalid {source} PR JSON: {exc}") from exc
     if not isinstance(data, dict):
-        raise TypeError("GitHub PR response must be one JSON object")
-    base_sha = data.get("baseRefOid")
-    head_sha = data.get("headRefOid")
-    head_branch = data.get("headRefName")
-    base_branch = data.get("baseRefName")
+        raise TypeError(f"GitHub {source} PR response must be one JSON object")
+    return data
+
+
+def _parse_pr_snapshot(
+    api_raw: str, view_raw: str, expected_pr_number: int
+) -> tuple[PrSnapshot, str | None]:
+    api_data = _json_object(api_raw, "API")
+    view_data = _json_object(view_raw, "view")
+
+    api_number = api_data.get("number")
+    if api_number != expected_pr_number:
+        raise ValueError(
+            f"GitHub API returned PR number {api_number!r}, expected {expected_pr_number}"
+        )
+    base = api_data.get("base")
+    head = api_data.get("head")
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        raise TypeError("GitHub API PR base and head metadata must be objects")
+    base_sha = base.get("sha")
+    head_sha = head.get("sha")
+    head_branch = view_data.get("headRefName")
+    base_branch = view_data.get("baseRefName")
+    api_head_branch = head.get("ref")
+    api_base_branch = base.get("ref")
+    view_head_sha = view_data.get("headRefOid")
     if not isinstance(base_sha, str) or not FULL_SHA_RE.fullmatch(base_sha):
-        raise ValueError("PR baseRefOid is missing or is not one full commit SHA")
+        raise ValueError("PR base.sha is missing or is not one full commit SHA")
     if not isinstance(head_sha, str) or not FULL_SHA_RE.fullmatch(head_sha):
+        raise ValueError("PR head.sha is missing or is not one full commit SHA")
+    if not isinstance(view_head_sha, str) or not FULL_SHA_RE.fullmatch(view_head_sha):
         raise ValueError("PR headRefOid is missing or is not one full commit SHA")
     if not isinstance(head_branch, str) or not head_branch:
         raise ValueError("PR head branch is missing")
     if not isinstance(base_branch, str) or not base_branch:
         raise ValueError("PR base branch is missing")
-    checks = data.get("statusCheckRollup") or []
+    if api_head_branch != head_branch:
+        raise ValueError("GitHub API and gh view disagree about the PR head branch")
+    if api_base_branch != base_branch:
+        raise ValueError("GitHub API and gh view disagree about the PR base branch")
+    if head_sha != view_head_sha:
+        raise ValueError("GitHub API and gh view disagree about the PR head SHA")
+
+    api_state = api_data.get("state")
+    api_merged = api_data.get("merged")
+    view_state = view_data.get("state")
+    if not isinstance(api_state, str) or not isinstance(api_merged, bool):
+        raise TypeError("GitHub API PR state must be text and merged status must be boolean")
+    if not isinstance(view_state, str):
+        raise TypeError("gh view PR state must be text")
+    state = "MERGED" if api_merged else api_state.upper()
+    if view_state.upper() != state:
+        raise ValueError("GitHub API and gh view disagree about the PR state")
+
+    checks = view_data.get("statusCheckRollup") or []
     if not isinstance(checks, list) or not all(isinstance(item, dict) for item in checks):
         raise ValueError("PR statusCheckRollup is malformed")
     merge_commit = None
-    raw_merge = data.get("mergeCommit")
-    if isinstance(raw_merge, dict):
-        candidate = raw_merge.get("oid")
-        if isinstance(candidate, str) and FULL_SHA_RE.fullmatch(candidate):
-            merge_commit = candidate
+    if api_merged:
+        api_merge_commit = api_data.get("merge_commit_sha")
+        raw_merge = view_data.get("mergeCommit")
+        view_merge_commit = raw_merge.get("oid") if isinstance(raw_merge, dict) else None
+        if not isinstance(api_merge_commit, str) or not FULL_SHA_RE.fullmatch(api_merge_commit):
+            raise ValueError("Merged PR is missing a full merge commit SHA from the GitHub API")
+        if not isinstance(view_merge_commit, str) or not FULL_SHA_RE.fullmatch(view_merge_commit):
+            raise ValueError("Merged PR is missing a full merge commit SHA from gh view")
+        if api_merge_commit != view_merge_commit:
+            raise ValueError("GitHub API and gh view disagree about the PR merge commit")
+        merge_commit = api_merge_commit
+
+    mergeable = view_data.get("mergeable")
     return PrSnapshot(
         base_sha, head_sha, head_branch, base_branch,
-        str(data.get("state", "UNKNOWN")), str(data.get("mergeable", "UNKNOWN")),
+        state, str(mergeable if mergeable is not None else "UNKNOWN"),
         tuple(checks),
     ), merge_commit
 
@@ -199,13 +252,21 @@ def _parse_pr_snapshot(raw: str) -> tuple[PrSnapshot, str | None]:
 def fetch_pr_snapshot(
     pr_number: int, repo_slug: str, gh_env: Mapping[str, str]
 ) -> tuple[PrSnapshot, str | None]:
-    result = run_cmd(_pr_view_command(pr_number, repo_slug), check=False, env=gh_env)
-    if result.returncode != 0:
+    api_result = run_cmd(_pr_api_command(pr_number, repo_slug), check=False, env=gh_env)
+    if api_result.returncode != 0:
+        raise RuntimeError(
+            "Failed to fetch PR base/head snapshot: "
+            + (api_result.stderr or api_result.stdout).strip()
+        )
+    view_result = run_cmd(
+        _pr_view_command(pr_number, repo_slug), check=False, env=gh_env
+    )
+    if view_result.returncode != 0:
         raise RuntimeError(
             "Failed to fetch PR head/check rollup: "
-            + (result.stderr or result.stdout).strip()
+            + (view_result.stderr or view_result.stdout).strip()
         )
-    return _parse_pr_snapshot(result.stdout)
+    return _parse_pr_snapshot(api_result.stdout, view_result.stdout, pr_number)
 
 
 def registered_worktree_roots(canonical_root: Path) -> tuple[Path, ...]:

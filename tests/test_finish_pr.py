@@ -532,22 +532,178 @@ def test_no_reported_checks_fail_closed_when_protection_is_unreadable(monkeypatc
     assert "cannot read branch protection" in reason
 
 
-def test_closeout_refreshes_remote_before_removal_and_uses_merge_receipt(monkeypatch) -> None:
+def test_closeout_reconciles_lock_before_pull_and_uses_merge_receipt(monkeypatch, tmp_path) -> None:
     module = _load()
     calls = []
+    root = tmp_path.resolve()
+    lock_script = str(module.REPO_ROOT / "scripts" / "worktree-coordination" / "canonical_lock.py")
+    results = iter([
+        completed([], stdout="fetched"),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({"locked": False, "integrity": "unlocked"})),
+        completed([], stdout="updated"),
+    ])
 
     def fake_run(cmd, check=True, capture=True, *, env=None):
         calls.append(cmd)
-        return completed(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
 
     monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
     assert module.close_merged_lane("feature", SHA_B, "main") == (True, "Closed")
     assert calls == [
         ["git", "fetch", "--no-tags", "origin", "main"],
         ["git", "merge-base", "--is-ancestor", SHA_B, "origin/main"],
         ["make", "worktree-remove", "BRANCH=feature", f"WORKTREE_MERGE_COMMIT={SHA_B}"],
+        [sys.executable, lock_script, "--reconcile", "--repo", str(root), "--json"],
+        [sys.executable, lock_script, "--status", str(root), "--json"],
         ["git", "pull", "--ff-only", "origin", "main"],
     ]
+
+
+def test_closeout_defers_pull_while_another_live_lane_keeps_lock(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({
+            "locked": True, "integrity": "locked", "justifying_claims": ["other-lane"],
+        })),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is True
+    assert reason == "Closed; canonical pull deferred because canonical checkout remains locked by live lane(s): other-lane"
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
+
+
+def test_closeout_does_not_pull_when_lock_reconcile_fails(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], 4, stderr="claim registry unreadable"),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is False
+    assert reason == "lane closed but canonical lock reconciliation failed: claim registry unreadable"
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
+
+
+def test_closeout_uses_installed_meta_canonical_lock_runtime(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    installed_root = tmp_path / "installed"
+    lock_script = installed_root / "scripts" / "meta" / "canonical_lock.py"
+    lock_script.parent.mkdir(parents=True)
+    lock_script.write_text("# installed entrypoint\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", installed_root)
+    results = iter([
+        completed([], stdout="fetched"),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({"locked": False, "integrity": "unlocked"})),
+        completed([], stdout="updated"),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    assert module.close_merged_lane("feature", SHA_B, "main") == (True, "Closed")
+    assert calls[3] == [
+        sys.executable, str(lock_script), "--reconcile", "--repo", str(root), "--json",
+    ]
+
+
+def test_closeout_rejects_failed_relock_action_despite_top_level_success(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({
+            "ok": True,
+            "actions": [{"ok": False, "action": "relocked", "verdict": "degraded"}],
+        })),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is False
+    assert "failed or unverifiable actions" in reason
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
+
+
+def test_closeout_rejects_degraded_status_even_with_live_claim(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({
+            "locked": True, "integrity": "degraded", "justifying_claims": ["other-lane"],
+        })),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is False
+    assert "integrity is degraded" in reason
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
 
 
 def test_failed_merge_verification_never_closes_lane(monkeypatch, tmp_path) -> None:
@@ -683,7 +839,7 @@ def test_post_merge_recovery_reproves_review_and_claim_authority(
 
 
 def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, capsys
 ) -> None:
     module = _load()
     merged = module.PrSnapshot(
@@ -718,7 +874,10 @@ def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
     monkeypatch.setattr(
         module,
         "close_merged_lane",
-        lambda *args: closed.append(args) or (True, "Closed"),
+        lambda *args: closed.append(args) or (
+            True,
+            "Closed; canonical pull deferred because canonical checkout remains locked by live lane(s): other-lane",
+        ),
     )
 
     assert module.finish_pr(
@@ -730,6 +889,9 @@ def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
         review_output_root=tmp_path / "receipts",
     ) is True
     assert closed == [("feature", SHA_C, "main")]
+    output = capsys.readouterr().out
+    assert "Done: PR #42 merged at " in output
+    assert "Lane closeout detail: Closed; canonical pull deferred because canonical checkout remains locked by live lane(s): other-lane" in output
 
 
 def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:

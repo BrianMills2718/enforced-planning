@@ -673,6 +673,79 @@ def prepare_post_merge_recovery(
     return merge_commit, receipt_path, authority
 
 
+def reconcile_canonical_checkout_lock(repo_root: Path) -> tuple[bool, bool, str]:
+    """Reconcile the canonical lock after lane cleanup, before a local pull.
+
+    Lane cleanup releases the claim, but the canonical checkout's read-only
+    lock is a separate receipt. Another live lane may still require that lock;
+    in that case this PR and its lane can close successfully while the canonical
+    pull waits for the remaining lane.
+    """
+    repo_root = repo_root.resolve()
+    lock_script = next(
+        (
+            candidate
+            for candidate in (
+                REPO_ROOT / "scripts" / "meta" / "canonical_lock.py",
+                REPO_ROOT / "scripts" / "worktree-coordination" / "canonical_lock.py",
+            )
+            if candidate.is_file()
+        ),
+        None,
+    )
+    if lock_script is None:
+        return False, False, "canonical lock runtime is unavailable in source or installed layout"
+    reconcile = run_cmd(
+        [sys.executable, str(lock_script), "--reconcile", "--repo", str(repo_root), "--json"],
+        check=False,
+    )
+    if reconcile.returncode != 0:
+        return False, False, (reconcile.stderr or reconcile.stdout).strip()
+    try:
+        reconcile_result = json.loads(reconcile.stdout)
+    except json.JSONDecodeError as exc:
+        return False, False, f"canonical lock reconcile returned invalid JSON: {exc}"
+    if not isinstance(reconcile_result, dict) or reconcile_result.get("ok") is not True:
+        return False, False, "canonical lock reconcile did not report success"
+    actions = reconcile_result.get("actions")
+    if not isinstance(actions, list):
+        return False, False, "canonical lock reconcile did not report its actions"
+    failed_actions = [
+        action
+        for action in actions
+        if not isinstance(action, dict) or action.get("ok") is not True
+    ]
+    if failed_actions:
+        return False, False, f"canonical lock reconcile reported failed or unverifiable actions: {failed_actions}"
+
+    status = run_cmd(
+        [sys.executable, str(lock_script), "--status", str(repo_root), "--json"],
+        check=False,
+    )
+    if status.returncode != 0:
+        return False, False, (status.stderr or status.stdout).strip()
+    try:
+        status_result = json.loads(status.stdout)
+    except json.JSONDecodeError as exc:
+        return False, False, f"canonical lock status returned invalid JSON: {exc}"
+    if (
+        not isinstance(status_result, dict)
+        or not isinstance(status_result.get("locked"), bool)
+        or status_result.get("integrity") not in {"unlocked", "locked", "degraded"}
+    ):
+        return False, False, "canonical lock status did not report a verified lock state"
+    if status_result["locked"]:
+        if status_result["integrity"] != "locked":
+            return False, False, f"canonical checkout lock integrity is {status_result['integrity']}"
+        claims = status_result.get("justifying_claims")
+        if not isinstance(claims, list) or not claims:
+            return False, False, "canonical checkout remains locked without a reported live lane claim"
+        return True, False, f"canonical checkout remains locked by live lane(s): {', '.join(map(str, claims))}"
+    if status_result["integrity"] != "unlocked":
+        return False, False, f"canonical checkout lock integrity is {status_result['integrity']}"
+    return True, True, "canonical checkout lock reconciled"
+
+
 def close_merged_lane(branch: str, merge_commit: str, base_branch: str) -> tuple[bool, str]:
     refresh = run_cmd(["git", "fetch", "--no-tags", "origin", base_branch], check=False)
     if refresh.returncode != 0:
@@ -691,6 +764,11 @@ def close_merged_lane(branch: str, merge_commit: str, base_branch: str) -> tuple
     ], check=False)
     if close.returncode != 0:
         return False, (close.stderr or close.stdout).strip()
+    lock_ok, unlocked, lock_reason = reconcile_canonical_checkout_lock(get_main_repo_root())
+    if not lock_ok:
+        return False, f"lane closed but canonical lock reconciliation failed: {lock_reason}"
+    if not unlocked:
+        return True, f"Closed; canonical pull deferred because {lock_reason}"
     update = run_cmd(["git", "pull", "--ff-only", "origin", base_branch], check=False)
     if update.returncode != 0:
         return False, (update.stderr or update.stdout).strip()
@@ -792,6 +870,8 @@ def finish_pr(
         print(f"HIGH: PR merged, but sanctioned lane closeout failed: {reason}")
         return False
     print(f"Done: PR #{pr_number} merged at {snapshot.head_sha} and lane closed.")
+    if reason != "Closed":
+        print(f"Lane closeout detail: {reason}")
     return True
 
 

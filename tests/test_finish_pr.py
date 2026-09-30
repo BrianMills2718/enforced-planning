@@ -58,9 +58,10 @@ def pr_api_payload(*, number=42, head_sha=SHA_A, merged=False, merge_sha=None):
     }
 
 
-def pr_view_payload(*, head_sha=SHA_A, state="OPEN", merge_sha=None):
+def pr_view_payload(*, number=42, head_sha=SHA_A, state="OPEN", merge_sha=None):
     merge_commit = {"oid": merge_sha} if merge_sha else None
     return {
+        "number": number,
         "headRefOid": head_sha,
         "headRefName": "feature",
         "baseRefName": "main",
@@ -96,7 +97,7 @@ def test_fetch_pr_snapshot_uses_supported_fields_and_exact_api_base_sha(monkeypa
     assert calls[0][0] == ["gh", "api", "repos/owner/repo/pulls/42"]
     assert "baseRefOid" not in calls[1][0][-1]
     assert calls[1][0][-1] == (
-        "headRefOid,headRefName,baseRefName,statusCheckRollup,"
+        "number,headRefOid,headRefName,baseRefName,statusCheckRollup,"
         "mergeable,state,mergeCommit"
     )
     assert all(call_kwargs["env"] == {"GH_CONFIG_DIR": "/tmp/gh"} for _, call_kwargs in calls)
@@ -116,6 +117,22 @@ def test_fetch_pr_snapshot_rejects_inconsistent_api_and_view(monkeypatch):
         assert "disagree about the PR head SHA" in str(exc)
     else:
         raise AssertionError("inconsistent GitHub snapshots must fail closed")
+
+
+def test_fetch_pr_snapshot_rejects_different_pr_numbers(monkeypatch):
+    module = _load()
+    results = iter([
+        completed([], stdout=json.dumps(pr_api_payload(number=42))),
+        completed([], stdout=json.dumps(pr_view_payload(number=43))),
+    ])
+    monkeypatch.setattr(module, "run_cmd", lambda *_args, **_kwargs: next(results))
+
+    try:
+        module.fetch_pr_snapshot(42, "owner/repo", {})
+    except ValueError as exc:
+        assert "gh view returned PR number 43, expected 42" in str(exc)
+    else:
+        raise AssertionError("different PR numbers must fail closed")
 
 
 def test_fetch_pr_snapshot_requires_matching_merge_commit_for_merged_pr(monkeypatch):

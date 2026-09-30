@@ -161,7 +161,7 @@ def _pr_api_command(pr_number: int, repo_slug: str) -> list[str]:
 def _pr_view_command(pr_number: int, repo_slug: str) -> list[str]:
     return [
         "gh", "pr", "view", str(pr_number), "--repo", repo_slug, "--json",
-        "headRefOid,headRefName,baseRefName,statusCheckRollup,mergeable,state,mergeCommit",
+        "number,headRefOid,headRefName,baseRefName,statusCheckRollup,mergeable,state,mergeCommit",
     ]
 
 
@@ -182,9 +182,16 @@ def _parse_pr_snapshot(
     view_data = _json_object(view_raw, "view")
 
     api_number = api_data.get("number")
+    view_number = view_data.get("number")
+    if type(api_number) is not int or type(view_number) is not int:
+        raise TypeError("GitHub API and gh view PR numbers must be integers")
     if api_number != expected_pr_number:
         raise ValueError(
             f"GitHub API returned PR number {api_number!r}, expected {expected_pr_number}"
+        )
+    if view_number != expected_pr_number:
+        raise ValueError(
+            f"gh view returned PR number {view_number!r}, expected {expected_pr_number}"
         )
     base = api_data.get("base")
     head = api_data.get("head")

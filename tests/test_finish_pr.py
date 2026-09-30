@@ -532,22 +532,88 @@ def test_no_reported_checks_fail_closed_when_protection_is_unreadable(monkeypatc
     assert "cannot read branch protection" in reason
 
 
-def test_closeout_refreshes_remote_before_removal_and_uses_merge_receipt(monkeypatch) -> None:
+def test_closeout_reconciles_lock_before_pull_and_uses_merge_receipt(monkeypatch, tmp_path) -> None:
     module = _load()
     calls = []
+    root = tmp_path.resolve()
+    lock_script = str(module.REPO_ROOT / "scripts" / "worktree-coordination" / "canonical_lock.py")
+    results = iter([
+        completed([], stdout="fetched"),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({"locked": False, "integrity": "unlocked"})),
+        completed([], stdout="updated"),
+    ])
 
     def fake_run(cmd, check=True, capture=True, *, env=None):
         calls.append(cmd)
-        return completed(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
 
     monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
     assert module.close_merged_lane("feature", SHA_B, "main") == (True, "Closed")
     assert calls == [
         ["git", "fetch", "--no-tags", "origin", "main"],
         ["git", "merge-base", "--is-ancestor", SHA_B, "origin/main"],
         ["make", "worktree-remove", "BRANCH=feature", f"WORKTREE_MERGE_COMMIT={SHA_B}"],
+        [sys.executable, lock_script, "--reconcile", "--repo", str(root), "--json"],
+        [sys.executable, lock_script, "--status", str(root), "--json"],
         ["git", "pull", "--ff-only", "origin", "main"],
     ]
+
+
+def test_closeout_defers_pull_while_another_live_lane_keeps_lock(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({"locked": True, "justifying_claims": ["other-lane"]})),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is True
+    assert reason == "Closed; canonical pull deferred because canonical checkout remains locked by live lane(s): other-lane"
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
+
+
+def test_closeout_does_not_pull_when_lock_reconcile_fails(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], 4, stderr="claim registry unreadable"),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is False
+    assert reason == "lane closed but canonical lock reconciliation failed: claim registry unreadable"
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
 
 
 def test_failed_merge_verification_never_closes_lane(monkeypatch, tmp_path) -> None:

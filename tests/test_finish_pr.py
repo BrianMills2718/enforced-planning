@@ -574,7 +574,9 @@ def test_closeout_defers_pull_while_another_live_lane_keeps_lock(monkeypatch, tm
         completed([]),
         completed([]),
         completed([], stdout=json.dumps({"ok": True, "actions": []})),
-        completed([], stdout=json.dumps({"locked": True, "justifying_claims": ["other-lane"]})),
+        completed([], stdout=json.dumps({
+            "locked": True, "integrity": "locked", "justifying_claims": ["other-lane"],
+        })),
     ])
 
     def fake_run(cmd, check=True, capture=True, *, env=None):
@@ -613,6 +615,94 @@ def test_closeout_does_not_pull_when_lock_reconcile_fails(monkeypatch, tmp_path)
     ok, reason = module.close_merged_lane("feature", SHA_B, "main")
     assert ok is False
     assert reason == "lane closed but canonical lock reconciliation failed: claim registry unreadable"
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
+
+
+def test_closeout_uses_installed_meta_canonical_lock_runtime(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    installed_root = tmp_path / "installed"
+    lock_script = installed_root / "scripts" / "meta" / "canonical_lock.py"
+    lock_script.parent.mkdir(parents=True)
+    lock_script.write_text("# installed entrypoint\n", encoding="utf-8")
+    monkeypatch.setattr(module, "REPO_ROOT", installed_root)
+    results = iter([
+        completed([], stdout="fetched"),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({"locked": False, "integrity": "unlocked"})),
+        completed([], stdout="updated"),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    assert module.close_merged_lane("feature", SHA_B, "main") == (True, "Closed")
+    assert calls[3] == [
+        sys.executable, str(lock_script), "--reconcile", "--repo", str(root), "--json",
+    ]
+
+
+def test_closeout_rejects_failed_relock_action_despite_top_level_success(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({
+            "ok": True,
+            "actions": [{"ok": False, "action": "relocked", "verdict": "degraded"}],
+        })),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is False
+    assert "failed or unverifiable actions" in reason
+    assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
+
+
+def test_closeout_rejects_degraded_status_even_with_live_claim(monkeypatch, tmp_path) -> None:
+    module = _load()
+    calls = []
+    root = tmp_path.resolve()
+    results = iter([
+        completed([]),
+        completed([]),
+        completed([]),
+        completed([], stdout=json.dumps({"ok": True, "actions": []})),
+        completed([], stdout=json.dumps({
+            "locked": True, "integrity": "degraded", "justifying_claims": ["other-lane"],
+        })),
+    ])
+
+    def fake_run(cmd, check=True, capture=True, *, env=None):
+        calls.append(cmd)
+        result = next(results)
+        result.args = cmd
+        return result
+
+    monkeypatch.setattr(module, "run_cmd", fake_run)
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: root)
+    ok, reason = module.close_merged_lane("feature", SHA_B, "main")
+    assert ok is False
+    assert "integrity is degraded" in reason
     assert not any(cmd[:2] == ["git", "pull"] for cmd in calls)
 
 

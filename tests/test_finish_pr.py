@@ -133,6 +133,22 @@ def test_fetch_pr_snapshot_requires_matching_merge_commit_for_merged_pr(monkeypa
     assert merge_commit == SHA_C
 
 
+def test_fetch_pr_snapshot_rejects_disagreeing_merged_commit(monkeypatch):
+    module = _load()
+    results = iter([
+        completed([], stdout=json.dumps(pr_api_payload(merged=True, merge_sha=SHA_C))),
+        completed([], stdout=json.dumps(pr_view_payload(state="MERGED", merge_sha=SHA_A))),
+    ])
+    monkeypatch.setattr(module, "run_cmd", lambda *_args, **_kwargs: next(results))
+
+    try:
+        module.fetch_pr_snapshot(42, "owner/repo", {})
+    except ValueError as exc:
+        assert "disagree about the PR merge commit" in str(exc)
+    else:
+        raise AssertionError("different merge commits must fail closed")
+
+
 def test_review_spec_must_be_absolute_and_outside_repository(
     tmp_path, monkeypatch
 ) -> None:

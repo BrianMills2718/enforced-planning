@@ -47,10 +47,12 @@ def snapshot(module, sha=SHA_A, checks=(), base_sha=SHA_B):
     )
 
 
-def pr_api_payload(*, number=42, head_sha=SHA_A, merged=False, merge_sha=None):
+def pr_api_payload(
+    *, number=42, head_sha=SHA_A, merged=False, merge_sha=None, state=None
+):
     return {
         "number": number,
-        "state": "closed" if merged else "open",
+        "state": state or ("closed" if merged else "open"),
         "merged": merged,
         "merge_commit_sha": merge_sha,
         "base": {"sha": SHA_B, "ref": "main"},
@@ -164,6 +166,26 @@ def test_fetch_pr_snapshot_rejects_disagreeing_merged_commit(monkeypatch):
         assert "disagree about the PR merge commit" in str(exc)
     else:
         raise AssertionError("different merge commits must fail closed")
+
+
+def test_fetch_pr_snapshot_rejects_open_rest_state_marked_merged(monkeypatch):
+    module = _load()
+    results = iter([
+        completed([], stdout=json.dumps(
+            pr_api_payload(merged=True, merge_sha=SHA_C, state="open")
+        )),
+        completed([], stdout=json.dumps(
+            pr_view_payload(state="MERGED", merge_sha=SHA_C)
+        )),
+    ])
+    monkeypatch.setattr(module, "run_cmd", lambda *_args, **_kwargs: next(results))
+
+    try:
+        module.fetch_pr_snapshot(42, "owner/repo", {})
+    except ValueError as exc:
+        assert "merged PR whose state is not closed" in str(exc)
+    else:
+        raise AssertionError("contradictory REST state and merged flag must fail closed")
 
 
 def test_review_spec_must_be_absolute_and_outside_repository(

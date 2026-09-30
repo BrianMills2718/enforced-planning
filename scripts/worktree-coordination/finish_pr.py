@@ -228,7 +228,12 @@ def _parse_pr_snapshot(
         raise TypeError("GitHub API PR state must be text and merged status must be boolean")
     if not isinstance(view_state, str):
         raise TypeError("gh view PR state must be text")
-    state = "MERGED" if api_merged else api_state.upper()
+    normalized_api_state = api_state.upper()
+    if normalized_api_state not in {"OPEN", "CLOSED"}:
+        raise ValueError(f"GitHub API returned unknown PR state {api_state!r}")
+    if api_merged and normalized_api_state != "CLOSED":
+        raise ValueError("GitHub API reports a merged PR whose state is not closed")
+    state = "MERGED" if api_merged else normalized_api_state
     if view_state.upper() != state:
         raise ValueError("GitHub API and gh view disagree about the PR state")
 

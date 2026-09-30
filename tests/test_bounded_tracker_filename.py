@@ -10,7 +10,9 @@ session_name, which is a slug of free-text goal wording.
 
 from __future__ import annotations
 
+import errno
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -114,6 +116,34 @@ def test_a_new_tracker_at_that_same_length_is_shortened(tmp_path) -> None:
     contract = replace(contract, session_name="g" * padding)
 
     resolved = session_contracts.session_tracker_path(contract, tracker_dir=tmp_path)
+    assert len(resolved.name.encode()) <= session_contracts.MAX_TRACKER_NAME_BYTES
+    assert _temp_name_length(resolved.name) <= session_contracts.MAX_TRACKER_FILENAME_BYTES
+
+
+def test_an_unrepresentably_long_legacy_name_is_not_probed(tmp_path, monkeypatch) -> None:
+    """A full goal slug can make the legacy-path existence check itself fail."""
+    contract = _contract(broader_goal="long session goal " * 40)
+    safe_session_id = contract.session_id.replace(":", "-")
+    legacy = (
+        tmp_path
+        / contract.project
+        / f"{contract.agent}__{contract.project}__{safe_session_id}__{contract.session_name}.yaml"
+    )
+    assert len(legacy.name.encode()) > session_contracts.MAX_TRACKER_FILENAME_BYTES
+
+    original_is_file = Path.is_file
+    probes = []
+
+    def is_file(path: Path) -> bool:
+        if path == legacy:
+            probes.append(path)
+            raise OSError(errno.ENAMETOOLONG, "File name too long", str(path))
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", is_file)
+    resolved = session_contracts.session_tracker_path(contract, tracker_dir=tmp_path)
+
+    assert not probes
     assert len(resolved.name.encode()) <= session_contracts.MAX_TRACKER_NAME_BYTES
     assert _temp_name_length(resolved.name) <= session_contracts.MAX_TRACKER_FILENAME_BYTES
 

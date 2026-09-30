@@ -378,7 +378,14 @@ def session_tracker_path(
     # A record written before the bound existed keeps its own path. Returning the
     # shortened name for it would strand the live tracker and start a second one
     # for the same claim.
-    if legacy != bounded and legacy.is_file():
+    # ``Path.is_file`` stats the candidate and can raise ENAMETOOLONG before
+    # returning False when the unbounded historical name exceeds the filesystem
+    # component limit. Such a component cannot contain a legacy tracker, so skip
+    # the probe and use the bounded path. Keep probing names that could exist:
+    # this preserves pre-bound trackers that fit on disk but exceed our safer
+    # atomic-rewrite budget.
+    legacy_name_fits_filesystem = len(legacy.name.encode()) <= MAX_TRACKER_FILENAME_BYTES
+    if legacy != bounded and legacy_name_fits_filesystem and legacy.is_file():
         return legacy
     return bounded
 

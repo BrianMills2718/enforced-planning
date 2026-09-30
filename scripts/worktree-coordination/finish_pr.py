@@ -840,6 +840,8 @@ def finish_pr(
         print(f"HIGH: PR merged, but sanctioned lane closeout failed: {reason}")
         return False
     print(f"Done: PR #{pr_number} merged at {snapshot.head_sha} and lane closed.")
+    if reason != "Closed":
+        print(f"Lane closeout detail: {reason}")
     return True
 
 

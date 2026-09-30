@@ -749,7 +749,7 @@ def test_post_merge_recovery_reproves_review_and_claim_authority(
 
 
 def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, capsys
 ) -> None:
     module = _load()
     merged = module.PrSnapshot(
@@ -784,7 +784,10 @@ def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
     monkeypatch.setattr(
         module,
         "close_merged_lane",
-        lambda *args: closed.append(args) or (True, "Closed"),
+        lambda *args: closed.append(args) or (
+            True,
+            "Closed; canonical pull deferred because canonical checkout remains locked by live lane(s): other-lane",
+        ),
     )
 
     assert module.finish_pr(
@@ -796,6 +799,9 @@ def test_retry_after_merge_skips_second_merge_and_closes_exact_lane(
         review_output_root=tmp_path / "receipts",
     ) is True
     assert closed == [("feature", SHA_C, "main")]
+    output = capsys.readouterr().out
+    assert "Done: PR #42 merged at " in output
+    assert "Lane closeout detail: Closed; canonical pull deferred because canonical checkout remains locked by live lane(s): other-lane" in output
 
 
 def test_hook_blocks_direct_merge_and_finish_command_variants() -> None:

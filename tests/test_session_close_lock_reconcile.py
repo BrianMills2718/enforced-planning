@@ -192,16 +192,24 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
         branch="lane",
         merge_commit=None,
         json=False,
+        repo_root=tmp_path / "downstream",
     )
 
     monkeypatch.setattr(module, "parse_args", lambda _argv: args)
-    monkeypatch.setattr(module, "_lane_range_basis", lambda *_args: (None, "merge_base"))
+    def range_basis(*_args, repo_root: Path) -> tuple[None, str]:
+        events.append("range")
+        assert repo_root == durable_root
+        return None, "merge_base"
+
+    monkeypatch.setattr(module, "_lane_range_basis", range_basis)
     monkeypatch.setattr(module, "_supported_closeout_kwargs", lambda _args: {})
-    monkeypatch.setattr(
-        module,
-        "_resolve_durable_repo_root",
-        lambda: events.append("durable-root") or durable_root,
-    )
+
+    def resolve_durable_root(root: Path) -> Path:
+        events.append("durable-root")
+        assert root == args.repo_root
+        return durable_root
+
+    monkeypatch.setattr(module, "_resolve_durable_repo_root", resolve_durable_root)
     monkeypatch.setattr(
         module,
         "_materialize_shared_ref_history",
@@ -245,11 +253,84 @@ def test_main_resolves_reconcile_helper_before_close_removes_worktree(
     assert events == [
         "durable-root",
         "materialize",
+        "range",
         "resolve",
         "close",
         "reconcile",
         "report",
     ]
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_parse_args_accepts_explicit_repo_root(script: Path, tmp_path: Path) -> None:
+    module = _load(script, f"session_close_repo_root_args_{script.parent.name}")
+    args = module.parse_args(
+        [
+            "--agent", "codex",
+            "--project", "consumer",
+            "--scope", "lane",
+            "--repo-root", str(tmp_path),
+        ]
+    )
+    assert args.repo_root == str(tmp_path)
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_lane_range_basis_uses_the_target_repository(
+    script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A central framework wrapper must walk the consumer repo's refs."""
+
+    module = _load(script, f"session_close_target_range_{script.parent.name}")
+    consumer = tmp_path / "consumer"
+    consumer.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(consumer)], check=True)
+    (consumer / "seed.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(consumer), "add", "seed.txt"], check=True)
+    subprocess.run(
+        ["git", "-C", str(consumer), "-c", "user.email=test@example.com",
+         "-c", "user.name=Test", "commit", "-m", "base"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    base = subprocess.run(
+        ["git", "-C", str(consumer), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(consumer), "update-ref", "refs/remotes/origin/main", base],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(consumer), "checkout", "-qb", "lane"], check=True)
+    (consumer / "seed.txt").write_text("lane\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(consumer), "add", "seed.txt"], check=True)
+    subprocess.run(
+        ["git", "-C", str(consumer), "-c", "user.email=test@example.com",
+         "-c", "user.name=Test", "commit", "-m", "lane"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    monkeypatch.setattr(module.coordination_claims, "_load_claims", lambda: [])
+
+    result = module._lane_range_basis(
+        "consumer",
+        "lane",
+        "lane",
+        repo_root=consumer,
+    )
+
+    assert result == (base, module.concurrent_writers.BASIS_MERGE_BASE)
+
+
+def test_session_close_make_target_passes_repo_root() -> None:
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert '--repo-root "$(WORKTREE_REPO_ROOT)"' in makefile
 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)

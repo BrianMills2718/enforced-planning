@@ -624,3 +624,13 @@ lock, projection writer, exact-native-owner guard, and installed manifest
 closure. Its root-plus-descendants handoff/session-end operation does not widen
 or bypass Plan 132 narrowing authority, and its negative fixture preserves an
 unrelated root plus dirty worktree bytes.
+
+## Post-Plan Target-Repository Closeout Note (2026-09-30)
+
+The source and installed `session_close.py` entrypoints accept `--repo-root`
+for callers managing a lane in another repository. The `session-close` Make
+target passes `WORKTREE_REPO_ROOT`; closeout now uses that target for advertised
+`origin/main` refresh, merge-base calculation, and shared-ref range reporting.
+The regression coverage is in
+`tests/test_session_close_lock_reconcile.py`, including an independent Git
+consumer repository fixture.

@@ -557,6 +557,7 @@ endif
 		--agent "$(WORKTREE_AGENT)" \
 		--project "$(WORKTREE_PROJECT)" \
 		--scope "$(BRANCH)" \
+		--repo-root "$(WORKTREE_REPO_ROOT)" \
 		--worktree-path "$(WORKTREE_DIR)/$(BRANCH)" \
 		--branch "$(BRANCH)" \
 		--disposition "$(WORKTREE_DISPOSITION)" \

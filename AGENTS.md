@@ -170,7 +170,10 @@ adoption.
    `origin/main` history while the lane still owns writes. This keeps the
    start-revision range locally readable in partial clones after the lane ref
    and worktree are removed; a failed refresh remains a visible `NOT CHECKED`
-   report rather than a false unchanged result.
+   report rather than a false unchanged result. A caller closing a lane in a
+   different repository must pass `--repo-root <canonical target repo>`;
+   `make session-close` supplies `WORKTREE_REPO_ROOT` so fetch, merge-base, and
+   shared-ref range evidence are read from that target repository.
    A legacy `session_ended` claim that recorded the canonical repository root
    is the one exception to physical cleanup: use `session-close
    --reconcile-canonical-root` with exact claim and tracker SHA-256 digests so

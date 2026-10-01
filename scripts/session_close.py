@@ -91,6 +91,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent", required=True)
     parser.add_argument("--project", required=True)
     parser.add_argument("--scope", required=True)
+    parser.add_argument(
+        "--repo-root",
+        help="Canonical repository root whose shared refs this closeout reports.",
+    )
     parser.add_argument("--session-id")
     parser.add_argument("--worktree-path")
     parser.add_argument("--branch")
@@ -313,7 +317,13 @@ def _reconcile_canonical_lock(scope: str, module_path: Path | None = None) -> No
 
 
 
-def _lane_range_basis(project: str, scope: str, branch: str | None) -> tuple[str | None, str]:
+def _lane_range_basis(
+    project: str,
+    scope: str,
+    branch: str | None,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> tuple[str | None, str]:
     """The revision this lane branched from, read before the claim is released.
 
     A claim's ``start_revision`` is recorded once and never moves, which is what
@@ -328,7 +338,7 @@ def _lane_range_basis(project: str, scope: str, branch: str | None) -> tuple[str
 
     candidate = branch or scope
     completed = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "merge-base", candidate, "origin/main"],
+        ["git", "-C", str(repo_root), "merge-base", candidate, "origin/main"],
         capture_output=True,
         text=True,
         check=False,
@@ -363,9 +373,15 @@ def _report_shared_ref_movement(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    durable_repo_root = _resolve_durable_repo_root()
+    requested_repo_root = Path(args.repo_root).expanduser() if args.repo_root else REPO_ROOT
+    durable_repo_root = _resolve_durable_repo_root(requested_repo_root)
     _materialize_shared_ref_history(durable_repo_root)
-    since_revision, range_basis = _lane_range_basis(args.project, args.scope, args.branch)
+    since_revision, range_basis = _lane_range_basis(
+        args.project,
+        args.scope,
+        args.branch,
+        repo_root=durable_repo_root,
+    )
     # Resolve this while the lane still exists. close_session() can remove the
     # worktree containing this script, so a relative lookup after closeout can
     # no longer find the reconciliation helper.

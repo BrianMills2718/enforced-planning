@@ -648,6 +648,35 @@ contents, and submodules. It never calls worktree removal or branch deletion.
 Use ordinary `session-close` for real linked worktrees and
 `--reconcile-missing-worktree` only for an already-absent recorded worktree.
 
+If that legacy claim's tracker was never created, use `--tracker-absent` in
+canonical-root mode instead of inventing a tracker digest:
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project PROJECT --scope SCOPE \
+  --reconcile-canonical-root --tracker-absent \
+  --claim-sha256 EXACT_CLAIM_SHA256 \
+  --json
+```
+
+The command verifies that neither the recorded tracker path nor any exact
+identity-matched tracker exists. It still requires the exact session-ended
+claim digest, a clean canonical Git checkout, and a checked-out branch matching
+the claim. The archive records `tracker_path: null` and
+`tracker_absent_verified: true`; the repository and branch remain in place.
+Before filesystem closeout, it rechecks the exact claim under the coordination
+registry lock and changes the claim to `closing`, so a concurrent resume cannot
+take custody after validation. The same fence protects linked-worktree
+`--reconcile-session-ended` closeout; if its cleanup fails, the claim returns
+to its original `session_ended` bytes for a safe retry.
+If the process stops after the `closing` fence is written, rerun the same
+reconciliation with `--claim-sha256` set to the current claim-file digest. The
+fence records its original claim digest, mode, and tracker-absence result, and
+the closeout resumes only when that exact fenced claim still matches.
+This mode does not accept `--recovery-archive-dir`: canonical-root closeout
+requires a clean checkout, while uncommitted linked-worktree recovery uses the
+separate `--reconcile-session-ended --tracker-absent` route.
+
 ### Session-ended claim with a stale tracker identity
 
 A historical session-start path could reuse one session tracker while moving
@@ -2473,12 +2502,29 @@ staged, modified, or untracked work. `branch_merged_to_default` may classify the
 branch only after the worktree is clean, so closeout cannot erase changes that
 were never represented by the compared commits.
 
-A missing task branch cannot receive the `merged` disposition: once its tip is
-absent, closeout has no branch evidence to compare with the canonical default.
-Restore the branch from durable evidence before merged closeout, or use an
-explicit supported non-merge disposition with the required recovery reference
-or discard authorization. Missing worktree and branch paths are not themselves
-evidence that integration occurred.
+A missing task branch cannot receive the `merged` disposition without prior
+closeout evidence. Restore the branch from durable evidence, or use an explicit
+supported non-merge disposition with the required recovery reference or discard
+authorization. Missing worktree and branch paths alone do not prove integration.
+
+Before normal cleanup starts, `session-close` records the exact branch tip and
+the successful integration proof in a durable `closing` claim. If the process
+stops after deleting the branch but before archiving the claim, retry using the
+current claim-file digest:
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project example --scope example-lane \
+  --session-id "codex:$CODEX_THREAD_ID" \
+  --claim-sha256 "$(sha256sum ~/.claude/coordination/claims/codex_example_example-lane.yaml | cut -d' ' -f1)" \
+  --json
+```
+
+The retry verifies that the recorded tip still exists and is integrated into
+the recorded default-branch ref (including a fresh patch-equivalence check for
+squash merges). It refuses if the claim digest, branch tip, target ref, or
+integration evidence changed. This route does not infer success from a missing
+branch and does not delete a branch again.
 
 The default closeout path does not merge automatically. Merge and verification
 remain explicit root-anchored control-session actions. `git branch -D` must not

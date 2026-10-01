@@ -634,3 +634,16 @@ target passes `WORKTREE_REPO_ROOT`; closeout now uses that target for advertised
 The regression coverage is in
 `tests/test_session_close_lock_reconcile.py`, including an independent Git
 consumer repository fixture.
+
+## Post-Plan Canonical-Root Closeout Note (2026-10-01)
+
+`session_close.py --reconcile-canonical-root --tracker-absent` can archive an
+exact session-ended legacy claim after its tracker has disappeared when the
+recorded worktree is the clean canonical repository. It retains the checkout
+and branch. Ordinary interrupted closeout retries are fenced by the exact
+claim digest and reuse the original disposition and evidence. Operator steps
+and safety checks are in `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`;
+regressions are covered by `tests/test_session_cli.py` and
+`tests/test_session_lifecycle.py`.
+
+Last verified 2026-10-01 against Plan 108 PW-06.

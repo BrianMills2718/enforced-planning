@@ -117,6 +117,10 @@ python scripts/check_coordination_claims.py --progress --help
 python scripts/session_end.py --help
 python scripts/session_finish.py --help
 python scripts/session_close.py --help
+# Reconcile an exact legacy claim after its tracker disappeared; the canonical
+# checkout must be clean, and the claim digest must match the current file.
+python scripts/session_close.py --repo-root /path/to/repo --branch main \
+  --reconcile-canonical-root --tracker-absent --claim-sha256 <sha256>
 python scripts/session_resume.py --help
 python scripts/session_narrow.py --help
 

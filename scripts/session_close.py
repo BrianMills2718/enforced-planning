@@ -149,8 +149,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--tracker-absent",
         action="store_true",
         help=(
-            "With --reconcile-session-ended: dispose of a session-ended claim whose session tracker "
-            "does not exist (verified). Captures git status, branch head, and a recovery ref first; "
+            "With --reconcile-session-ended or --reconcile-canonical-root: dispose of a session-ended "
+            "claim whose session tracker does not exist (verified). The canonical-root mode requires "
+            "a clean canonical checkout; the linked-worktree mode captures git status, branch head, "
+            "and a recovery ref first; "
             "uncommitted changes are also bundled under --recovery-archive-dir and the worktree and "
             "branch are retained."
         ),
@@ -161,7 +163,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--claim-sha256",
-        help="Exact SHA-256 required for canonical-root or session-ended reconciliation.",
+        help=(
+            "Exact claim-file SHA-256 required for reconciliation and interrupted-closeout retry; "
+            "hash the current fenced claim."
+        ),
     )
     parser.add_argument(
         "--terminalize-shared-child",

@@ -740,7 +740,7 @@ def test_tracker_absent_refuses_when_the_tracker_exists(
 ) -> None:
     """An existing tracker means the ordinary digest-bound path must be used."""
 
-    from tests.test_session_cli import _native_actor  # noqa: PLC0415
+    from tests.test_session_cli import _native_actor
 
     claim_file, _repo_root, _worktree, branch = _trackerless_session_ended_lane_with_worktree(
         tmp_path, monkeypatch, keep_tracker=True
@@ -879,3 +879,311 @@ def test_tracker_absent_refuses_untracked_files_it_cannot_capture(
             )
     assert claim_file.read_bytes() == before
     assert (worktree / "scratch-notes.txt").is_file()
+
+
+def test_tracker_absent_canonical_root_reconciliation_retains_clean_checkout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A legacy main-checkout claim closes safely without a tracker digest."""
+
+    from tests.test_session_cli import _native_actor
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "initial")
+    _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    with _native_actor("codex", "codex:legacy-main-no-tracker"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="legacy-main-no-tracker",
+            intent="close ended root claim without its missing tracker",
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root),
+            branch="main",
+            broader_goal="Retain the canonical checkout",
+            current_phase="metadata closeout",
+            plan_ref="UNPLANNED",
+            session_id="codex:legacy-main-no-tracker",
+            tracker_dir=trackers_dir,
+        )
+    claim_file = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "legacy-main-no-tracker"
+    )
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+    with _native_actor("codex", "codex:legacy-main-no-tracker"):
+        session_lifecycle.end_runtime_session(
+            agent="codex",
+            session_id="codex:legacy-main-no-tracker",
+            reason="runtime ended after integration",
+            claims_dir=claims_dir,
+        )
+    claim_digest = session_lifecycle._claim_sha256(claim_file)
+    branch_tip = _git(repo_root, "rev-parse", "refs/heads/main")
+    coordinator_session = "codex:canonical-coordinator"
+
+    with _native_actor("codex", coordinator_session):
+        with pytest.raises(ValueError, match="branch override"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope="legacy-main-no-tracker",
+                actor_session_id=coordinator_session,
+                reconcile_canonical_root=True,
+                tracker_absent=True,
+                expected_claim_sha256=claim_digest,
+                branch="unrelated-branch",
+            )
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope="legacy-main-no-tracker",
+                actor_session_id=coordinator_session,
+                reconcile_canonical_root=True,
+                tracker_absent=True,
+                expected_claim_sha256=claim_digest,
+                expected_tracker_sha256="a" * 64,
+            )
+    assert session_lifecycle._claim_sha256(claim_file) == claim_digest
+
+    original_write_claim = session_lifecycle._write_claim_and_refresh_projection
+
+    def interrupt_after_fence(*args: object, **kwargs: object) -> tuple[Path, str]:
+        original_write_claim(*args, **kwargs)  # type: ignore[arg-type]
+        raise KeyboardInterrupt("simulated process interruption after canonical fence")
+
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_write_claim_and_refresh_projection",
+        interrupt_after_fence,
+    )
+    with _native_actor("codex", coordinator_session), pytest.raises(
+        KeyboardInterrupt, match="simulated process interruption"
+    ):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="legacy-main-no-tracker",
+            actor_session_id=coordinator_session,
+            reconcile_canonical_root=True,
+            tracker_absent=True,
+            expected_claim_sha256=claim_digest,
+        )
+    fenced_claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert fenced_claim["status"] == "closing"
+    assert fenced_claim["closeout_fence"]["reconciliation_mode"] == "canonical_root"
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_write_claim_and_refresh_projection",
+        original_write_claim,
+    )
+    fenced_claim_digest = session_lifecycle._claim_sha256(claim_file)
+
+    with _native_actor("codex", coordinator_session):
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="legacy-main-no-tracker",
+            actor_session_id=coordinator_session,
+            reconcile_canonical_root=True,
+            tracker_absent=True,
+            expected_claim_sha256=fenced_claim_digest,
+        )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "retained_canonical_root"
+    assert payload["branch_action"] == "retained_canonical_branch"
+    assert repo_root.is_dir()
+    assert _git(repo_root, "symbolic-ref", "--short", "HEAD") == "main"
+    assert _git(repo_root, "rev-parse", "refs/heads/main") == branch_tip
+    assert not claim_file.exists()
+    receipt = payload["canonical_root_reconciliation"]
+    assert receipt["claim_sha256"] == fenced_claim_digest
+    assert receipt["reconciliation_actor_session_id"] == coordinator_session
+    assert receipt["reconciliation_actor_relation"] == "successor"
+    assert receipt["tracker_path"] is None
+    assert receipt["tracker_absent_verified"] is True
+
+
+def test_trackerless_canonical_closeout_refuses_claim_resumed_after_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The final digest check and closing fence serialize with session-resume."""
+
+    from tests.test_session_cli import _native_actor
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "initial")
+    _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    with _native_actor("codex", "codex:race-owner"):
+        session_lifecycle.start_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="legacy-main-race",
+            intent="test resume racing canonical-root closeout",
+            repo_root=str(repo_root),
+            worktree_path=str(repo_root),
+            branch="main",
+            broader_goal="Retain the canonical checkout",
+            current_phase="metadata closeout",
+            plan_ref="UNPLANNED",
+            session_id="codex:race-owner",
+            tracker_dir=trackers_dir,
+        )
+    claim_file = claims_dir / coordination_claims._claim_filename(
+        "codex", "enforced-planning", "legacy-main-race"
+    )
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+    with _native_actor("codex", "codex:race-owner"):
+        session_lifecycle.end_runtime_session(
+            agent="codex",
+            session_id="codex:race-owner",
+            reason="runtime ended before race test",
+            claims_dir=claims_dir,
+        )
+    before_close = claim_file.read_bytes()
+    claim_digest = session_lifecycle._claim_sha256(claim_file)
+    original_validator = session_lifecycle._validate_canonical_root_reconciliation
+
+    def resume_between_preflight_and_fence(**kwargs: object) -> dict[str, object]:
+        result = original_validator(**kwargs)  # type: ignore[arg-type]
+        resumed = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        resumed["status"] = "active"
+        resumed["session_id"] = "codex:resumed-owner"
+        with coordination_claims.claim_registry_lock(claims_dir):
+            session_lifecycle._write_claim_and_refresh_projection(claim_file, resumed, claims_dir)
+        return result
+
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_validate_canonical_root_reconciliation",
+        resume_between_preflight_and_fence,
+    )
+    with _native_actor("codex", "codex:race-owner"), pytest.raises(
+        ValueError, match="changed before closeout was fenced"
+    ):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope="legacy-main-race",
+            actor_session_id="codex:race-owner",
+            reconcile_canonical_root=True,
+            tracker_absent=True,
+            expected_claim_sha256=claim_digest,
+        )
+
+    current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert current["status"] == "active"
+    assert current["session_id"] == "codex:resumed-owner"
+    assert current["status"] != "closing"
+    assert repo_root.is_dir()
+    assert _git(repo_root, "symbolic-ref", "--short", "HEAD") == "main"
+    assert before_close != claim_file.read_bytes()
+
+
+def test_trackerless_linked_closeout_restores_claim_if_worktree_cleanup_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cleanup errors roll back; process interruption leaves a resumable fence."""
+
+    from tests.test_session_cli import (
+        _native_actor,
+        _real_repo_with_worktree,
+        _start_real_closeout_claim,
+    )
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    with _native_actor("codex", "codex:test-session"):
+        claim_file = _start_real_closeout_claim(
+            repo_root=repo_root,
+            worktree=worktree,
+            branch=branch,
+            claims_dir=claims_dir,
+            trackers_dir=trackers_dir,
+        )
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    Path(claim["tracker_path"]).unlink()
+    _git(repo_root, "tag", "safe-recovery", branch)
+    with _native_actor("codex", "codex:test-session"):
+        session_lifecycle.end_runtime_session(
+            agent="codex",
+            session_id="codex:test-session",
+            reason="runtime ended before cleanup failure test",
+            claims_dir=claims_dir,
+        )
+    before = claim_file.read_bytes()
+    original_remove = session_lifecycle._remove_worktree_path
+
+    def close(archive_name: str) -> dict[str, object]:
+        with _native_actor("claude-code", "claude-code:closeout-retry"):
+            return session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="claude-code:closeout-retry",
+                reconcile_session_ended=True,
+                tracker_absent=True,
+                expected_claim_sha256=session_lifecycle._claim_sha256(claim_file),
+                recovery_archive_dir=str(tmp_path / "archive" / archive_name),
+                disposition="archived",
+                disposition_reason="retain branch after failed cleanup test",
+                recovery_ref="refs/tags/safe-recovery",
+            )
+
+    def fail_remove(*_args: object, **_kwargs: object) -> str:
+        raise RuntimeError("injected worktree removal failure")
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", fail_remove)
+    with pytest.raises(RuntimeError, match="injected worktree removal failure"):
+        close("first")
+
+    assert claim_file.read_bytes() == before
+    assert yaml.safe_load(claim_file.read_text(encoding="utf-8"))["status"] == "session_ended"
+    assert worktree.is_dir()
+    assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
+
+    def interrupt_remove(*_args: object, **_kwargs: object) -> str:
+        raise KeyboardInterrupt("simulated process interruption")
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", interrupt_remove)
+    with pytest.raises(KeyboardInterrupt, match="simulated process interruption"):
+        close("interrupted")
+    fenced = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert fenced["status"] == "closing"
+    assert fenced["closeout_fence"]["reconciliation_mode"] == "session_ended"
+    assert fenced["closeout_fence"]["tracker_absent_verified"] is True
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", original_remove)
+    result = close("resumed")
+    assert result["action"] == "closed"
+    assert not claim_file.exists()
+    assert not worktree.exists()

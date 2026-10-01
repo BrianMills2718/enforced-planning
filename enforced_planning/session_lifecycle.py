@@ -325,6 +325,112 @@ def _claim_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _read_closeout_fence(claim_file: Path, *, mode: str, tracker_absent: bool) -> dict[str, Any]:
+    """Validate the durable recovery fence on a previously interrupted closeout."""
+
+    raw = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    fence = raw.get("closeout_fence") if isinstance(raw, dict) else None
+    if not isinstance(fence, dict) or fence.get("schema_version") != "1.0":
+        raise ValueError("closing claim has no supported closeout recovery fence")
+    if fence.get("reconciliation_mode") != mode or fence.get("tracker_absent_verified") is not tracker_absent:
+        raise ValueError("closing claim fence does not match this reconciliation mode")
+    original_digest = fence.get("claim_sha256_before_fence")
+    if not isinstance(original_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", original_digest):
+        raise ValueError("closing claim fence has no valid pre-fence claim digest")
+    return fence
+
+
+def _validated_fenced_preflight(
+    *, repo_root: Path, branch: str, fence: dict[str, Any], branch_exists: bool = False
+) -> CloseoutPreflight:
+    """Re-prove a previously authorized closeout after its branch ref was deleted."""
+
+    recorded = fence.get("preflight")
+    if not isinstance(recorded, dict):
+        raise ValueError("Interrupted closeout has no supported preflight receipt")
+    disposition = recorded.get("disposition")
+    if disposition not in WORKTREE_DISPOSITIONS:
+        raise ValueError("Interrupted closeout has no supported preflight disposition")
+    if recorded.get("branch") != branch:
+        raise ValueError("Interrupted closeout branch differs from its recorded preflight receipt")
+    branch_tip = recorded.get("branch_tip")
+    default_branch = recorded.get("default_branch")
+    default_ref = recorded.get("default_ref")
+    if not all(isinstance(value, str) and value for value in (branch_tip, default_branch, default_ref)):
+        raise ValueError("Interrupted closeout preflight receipt is missing its branch or target identity")
+    if not _ref_exists(repo_root, branch_tip):
+        raise ValueError("Interrupted closeout cannot recover because the recorded branch tip object is missing")
+    if push_safety.resolve_default_branch(repo_root) != default_branch or not _ref_exists(repo_root, default_ref):
+        raise ValueError("Interrupted closeout default branch identity changed; preserve the claim for review")
+    evidence = recorded.get("merge_evidence")
+    merge_commit = recorded.get("merge_commit")
+    if evidence == "branch_ancestor":
+        integrated = _is_ancestor(repo_root, branch_tip, default_ref)
+    elif evidence in {"squash_patch_equivalent", "squash_patch_equivalent_discovered"}:
+        integrated = isinstance(merge_commit, str) and _squash_merge_matches_branch(
+            repo_root,
+            branch_ref=branch_tip,
+            merge_commit=merge_commit,
+            default_ref=default_ref,
+        )
+    else:
+        integrated = False
+    if disposition == MERGED_DISPOSITION:
+        if not integrated:
+            raise ValueError("Interrupted closeout can no longer prove the recorded branch integration")
+    elif integrated:
+        disposition = MERGED_DISPOSITION
+        evidence = "branch_ancestor"
+    elif disposition in RECOVERY_REQUIRED_DISPOSITIONS:
+        recovery_ref = recorded.get("recovery_ref")
+        if not isinstance(recovery_ref, str) or not _ref_exists(repo_root, recovery_ref) or not _is_ancestor(
+            repo_root, branch_tip, recovery_ref
+        ):
+            raise ValueError("Interrupted closeout no longer has its exact durable recovery ref")
+    elif disposition in DISCARD_AUTHORIZATION_DISPOSITIONS:
+        if recorded.get("discard_authorized") is not True:
+            raise ValueError("Interrupted closeout has no recorded authorization to discard unique commits")
+    else:
+        raise ValueError("Interrupted closeout does not have supported recoverable disposition evidence")
+    return CloseoutPreflight(
+        disposition=disposition,
+        branch_exists=branch_exists,
+        default_branch=default_branch,
+        merged_to_default=integrated,
+        default_remote_ref=recorded.get("default_remote_ref"),
+        default_branch_pushed=recorded.get("default_branch_pushed"),
+        merge_commit=merge_commit,
+        merge_evidence=evidence,
+        recovery_ref=recorded.get("recovery_ref"),
+        force_delete_branch=recorded.get("force_delete_branch") is True,
+    )
+
+
+def _restore_session_ended_closeout_fence(
+    *,
+    claim_file: Path,
+    claim_bytes_before_fence: bytes,
+    original_claim_sha256: str,
+) -> None:
+    """Restore a retryable session-ended claim after a failed fenced closeout."""
+
+    with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+        if not claim_file.is_file():
+            return
+        current = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+        if not isinstance(current, dict):
+            raise TypeError("cannot restore failed closeout fence from a non-mapping claim")
+        fence = current.get("closeout_fence")
+        if (
+            current.get("status") != "closing"
+            or not isinstance(fence, dict)
+            or fence.get("claim_sha256_before_fence") != original_claim_sha256
+        ):
+            raise ValueError("claim changed after closeout fencing; refusing to restore another writer's state")
+        coordination_claims._atomic_restore_file(claim_file, claim_bytes_before_fence)
+        coordination_claims.refresh_prewrite_authority_projection(coordination_claims.CLAIMS_DIR)
+
+
 def _exact_tracker_candidates(claim: coordination_claims.ClaimRecord) -> list[Path]:
     """Return trackers matching every preserved claim identity field."""
 
@@ -534,30 +640,14 @@ def _validate_session_ended_closeout_reconciliation(
     claim it had just ended (lrn-20260916T050517958708Z-8b8b878dfe).
     """
 
-    if not actor_session_id or ":" not in actor_session_id:
-        raise ValueError(
-            "Session-ended closeout reconciliation requires an exact actor_session_id "
-            "in '<agent>:<value>' form"
-        )
-    acting_agent = actor_session_id.split(":", 1)[0]
-    if acting_agent not in coordination_claims.SUPPORTED_AGENTS:
-        raise ValueError(
-            f"Session-ended closeout reconciliation actor_session_id names an unsupported "
-            f"agent {acting_agent!r}"
-        )
-    resolved_actor = coordination_claims.resolve_session_id(acting_agent, actor_session_id)
-    if not resolved_actor:
-        raise ValueError("Session-ended closeout reconciliation requires an exact actor_session_id")
-    coordination_claims.validate_native_session_binding(
-        acting_agent,
-        resolved_actor,
-        require_native_marker=True,
-    )
-    if claim.status != coordination_claims.SESSION_ENDED_STATUS:
+    resolved_actor = _validate_reconciliation_actor(actor_session_id, mode="Session-ended")
+    if claim.status not in {coordination_claims.SESSION_ENDED_STATUS, "closing"}:
         raise ValueError(
             "Session-ended closeout reconciliation requires an exact session_ended claim; "
             f"found {claim.status!r}."
         )
+    if claim.status == "closing":
+        _read_closeout_fence(claim_file, mode="session_ended", tracker_absent=tracker_absent)
     if not claim.session_id:
         raise ValueError("Session-ended closeout reconciliation requires a recorded owner session_id.")
     if not claim.worktree_path:
@@ -633,6 +723,27 @@ def _validate_session_ended_closeout_reconciliation(
         "tracker_sha256": actual_tracker_digest,
         "tracker_identity_mismatches": tracker_identity_mismatches,
     }
+
+
+def _validate_reconciliation_actor(actor_session_id: str | None, *, mode: str) -> str:
+    """Require a current, native actor identity for cross-session reconciliation."""
+
+    if not actor_session_id or ":" not in actor_session_id:
+        raise ValueError(
+            f"{mode} reconciliation requires an exact actor_session_id in '<agent>:<value>' form"
+        )
+    acting_agent = actor_session_id.split(":", 1)[0]
+    if acting_agent not in coordination_claims.SUPPORTED_AGENTS:
+        raise ValueError(f"{mode} reconciliation actor_session_id names an unsupported agent {acting_agent!r}")
+    resolved_actor = coordination_claims.resolve_session_id(acting_agent, actor_session_id)
+    if not resolved_actor:
+        raise ValueError(f"{mode} reconciliation requires an exact actor_session_id")
+    coordination_claims.validate_native_session_binding(
+        acting_agent,
+        resolved_actor,
+        require_native_marker=True,
+    )
+    return resolved_actor
 
 
 def _verify_session_ended_tracker_absent(claim: coordination_claims.ClaimRecord) -> dict[str, Any]:
@@ -775,13 +886,18 @@ def _validate_canonical_root_reconciliation(
     repo_root: Path,
     expected_claim_sha256: str | None,
     expected_tracker_sha256: str | None,
-) -> dict[str, str]:
+    actor_session_id: str | None,
+    tracker_absent: bool = False,
+) -> dict[str, Any]:
     """Bind a legacy claim to a clean canonical root without removing Git state."""
 
-    if claim.status != coordination_claims.SESSION_ENDED_STATUS:
+    if claim.status not in {coordination_claims.SESSION_ENDED_STATUS, "closing"}:
         raise ValueError(
-            f"Canonical-root reconciliation requires an exact session_ended claim; found {claim.status!r}."
+            f"Canonical-root reconciliation requires a session_ended or fenced closing claim; found {claim.status!r}."
         )
+    if claim.status == "closing":
+        _read_closeout_fence(claim_file, mode="canonical_root", tracker_absent=tracker_absent)
+    resolved_actor = _validate_reconciliation_actor(actor_session_id, mode="Canonical-root")
     if not claim.worktree_path:
         raise ValueError("Canonical-root reconciliation requires a recorded worktree path")
     recorded_worktree = Path(claim.worktree_path).expanduser().resolve()
@@ -799,23 +915,30 @@ def _validate_canonical_root_reconciliation(
         raise ValueError(
             "Canonical-root reconciliation claim digest mismatch; preserve the repository and regenerate evidence."
         )
-    expected_tracker_digest = (expected_tracker_sha256 or "").strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{64}", expected_tracker_digest):
-        raise ValueError("Canonical-root reconciliation requires --tracker-sha256 as a SHA-256 digest.")
-    trackers = _exact_tracker_candidates(claim)
-    if not trackers:
-        raise ValueError("Canonical-root reconciliation requires one exact session tracker")
-    if len(trackers) != 1:
-        rendered = ", ".join(str(path) for path in trackers)
-        raise ValueError("Ambiguous exact session trackers for canonical-root reconciliation: " + rendered)
-    tracker = trackers[0]
-    if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
-        raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
-    actual_tracker_digest = _tracker_sha256(tracker)
-    if actual_tracker_digest != expected_tracker_digest:
-        raise ValueError(
-            "Canonical-root reconciliation tracker digest mismatch; preserve the repository and regenerate evidence."
-        )
+    tracker_path: Path | None = None
+    actual_tracker_digest: str | None = None
+    if tracker_absent:
+        if expected_tracker_sha256:
+            raise ValueError("--tracker-absent and --tracker-sha256 are mutually exclusive.")
+        _verify_session_ended_tracker_absent(claim)
+    else:
+        expected_tracker_digest = (expected_tracker_sha256 or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_tracker_digest):
+            raise ValueError("Canonical-root reconciliation requires --tracker-sha256 as a SHA-256 digest.")
+        trackers = _exact_tracker_candidates(claim)
+        if not trackers:
+            raise ValueError("Canonical-root reconciliation requires one exact session tracker")
+        if len(trackers) != 1:
+            rendered = ", ".join(str(path) for path in trackers)
+            raise ValueError("Ambiguous exact session trackers for canonical-root reconciliation: " + rendered)
+        tracker_path = trackers[0]
+        if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker_path:
+            raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
+        actual_tracker_digest = _tracker_sha256(tracker_path)
+        if actual_tracker_digest != expected_tracker_digest:
+            raise ValueError(
+                "Canonical-root reconciliation tracker digest mismatch; preserve the repository and regenerate evidence."
+            )
 
     def git_output(*args: str) -> str:
         result = subprocess.run(
@@ -855,13 +978,17 @@ def _validate_canonical_root_reconciliation(
     return {
         "schema_version": "1.0",
         "claim_status_before": claim.status,
+        "predecessor_session_id": claim.session_id,
+        "reconciliation_actor_session_id": resolved_actor,
+        "reconciliation_actor_relation": "owner" if claim.session_id == resolved_actor else "successor",
         "recorded_worktree_path": str(recorded_worktree),
         "canonical_repo_root": str(canonical_root),
         "branch": current_branch,
         "claim_path": str(claim_file),
         "claim_sha256": actual_claim_digest,
-        "tracker_path": str(tracker),
+        "tracker_path": str(tracker_path) if tracker_path else None,
         "tracker_sha256": actual_tracker_digest,
+        "tracker_absent_verified": tracker_absent,
         "filesystem_action": "retained_canonical_root",
         "branch_action": "retained_canonical_branch",
     }
@@ -3088,13 +3215,41 @@ def _assert_worktree_removal_access(worktree_path: Path) -> None:
         )
 
 
-def _delete_branch(repo_root: Path, branch: str | None, *, force: bool = False) -> str:
+def _delete_branch(
+    repo_root: Path,
+    branch: str | None,
+    *,
+    force: bool = False,
+    expected_tip: str | None = None,
+) -> str:
     """Delete one local branch after worktree cleanup."""
 
     if not branch:
         return "not_requested"
     if not _branch_exists(repo_root, branch):
         return "already_missing"
+    if expected_tip:
+        checked_out = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if checked_out.returncode != 0:
+            raise RuntimeError((checked_out.stderr or checked_out.stdout).strip())
+        if f"branch refs/heads/{branch}" in checked_out.stdout.splitlines():
+            raise RuntimeError(f"Refusing to delete branch '{branch}' while another worktree still has it checked out")
+        result = subprocess.run(
+            ["git", "update-ref", "-d", f"refs/heads/{branch}", expected_tip],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout).strip())
+        return "deleted"
     delete_flag = "-D" if force else "-d"
     result = subprocess.run(
         ["git", "branch", delete_flag, branch],
@@ -5025,6 +5180,7 @@ def close_session(
     """
 
     claim, payload, claim_file = _claim_record_any_status(agent=agent, project=project, scope=scope)
+    loaded_claim_sha256 = _claim_sha256(claim_file)
     reconciliation_modes = sum(
         bool(value)
         for value in (
@@ -5035,15 +5191,60 @@ def close_session(
     )
     if reconciliation_modes > 1:
         raise ValueError("Choose only one reconciliation mode per session-close invocation.")
-    if tracker_absent and not reconcile_session_ended:
-        raise ValueError("--tracker-absent is only valid with --reconcile-session-ended.")
+    if tracker_absent and not (reconcile_session_ended or reconcile_canonical_root):
+        raise ValueError("--tracker-absent requires a reconciliation mode that supports absent trackers.")
     if recovery_archive_dir and not tracker_absent:
         raise ValueError("--recovery-archive-dir is only valid with --tracker-absent.")
-    if not reconcile_session_ended:
+    if recovery_archive_dir and reconcile_canonical_root:
+        raise ValueError("--recovery-archive-dir is only valid for linked-worktree --reconcile-session-ended.")
+    raw_fence = payload.get("closeout_fence")
+    ordinary_fenced_retry = (
+        claim.status == "closing"
+        and isinstance(raw_fence, dict)
+        and raw_fence.get("reconciliation_mode") == "ordinary"
+        and raw_fence.get("schema_version") == "1.0"
+    )
+    if ordinary_fenced_retry:
+        supplied_digest = (expected_claim_sha256 or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", supplied_digest) or supplied_digest != loaded_claim_sha256:
+            raise ValueError("Interrupted closeout retry requires --claim-sha256 for the current fenced claim")
+        _validate_reconciliation_actor(actor_session_id, mode="Interrupted closeout")
+    elif reconcile_canonical_root or reconcile_session_ended:
+        # Reconciliation is specifically for an ended predecessor. The current
+        # native actor may be a coordinator session, so do not require it to
+        # impersonate the ended claim owner.
+        _validate_reconciliation_actor(actor_session_id, mode="Closeout")
+    else:
         _require_claim_actor(claim, actor_session_id=actor_session_id)
+    if reconcile_canonical_root or reconcile_session_ended:
+        if branch is not None and branch != claim.branch:
+            raise ValueError("Session-ended reconciliation rejects a branch override that differs from the claim.")
+        if worktree_path is not None and Path(worktree_path).expanduser().resolve() != Path(
+            claim.worktree_path or ""
+        ).expanduser().resolve():
+            raise ValueError("Session-ended reconciliation rejects a worktree-path override that differs from the claim.")
+        if tracker_absent and expected_tracker_sha256:
+            raise ValueError("--tracker-absent and --tracker-sha256 are mutually exclusive.")
     resolved_worktree_path = _resolve_closeout_worktree_path(claim, worktree_path)
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
+    effective_delete_branch = delete_branch
+    fenced_preflight = raw_fence.get("preflight") if ordinary_fenced_retry else None
+    if ordinary_fenced_retry and not isinstance(fenced_preflight, dict):
+        raise ValueError("Interrupted closeout claim has no preflight receipt")
+    validated_branch_tip = (
+        fenced_preflight.get("branch_tip") if isinstance(fenced_preflight, dict) else None
+    )
+    if _branch_exists(repo_root, resolved_branch):
+        observed_branch_tip = _git_capture(
+            repo_root, "rev-parse", "--verify", f"refs/heads/{resolved_branch}"
+        ).strip()
+        if ordinary_fenced_retry and observed_branch_tip != validated_branch_tip:
+            raise ValueError("Interrupted closeout branch tip changed; preserve the claim for review")
+        if not ordinary_fenced_retry:
+            validated_branch_tip = observed_branch_tip
+    elif not ordinary_fenced_retry:
+        validated_branch_tip = None
     updated_at = datetime.now(timezone.utc).isoformat()
 
     session_ended_reconciliation = (
@@ -5077,6 +5278,8 @@ def close_session(
             repo_root=repo_root,
             expected_claim_sha256=expected_claim_sha256,
             expected_tracker_sha256=expected_tracker_sha256,
+            actor_session_id=actor_session_id,
+            tracker_absent=tracker_absent,
         )
         if reconcile_canonical_root
         else None
@@ -5140,7 +5343,7 @@ def close_session(
     retain_captured_lane = False
     if resolved_worktree_path and resolved_worktree_path.exists():
         surface_runtime.assert_no_live_leases_for_worktree(resolved_worktree_path)
-        if tracker_absent:
+        if tracker_absent and session_ended_reconciliation is not None:
             lane_state_capture = _capture_session_ended_lane_state(
                 claim=claim,
                 worktree=resolved_worktree_path,
@@ -5168,30 +5371,70 @@ def close_session(
             capture=lane_state_capture,
         )
     else:
-        preflight = _validate_closeout_preflight(
-            repo_root=repo_root,
-            branch=resolved_branch,
-            disposition=disposition,
-            disposition_reason=disposition_reason,
-            recovery_ref=recovery_ref
-            or (lane_state_capture["recovery_ref"] if lane_state_capture is not None else None),
-            merge_commit=merge_commit,
-            allow_discard_unique=allow_discard_unique,
-            delete_branch=delete_branch,
-            retain_canonical_default_branch=canonical_root_reconciliation is not None,
-        )
+        if ordinary_fenced_retry:
+            branch_exists = _branch_exists(repo_root, resolved_branch)
+            recorded = raw_fence.get("preflight")
+            if not isinstance(recorded, dict):
+                raise ValueError("Interrupted closeout claim has no preflight receipt")
+            recorded_disposition = recorded.get("disposition")
+            if disposition != MERGED_DISPOSITION and disposition != recorded_disposition:
+                raise ValueError("Interrupted closeout retry cannot change its fenced disposition")
+            if recovery_ref and recovery_ref != recorded.get("recovery_ref"):
+                raise ValueError("Interrupted closeout retry cannot change its fenced recovery ref")
+            if merge_commit and merge_commit != recorded.get("merge_commit"):
+                raise ValueError("Interrupted closeout retry cannot change its fenced merge commit")
+            if allow_discard_unique and recorded.get("discard_authorized") is not True:
+                raise ValueError("Interrupted closeout retry cannot add discard authorization")
+            if branch_exists:
+                current_tip = _git_capture(
+                    repo_root, "rev-parse", "--verify", f"refs/heads/{resolved_branch}"
+                ).strip()
+                if current_tip != recorded.get("branch_tip"):
+                    raise ValueError("Interrupted closeout branch tip changed; preserve the claim for review")
+            preflight = _validated_fenced_preflight(
+                repo_root=repo_root,
+                branch=resolved_branch,
+                fence=raw_fence,
+                branch_exists=branch_exists,
+            )
+            effective_delete_branch = preflight.force_delete_branch
+        else:
+            preflight = _validate_closeout_preflight(
+                repo_root=repo_root,
+                branch=resolved_branch,
+                disposition=disposition,
+                disposition_reason=disposition_reason,
+                recovery_ref=recovery_ref
+                or (lane_state_capture["recovery_ref"] if lane_state_capture is not None else None),
+                merge_commit=merge_commit,
+                allow_discard_unique=allow_discard_unique,
+                delete_branch=delete_branch,
+                retain_canonical_default_branch=canonical_root_reconciliation is not None,
+            )
+            if validated_branch_tip and _branch_exists(repo_root, resolved_branch):
+                latest_tip = _git_capture(
+                    repo_root, "rev-parse", "--verify", f"refs/heads/{resolved_branch}"
+                ).strip()
+                if latest_tip != validated_branch_tip:
+                    raise ValueError("Task branch changed during closeout preflight; preserve the lane")
     mailbox_closeout = _resolve_active_mailbox_for_closeout(
         claim=claim,
         mailbox_disposition=mailbox_disposition,
         mailbox_note=mailbox_note,
     )
+    effective_disposition_reason = (
+        disposition_reason.strip() if disposition_reason and disposition_reason.strip() else None
+    )
+    if ordinary_fenced_retry:
+        recorded_reason = payload.get("disposition_reason")
+        if effective_disposition_reason and effective_disposition_reason != recorded_reason:
+            raise ValueError("Interrupted closeout retry cannot change its fenced disposition reason")
+        effective_disposition_reason = recorded_reason
 
     payload["status"] = "closing"
     payload["repo_root"] = str(repo_root)
     payload["disposition"] = preflight.disposition
-    payload["disposition_reason"] = (
-        disposition_reason.strip() if disposition_reason and disposition_reason.strip() else None
-    )
+    payload["disposition_reason"] = effective_disposition_reason
     payload["recovery_ref"] = preflight.recovery_ref
     payload["default_branch"] = preflight.default_branch
     payload["merged_to_default"] = preflight.merged_to_default
@@ -5212,20 +5455,107 @@ def close_session(
         session_ended_reconciliation["merge_commit"] = preflight.merge_commit or "none"
         session_ended_reconciliation["lane_state_capture"] = lane_state_capture
         payload["session_ended_closeout_reconciliation"] = session_ended_reconciliation
-        if _claim_sha256(claim_file) != session_ended_reconciliation["claim_sha256"]:
-            raise ValueError("Session-ended closeout reconciliation claim changed before mutation.")
-        if tracker_absent:
-            _verify_session_ended_tracker_absent(claim)
-        elif _tracker_sha256(Path(session_ended_reconciliation["tracker_path"])) != session_ended_reconciliation[
-            "tracker_sha256"
-        ]:
-            raise ValueError("Session-ended closeout reconciliation tracker changed before mutation.")
+    if canonical_root_reconciliation is not None:
+        canonical_root_reconciliation["tracker_absent_verified"] = bool(tracker_absent)
     payload["updated_at"] = updated_at
     payload["notes"] = note or "closing claimed lane via canonical session-close flow"
-    # Keep the projection current during physical cleanup, but do not emit a
-    # terminal closeout receipt until the final completed state is durable.
-    if session_ended_reconciliation is None:
+    claim_bytes_before_fence: bytes | None = None
+    fence_origin_claim_sha256: str | None = None
+    if session_ended_reconciliation is not None or canonical_root_reconciliation is not None:
+        reconciliation_mode = "session_ended" if session_ended_reconciliation is not None else "canonical_root"
+        bound_claim_sha256 = (
+            session_ended_reconciliation["claim_sha256"]
+            if session_ended_reconciliation is not None
+            else canonical_root_reconciliation["claim_sha256"]
+        )
         with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+            if not claim_file.is_file() or _claim_sha256(claim_file) != bound_claim_sha256:
+                raise ValueError("Session-ended closeout claim changed before closeout was fenced.")
+            claim_bytes_before_fence = claim_file.read_bytes()
+            current_claim, _current_payload, current_claim_file = _claim_record_any_status(
+                agent=agent, project=project, scope=scope
+            )
+            if current_claim_file != claim_file or current_claim.status not in {
+                coordination_claims.SESSION_ENDED_STATUS,
+                "closing",
+            }:
+                raise ValueError("Session-ended closeout requires the same preserved claim under the registry lock.")
+            if tracker_absent:
+                _verify_session_ended_tracker_absent(current_claim)
+            elif session_ended_reconciliation is not None:
+                tracker = Path(session_ended_reconciliation["tracker_path"])
+                if _tracker_sha256(tracker) != session_ended_reconciliation["tracker_sha256"]:
+                    raise ValueError("Session-ended closeout tracker changed before closeout was fenced.")
+            elif canonical_root_reconciliation is not None:
+                tracker = Path(canonical_root_reconciliation["tracker_path"])
+                if _tracker_sha256(tracker) != canonical_root_reconciliation["tracker_sha256"]:
+                    raise ValueError("Canonical-root reconciliation tracker changed before closeout was fenced.")
+            if current_claim.status == "closing":
+                current_fence = _read_closeout_fence(
+                    claim_file,
+                    mode=reconciliation_mode,
+                    tracker_absent=tracker_absent,
+                )
+                fence_origin_claim_sha256 = str(current_fence["claim_sha256_before_fence"])
+            else:
+                fence_origin_claim_sha256 = bound_claim_sha256
+                payload["status"] = "closing"
+                payload["closeout_fence"] = {
+                    "schema_version": "1.0",
+                    "reconciliation_mode": reconciliation_mode,
+                    "claim_sha256_before_fence": bound_claim_sha256,
+                    "tracker_absent_verified": bool(tracker_absent),
+                    "recorded_at": updated_at,
+                }
+                _write_claim_and_refresh_projection(claim_file, payload, coordination_claims.CLAIMS_DIR)
+    elif session_ended_reconciliation is None and not ordinary_fenced_retry:
+        # Persist the validated preflight before ordinary physical cleanup. This
+        # makes a branch already deleted before a process interruption provable
+        # on a later native-session retry.
+        with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+            if not claim_file.is_file() or _claim_sha256(claim_file) != loaded_claim_sha256:
+                raise ValueError("Closeout claim changed before the cleanup fence was written.")
+            current_claim, _current_payload, current_claim_file = _claim_record_any_status(
+                agent=agent, project=project, scope=scope
+            )
+            if current_claim_file != claim_file or (
+                current_claim.status == "closing" and isinstance(_current_payload.get("closeout_fence"), dict)
+            ):
+                raise ValueError("Closeout claim changed status before the cleanup fence was written.")
+            branch_tip = None
+            if _branch_exists(repo_root, resolved_branch):
+                branch_tip = _git_capture(
+                    repo_root, "rev-parse", "--verify", f"refs/heads/{resolved_branch}"
+                ).strip()
+            if branch_tip != validated_branch_tip:
+                raise ValueError("Task branch changed before the cleanup fence was written; preserve the lane")
+            default_ref = (
+                preflight.default_remote_ref
+                if preflight.default_remote_ref and _ref_exists(repo_root, preflight.default_remote_ref)
+                else (f"refs/heads/{preflight.default_branch}" if preflight.default_branch else None)
+            )
+            payload["closeout_fence"] = {
+                "schema_version": "1.0",
+                "reconciliation_mode": "ordinary",
+                "claim_sha256_before_fence": loaded_claim_sha256,
+                "tracker_absent_verified": False,
+                "recorded_at": updated_at,
+                "preflight": {
+                    "disposition": preflight.disposition,
+                    "branch": resolved_branch,
+                    "branch_tip": validated_branch_tip,
+                    "default_branch": preflight.default_branch,
+                    "default_ref": default_ref,
+                    "default_remote_ref": preflight.default_remote_ref,
+                    "default_branch_pushed": preflight.default_branch_pushed,
+                    "merged_to_default": preflight.merged_to_default,
+                    "merge_commit": preflight.merge_commit,
+                    "merge_evidence": preflight.merge_evidence,
+                    "recovery_ref": preflight.recovery_ref,
+                    "discard_authorized": bool(allow_discard_unique),
+                    "force_delete_branch": preflight.force_delete_branch,
+                },
+            }
             _write_claim_and_refresh_projection(claim_file, payload, coordination_claims.CLAIMS_DIR)
 
     tracker_path = session_contracts.find_session_tracker_path(
@@ -5236,7 +5566,11 @@ def close_session(
         preferred_path=claim.tracker_path,
     )
     tracker_path_text = str(tracker_path) if tracker_path is not None else claim.tracker_path
-    if tracker_path is not None and session_ended_reconciliation is None:
+    if (
+        tracker_path is not None
+        and session_ended_reconciliation is None
+        and canonical_root_reconciliation is None
+    ):
         session_contracts.update_session_tracker(
             tracker_path,
             current_phase="closing",
@@ -5244,30 +5578,45 @@ def close_session(
             updated_at=updated_at,
         )
 
-    worktree_action = "not_requested"
-    branch_action = "kept"
-    if reconciliation_receipt is not None:
-        worktree_action = reconciliation_receipt["filesystem_action"]
-    elif canonical_root_reconciliation is not None:
-        worktree_action = canonical_root_reconciliation["filesystem_action"]
-    elif terminalize_shared_child:
-        worktree_action = "retained_for_parent"
-    elif retain_captured_lane:
-        worktree_action = "retained_uncommitted_state_captured"
-    elif worktree_path or claim.worktree_path:
-        worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
-    if canonical_root_reconciliation is not None:
-        branch_action = canonical_root_reconciliation["branch_action"]
-    elif terminalize_shared_child:
-        branch_action = "retained_for_parent"
-    elif retain_captured_lane:
-        branch_action = "retained_uncommitted_state_captured"
-    elif delete_branch:
-        branch_action = _delete_branch(
-            repo_root,
-            resolved_branch,
-            force=preflight.force_delete_branch,
-        )
+    try:
+        worktree_action = "not_requested"
+        branch_action = "kept"
+        if reconciliation_receipt is not None:
+            worktree_action = reconciliation_receipt["filesystem_action"]
+        elif canonical_root_reconciliation is not None:
+            worktree_action = canonical_root_reconciliation["filesystem_action"]
+        elif terminalize_shared_child:
+            worktree_action = "retained_for_parent"
+        elif retain_captured_lane:
+            worktree_action = "retained_uncommitted_state_captured"
+        elif worktree_path or claim.worktree_path:
+            worktree_action = _remove_worktree_path(repo_root, resolved_worktree_path)
+        if canonical_root_reconciliation is not None:
+            branch_action = canonical_root_reconciliation["branch_action"]
+        elif terminalize_shared_child:
+            branch_action = "retained_for_parent"
+        elif retain_captured_lane:
+            branch_action = "retained_uncommitted_state_captured"
+        elif effective_delete_branch:
+            branch_action = _delete_branch(
+                repo_root,
+                resolved_branch,
+                force=preflight.force_delete_branch,
+                expected_tip=validated_branch_tip,
+            )
+    except (OSError, RuntimeError, ValueError) as exc:
+        if claim_bytes_before_fence is not None:
+            try:
+                _restore_session_ended_closeout_fence(
+                    claim_file=claim_file,
+                    claim_bytes_before_fence=claim_bytes_before_fence,
+                    original_claim_sha256=fence_origin_claim_sha256 or bound_claim_sha256,
+                )
+            except (OSError, RuntimeError, ValueError) as restore_exc:
+                raise RuntimeError(
+                    f"closeout failed and its session-ended claim fence could not be restored: {restore_exc}"
+                ) from exc
+        raise
 
     if session_ended_reconciliation is not None:
         session_ended_reconciliation["filesystem_action"] = worktree_action
@@ -5279,7 +5628,7 @@ def close_session(
     payload["updated_at"] = closed_at
     payload["notes"] = note or (
         f"closed claimed lane with disposition={preflight.disposition}"
-        + (f"; reason={disposition_reason.strip()}" if disposition_reason and disposition_reason.strip() else "")
+        + (f"; reason={effective_disposition_reason}" if effective_disposition_reason else "")
     )
     with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
         registry_digest_before = coordination_claims._registry_digest(coordination_claims.CLAIMS_DIR)

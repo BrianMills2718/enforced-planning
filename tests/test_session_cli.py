@@ -4776,6 +4776,309 @@ def test_close_session_ended_reconciliation_retries_after_partial_cleanup(
     assert receipt["branch_action"] == "deleted"
 
 
+def test_close_session_recovers_after_branch_deletion_before_claim_archive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successor can finish only after re-proving the fenced tip is integrated."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    original_delete = session_lifecycle._delete_branch
+
+    def delete_then_interrupt(*args: object, **kwargs: object) -> str:
+        original_delete(*args, **kwargs)  # type: ignore[arg-type]
+        raise KeyboardInterrupt("simulated stop after branch deletion")
+
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", delete_then_interrupt)
+    with _native_actor("codex", "codex:test-session"), pytest.raises(
+        KeyboardInterrupt, match="after branch deletion"
+    ):
+        original_reason = "merged branch after verified integration"
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:test-session",
+            disposition_reason=original_reason,
+        )
+
+    fenced = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert fenced["status"] == "closing"
+    assert fenced["closeout_fence"]["preflight"]["merge_evidence"] == "branch_ancestor"
+    assert not worktree.exists()
+    assert not session_lifecycle._branch_exists(repo_root, branch)
+    fenced_digest = session_lifecycle._claim_sha256(claim_file)
+
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", original_delete)
+    with _native_actor("codex", "codex:closeout-recovery-runtime"):
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:closeout-recovery-runtime",
+            expected_claim_sha256=fenced_digest,
+        )
+
+    assert payload["action"] == "closed"
+    assert payload["worktree_action"] == "already_missing"
+    assert payload["branch_action"] == "already_missing"
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    assert archived["status"] == "completed"
+    assert archived["disposition_reason"] == original_reason
+    assert original_reason in archived["notes"]
+
+
+def test_close_session_fenced_retry_reuses_preflight_while_branch_remains(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retry cannot replace the disposition fenced before partial cleanup."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    original_remove = session_lifecycle._remove_worktree_path
+
+    def remove_then_interrupt(*args: object, **kwargs: object) -> str:
+        action = original_remove(*args, **kwargs)  # type: ignore[arg-type]
+        raise KeyboardInterrupt(f"simulated stop after worktree removal: {action}")
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", remove_then_interrupt)
+    with _native_actor("codex", "codex:test-session"), pytest.raises(
+        KeyboardInterrupt, match="after worktree removal"
+    ):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:test-session",
+            delete_branch=False,
+        )
+
+    fenced = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert fenced["status"] == "closing"
+    assert fenced["closeout_fence"]["preflight"]["disposition"] == "merged"
+    assert fenced["closeout_fence"]["preflight"]["force_delete_branch"] is False
+    assert not worktree.exists()
+    assert session_lifecycle._branch_exists(repo_root, branch)
+    fenced_digest = session_lifecycle._claim_sha256(claim_file)
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", original_remove)
+    with _native_actor("codex", "codex:conflicting-closeout-retry"):
+        with pytest.raises(ValueError, match="cannot change its fenced disposition"):
+            session_lifecycle.close_session(
+                agent="codex",
+                project="enforced-planning",
+                scope=branch,
+                actor_session_id="codex:conflicting-closeout-retry",
+                expected_claim_sha256=fenced_digest,
+                disposition="abandoned",
+                disposition_reason="replace the fenced merge disposition",
+                allow_discard_unique=True,
+            )
+
+    assert session_lifecycle._branch_exists(repo_root, branch)
+    with _native_actor("codex", "codex:valid-closeout-retry"):
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:valid-closeout-retry",
+            expected_claim_sha256=fenced_digest,
+        )
+
+    assert payload["action"] == "closed"
+    assert payload["disposition"] == "merged"
+    assert payload["branch_action"] == "kept"
+    assert session_lifecycle._branch_exists(repo_root, branch)
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    assert archived["disposition"] == "merged"
+
+
+def test_close_session_refuses_branch_tip_change_during_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A new unmerged tip cannot inherit the earlier tip's merge proof."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    _git(repo_root, "merge", "--no-ff", branch, "-m", "merge feature")
+    claim_before = claim_file.read_bytes()
+    original_preflight = session_lifecycle._validate_closeout_preflight
+
+    def advance_branch_after_proof(**kwargs: object) -> session_lifecycle.CloseoutPreflight:
+        result = original_preflight(**kwargs)  # type: ignore[arg-type]
+        (worktree / "late-change.txt").write_text("preserve this commit\n", encoding="utf-8")
+        _git(worktree, "add", "late-change.txt")
+        _git(worktree, "commit", "-m", "concurrent branch advance")
+        return result
+
+    monkeypatch.setattr(session_lifecycle, "_validate_closeout_preflight", advance_branch_after_proof)
+    with _native_actor("codex", "codex:test-session"), pytest.raises(
+        ValueError, match="changed during closeout preflight"
+    ):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:test-session",
+        )
+
+    claim = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert claim["status"] == "active"
+    assert claim_file.read_bytes() == claim_before
+    assert worktree.is_dir()
+    assert _git(repo_root, "rev-parse", f"refs/heads/{branch}") == _git(worktree, "rev-parse", "HEAD")
+
+
+def test_close_session_recovers_interrupted_archival_from_exact_recovery_ref(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An authorized non-merge disposition remains retryable after ref deletion."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    branch_tip = _git(repo_root, "rev-parse", f"refs/heads/{branch}")
+    recovery_ref = f"refs/recovery/session-ended/{branch}"
+    _git(repo_root, "update-ref", recovery_ref, f"refs/heads/{branch}")
+    original_delete = session_lifecycle._delete_branch
+
+    def delete_then_interrupt(*args: object, **kwargs: object) -> str:
+        original_delete(*args, **kwargs)  # type: ignore[arg-type]
+        raise KeyboardInterrupt("simulated stop after archived branch deletion")
+
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", delete_then_interrupt)
+    with _native_actor("codex", "codex:test-session"), pytest.raises(
+        KeyboardInterrupt, match="after archived branch deletion"
+    ):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:test-session",
+            disposition="archived",
+            disposition_reason="preserve the experiment without merging it",
+            recovery_ref=recovery_ref,
+        )
+
+    fenced_digest = session_lifecycle._claim_sha256(claim_file)
+    assert not session_lifecycle._branch_exists(repo_root, branch)
+    _git(repo_root, "merge-base", "--is-ancestor", branch_tip, recovery_ref)
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", original_delete)
+    with _native_actor("codex", "codex:archive-recovery-runtime"):
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:archive-recovery-runtime",
+            expected_claim_sha256=fenced_digest,
+        )
+
+    assert payload["action"] == "closed"
+    assert payload["disposition"] == "archived"
+    assert _git(repo_root, "show-ref", "--verify", recovery_ref)
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    assert archived["disposition_reason"] == "preserve the experiment without merging it"
+    assert "preserve the experiment without merging it" in archived["notes"]
+
+
+def test_close_session_recovers_interrupted_explicit_discard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fenced preflight preserves explicit discard authorization across a crash."""
+
+    claims_dir = tmp_path / "claims"
+    trackers_dir = tmp_path / "sessions"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    repo_root, worktree, branch = _real_repo_with_worktree(tmp_path)
+    claim_file = _start_real_closeout_claim(
+        repo_root=repo_root,
+        worktree=worktree,
+        branch=branch,
+        claims_dir=claims_dir,
+        trackers_dir=trackers_dir,
+    )
+    original_delete = session_lifecycle._delete_branch
+
+    def delete_then_interrupt(*args: object, **kwargs: object) -> str:
+        original_delete(*args, **kwargs)  # type: ignore[arg-type]
+        raise KeyboardInterrupt("simulated stop after explicitly abandoned branch deletion")
+
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", delete_then_interrupt)
+    with _native_actor("codex", "codex:test-session"), pytest.raises(
+        KeyboardInterrupt, match="explicitly abandoned branch deletion"
+    ):
+        session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:test-session",
+            disposition="abandoned",
+            disposition_reason="discard the one-off branch after explicit review",
+            allow_discard_unique=True,
+        )
+
+    fenced = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+    assert fenced["closeout_fence"]["preflight"]["discard_authorized"] is True
+    fenced_digest = session_lifecycle._claim_sha256(claim_file)
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", original_delete)
+    with _native_actor("codex", "codex:discard-recovery-runtime"):
+        payload = session_lifecycle.close_session(
+            agent="codex",
+            project="enforced-planning",
+            scope=branch,
+            actor_session_id="codex:discard-recovery-runtime",
+            expected_claim_sha256=fenced_digest,
+        )
+
+    assert payload["action"] == "closed"
+    assert payload["disposition"] == "abandoned"
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    assert archived["disposition_reason"] == "discard the one-off branch after explicit review"
+    assert "discard the one-off branch after explicit review" in archived["notes"]
+
+
 def test_close_session_archives_session_ended_canonical_root_without_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

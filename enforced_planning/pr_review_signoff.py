@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -193,8 +194,7 @@ def build_codex_command(
         "exec",
         "--ephemeral",
         "--ignore-user-config",
-        "--sandbox",
-        "read-only",
+        "--dangerously-bypass-approvals-and-sandbox",
         "--config",
         f'model_reasoning_effort="{effort}"',
         "--cd",
@@ -207,8 +207,33 @@ def build_codex_command(
         "-",
     ]
     if model:
-        command[6:6] = ["--model", model]
+        command[5:5] = ["--model", model]
     return tuple(command)
+
+
+def _mount_aliases_for(path: Path) -> tuple[Path, ...]:
+    device = path.stat().st_dev
+    device_id = f"{os.major(device)}:{os.minor(device)}"
+    aliases: set[Path] = {path}
+    mountinfo = Path("/proc/self/mountinfo").read_text(encoding="utf-8")
+    for line in mountinfo.splitlines():
+        fields = line.split()
+        if len(fields) < 5 or fields[2] != device_id or fields[3] != "/":
+            continue
+        mount_path = fields[4]
+        for escaped, decoded in (
+            (r"\040", " "),
+            (r"\011", "\t"),
+            (r"\012", "\n"),
+            (r"\134", "\\"),
+        ):
+            mount_path = mount_path.replace(escaped, decoded)
+        candidate = Path(mount_path)
+        if candidate.is_dir():
+            aliases.add(candidate)
+    if any(any(character.isspace() for character in str(alias)) for alias in aliases):
+        raise RuntimeError("host user-runtime mount aliases contain unsupported whitespace")
+    return tuple(sorted(aliases, key=str))
 
 
 def evaluate_signoff(
@@ -479,17 +504,72 @@ def _run_reviewer_lane(
     timeout_seconds: int,
 ) -> tuple[ReviewerSession, SemanticReviewResult]:
     lane_digest = hashlib.sha256(review_lane.encode("utf-8")).hexdigest()[:12]
-    semantic_path = output_directory / f"semantic-review-{lane_digest}.json"
+    lane_directory = output_directory / f"reviewer-{lane_digest}"
+    semantic_path = lane_directory / "semantic-review.json"
+    lane_tmp = lane_directory / "tmp"
+    lane_codex_home = lane_directory / "codex-home"
+    lane_runtime = lane_directory / "xdg-runtime"
+    host_runtime = Path("/run/user") / str(os.getuid())
+    if not host_runtime.is_dir():
+        raise RuntimeError(f"host user runtime is unavailable: {host_runtime}")
+    lane_tmp.mkdir(parents=True, exist_ok=True)
+    lane_codex_home.mkdir(mode=0o700)
+    lane_runtime.mkdir(mode=0o700)
+    resolved_codex = shutil.which(codex_bin) or codex_bin
+    source_codex_home = Path(
+        os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))
+    ).resolve()
+    installed_codex = source_codex_home / "packages/standalone/current/bin/codex"
+    default_codex = shutil.which("codex")
+    if (
+        installed_codex.is_file()
+        and default_codex is not None
+        and Path(resolved_codex).resolve() == Path(default_codex).resolve()
+    ):
+        resolved_codex = str(installed_codex)
+    auth_source = source_codex_home / "auth.json"
+    if auth_source.is_file():
+        auth_target = lane_codex_home / "auth.json"
+        shutil.copyfile(auth_source, auth_target)
+        auth_target.chmod(0o600)
     command = build_codex_command(
-        codex_bin=codex_bin,
+        codex_bin=resolved_codex,
         repo_root=root,
         output_schema=output_schema,
         output_path=semantic_path,
         model=model,
         effort=effort,
     )
+    blocked_runtimes = " ".join(str(path) for path in _mount_aliases_for(host_runtime))
+    confined_command = [
+        "systemd-run",
+        "--user",
+        "--pipe",
+        "--quiet",
+        "--collect",
+        "--property=NoNewPrivileges=yes",
+        "--property=TemporaryFileSystem=/tmp:rw,nosuid,nodev",
+        "--property=ReadOnlyPaths=/",
+        f"--property=BindReadOnlyPaths={root}",
+        f"--property=ReadWritePaths={lane_directory}",
+        f"--property=InaccessiblePaths={blocked_runtimes}",
+        f"--property=WorkingDirectory={root}",
+        f"--setenv=CODEX_HOME={lane_codex_home}",
+        f"--setenv=XDG_RUNTIME_DIR={lane_runtime}",
+        f"--setenv=DBUS_SESSION_BUS_ADDRESS=unix:path={lane_runtime / 'bus'}",
+        f"--setenv=TMPDIR={lane_tmp}",
+        f"--setenv=TEMP={lane_tmp}",
+        f"--setenv=TMP={lane_tmp}",
+        "--setenv=GH_TOKEN=",
+        "--setenv=GITHUB_TOKEN=",
+        "--setenv=SSH_AUTH_SOCK=",
+        "--setenv=GIT_ASKPASS=/bin/false",
+        "--setenv=GIT_TERMINAL_PROMPT=0",
+        "--",
+        *command,
+    ]
     completed = subprocess.run(
-        list(command),
+        confined_command,
         input=build_reviewer_prompt(spec, checks, review_lane=review_lane),
         capture_output=True,
         text=True,
@@ -551,7 +631,7 @@ def run_review(
     checks = run_programmatic_checks(spec, repo_root=root)
     _assert_frozen_worktree(root, spec.head_sha, phase="post-check")
 
-    with tempfile.TemporaryDirectory(prefix="pr-review-signoff-") as directory:
+    with tempfile.TemporaryDirectory(prefix=".pr-review-signoff-", dir=root) as directory:
         output_directory = Path(directory)
 
         def run_lane(review_lane: str) -> tuple[ReviewerSession, SemanticReviewResult]:

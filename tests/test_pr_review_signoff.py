@@ -423,7 +423,7 @@ def test_criterion_result_requires_concrete_evidence() -> None:
         )
 
 
-def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -> None:
+def test_codex_command_uses_external_sandbox_and_schema_bound(tmp_path: Path) -> None:
     command = build_codex_command(
         codex_bin="codex",
         repo_root=tmp_path,
@@ -435,7 +435,9 @@ def test_codex_command_is_ephemeral_read_only_and_schema_bound(tmp_path: Path) -
 
     assert command[:2] == ("codex", "exec")
     assert "--ephemeral" in command
-    assert command[command.index("--sandbox") + 1] == "read-only"
+    assert "--dangerously-bypass-approvals-and-sandbox" in command
+    assert "--sandbox" not in command
+    assert "--add-dir" not in command
     assert command[command.index("--output-schema") + 1].endswith("pr-review-signoff.schema.json")
     assert command[command.index("--output-last-message") + 1].endswith("semantic.json")
 
@@ -525,7 +527,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     }
     spec_file = tmp_path / "spec.json"
     spec_file.write_text(json.dumps(spec_payload), encoding="utf-8")
-    fake_codex = tmp_path / "fake-codex"
+    fake_codex = repo / ".git" / "fake-codex"
     semantic = {
         "schema_version": "1.0",
         "review_lane": "correctness",
@@ -544,9 +546,24 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     }
     fake_codex.write_text(
         "#!/usr/bin/env python3\n"
-        "import json, pathlib, sys\n"
+        "import json, os, pathlib, subprocess, sys\n"
         "prompt = sys.stdin.read()\n"
         "lane = 'test-evidence' if '\"review_lane\": \"test-evidence\"' in prompt else 'correctness'\n"
+        "try:\n"
+        "    pathlib.Path('reviewer-mutation.txt').write_text('changed', encoding='utf-8')\n"
+        "except OSError:\n"
+        "    pass\n"
+        "else:\n"
+        "    raise SystemExit('reviewer filesystem was writable')\n"
+        "runtime_home = pathlib.Path(os.environ['CODEX_HOME'])\n"
+        "runtime_home.joinpath('runtime-marker').write_text('ok', encoding='utf-8')\n"
+        "pathlib.Path('/tmp/reviewer-private-tmp-proof').write_text('ok', encoding='utf-8')\n"
+        "host_runtimes = [f'/run/user/{os.getuid()}', f'/mnt/wslg/run/user/{os.getuid()}']\n"
+        "for host_runtime in host_runtimes:\n"
+        "    escape_env = os.environ | {'XDG_RUNTIME_DIR': host_runtime, 'DBUS_SESSION_BUS_ADDRESS': f'unix:path={host_runtime}/bus'}\n"
+        "    escape = subprocess.run(['systemd-run', '--user', '--wait', '--quiet', 'true'], env=escape_env)\n"
+        "    if escape.returncode == 0:\n"
+        "        raise SystemExit(f'reviewer could reach host user manager at {host_runtime}')\n"
         "args = sys.argv[1:]\n"
         "out = pathlib.Path(args[args.index('--output-last-message') + 1])\n"
         f"semantic = {semantic!r}\n"
@@ -576,6 +593,8 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
     )
 
     assert receipt.verdict == "signed_off"
+    assert not (repo / "reviewer-mutation.txt").exists()
+    assert not Path("/tmp/reviewer-private-tmp-proof").exists()
     assert {session.session_id for session in receipt.reviewer_sessions} == {
         "codex:fresh-correctness",
         "codex:fresh-test-evidence",

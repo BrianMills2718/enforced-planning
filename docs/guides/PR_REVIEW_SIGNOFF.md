@@ -24,8 +24,22 @@ planning format and must not invent or weaken criteria.
 2. deterministic execution of argument-vector commands without a shell, under
    a fail-closed systemd read-only mount for the frozen checkout and a private
    network namespace with GitHub/SSH credential environment variables cleared;
-3. one fresh ephemeral Codex process per semantic review lane in a read-only
-   sandbox;
+3. one fresh ephemeral Codex process per semantic review lane inside an
+   OS-enforced read-only filesystem unit, with only its lane-private receipt,
+   temp, and ephemeral Codex-home directory writable; the temporary home gets
+   only the authentication material required to start the client and is deleted
+   with the review workspace. Each unit receives a private writable `/tmp` tmpfs
+   without exposing host temporary storage. The canonical host
+   user-runtime directory
+   at `/run/user/<uid>` is hidden unconditionally and replaced with a lane-private
+   runtime so a reviewer cannot ask the user systemd manager or session bus to
+   launch a process outside the boundary, even through another mount alias or by
+   addressing its socket directly. The ephemeral lane directories live inside
+   the frozen checkout. Codex runs in its documented externally-sandboxed mode;
+   the outer OS unit reopens only those exact temporary subtrees, clears GitHub
+   and SSH mutation credentials, and remains the authoritative read-only boundary
+   for the rest of the checkout and host. The subtrees are deleted before the
+   clean-head recheck;
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
 6. the final deterministic signoff decision and receipt digest; and

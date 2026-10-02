@@ -182,6 +182,15 @@ python scripts/check_doc_coupling.py --validate-config
 python scripts/check_doc_coupling.py --base HEAD~5
 ```
 
+### Acknowledging gaps (`.doc-coupling-acks`)
+
+`--ack-file PATH` loads a YAML list of `{path, reason}` entries. When
+`--ack-file` is omitted, the checker itself defaults to
+`<git toplevel>/.doc-coupling-acks` if that file exists, so a consumer repo's
+older or locally diverged pre-commit hook that never passes `--ack-file` still
+honors it. An explicit `--ack-file` wins. A violation is acknowledged only when
+every one of its expected docs has an entry with a non-empty reason.
+
 ### Handling Violations
 
 **Option 1: Update the doc** (preferred)

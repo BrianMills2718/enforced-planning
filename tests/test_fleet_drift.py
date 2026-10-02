@@ -591,3 +591,31 @@ def test_makefile_json_target_is_silenced() -> None:
     ]
     assert recipe, "fleet-drift-json recipe not found"
     assert all(line.lstrip("\t").startswith("@") for line in recipe)
+
+
+def test_default_scan_roots_include_flat_code_root_under_home() -> None:
+    home = Path.home()
+    assert str(home / "code") in m.DEFAULT_SCAN_ROOTS
+    assert str(home / "code" / "active") in m.DEFAULT_SCAN_ROOTS
+    assert str(home / "projects") in m.DEFAULT_SCAN_ROOTS
+
+
+def test_flat_root_discovery_dedupes_symlinks_and_skips_mega(tmp_path: Path) -> None:
+    canonical = tmp_path / "canonical"
+    canonical.mkdir()
+    flat = tmp_path / "code"
+    legacy = tmp_path / "projects"
+    for d in (flat, legacy):
+        d.mkdir()
+    real = flat / "consumer"
+    (real / m.PACKAGE_DIR).mkdir(parents=True)
+    (real / m.PACKAGE_DIR / "x.py").write_text("x = 1\n")
+    # Same repo reachable via the legacy root, plus a skipped symlink and -mega dir.
+    (legacy / "consumer").symlink_to(real, target_is_directory=True)
+    (flat / "alias").symlink_to(real, target_is_directory=True)
+    mega = flat / "thing-mega"
+    (mega / m.PACKAGE_DIR).mkdir(parents=True)
+
+    consumers, _dups = m.discover_consumers([legacy, flat], canonical)
+
+    assert consumers == [Path(real.resolve())]

@@ -162,6 +162,44 @@ def canonical_repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def reject_self_removing_invocation(
+    branch: str,
+    *,
+    invocation_cwd: Path,
+    pr_number: int,
+) -> bool:
+    """Refuse closeout when the caller's cwd is inside the lane being removed.
+
+    Changing cwd inside this child process does not change the parent tool
+    runner's cwd.  If closeout removes that linked worktree, hooks dispatched
+    after this command return will start from a vanished directory.
+    """
+
+    worktree_path = find_worktree_for_branch(branch)
+    if worktree_path is None:
+        return False
+
+    resolved_cwd = invocation_cwd.expanduser().resolve()
+    resolved_worktree = worktree_path.expanduser().resolve()
+    if resolved_cwd != resolved_worktree and not resolved_cwd.is_relative_to(
+        resolved_worktree
+    ):
+        return False
+
+    root = canonical_repo_root()
+    rerun = (
+        f"cd {shlex.quote(str(root))} && "
+        f"python scripts/merge_pr.py {pr_number}"
+    )
+    print(
+        "HIGH: refusing to merge from inside the linked worktree that atomic "
+        "closeout would remove. The parent tool runner would retain this cwd, "
+        "causing post-tool hooks to start from a deleted directory."
+    )
+    print(f"   Re-run from the canonical root: {rerun}")
+    return True
+
+
 def release_claim_for_branch(branch: str) -> bool:
     """Release any claim associated with this branch. PR merged = work done.
 
@@ -375,6 +413,7 @@ def merge_pr(
     dry_run: bool = False,
     *,
     defer_closeout: bool = False,
+    invocation_cwd: Path | None = None,
 ) -> bool:
     """Merge a PR and close its lane, or explicitly defer that closeout."""
     print(f"🔍 Checking PR #{pr_number}...")
@@ -386,6 +425,18 @@ def merge_pr(
             f"❌ Refusing to merge PR #{pr_number}: its head branch could not be "
             "resolved, so closeout cannot be bound to an exact lane."
         )
+        return False
+
+    if (
+        not dry_run
+        and not defer_closeout
+        and invocation_cwd is not None
+        and reject_self_removing_invocation(
+            branch,
+            invocation_cwd=invocation_cwd,
+            pr_number=pr_number,
+        )
+    ):
         return False
 
     # Fetch latest
@@ -460,8 +511,9 @@ def merge_pr(
 
 
 def main() -> int:
-    # Prevent CWD-in-deleted-worktree issue
-    # Always run from project root, not from a worktree that may be deleted
+    # Preserve the caller cwd before changing this child process to the stable
+    # control checkout. The caller itself cannot be moved by os.chdir().
+    invocation_cwd = Path.cwd()
     project_root = canonical_repo_root()
     os.chdir(project_root)
 
@@ -494,6 +546,7 @@ def main() -> int:
             args.pr,
             args.dry_run,
             defer_closeout=args.defer_closeout,
+            invocation_cwd=invocation_cwd,
         )
         else 1
     )

@@ -1270,6 +1270,22 @@ def session_root_conflicts(
     )
 
 
+def normalize_parent_scope(parent_scope: str | None, project: str | None) -> str | None:
+    """Store a parent scope as the bare scope its parent claim records.
+
+    The root-lane error prints lanes as ``<project>:<scope>`` and tells the
+    agent to start a child with ``--parent-scope``; agents then pass that
+    printed form. Every parent lookup compares against the bare ``scope``, so a
+    prefixed value never matched and the child could never be closed
+    (brent-chatgpt, 2026-10-02). Strip the claim's own project prefix.
+    """
+
+    if not parent_scope or not project:
+        return parent_scope
+    prefix = f"{project}:"
+    return parent_scope[len(prefix):] if parent_scope.startswith(prefix) else parent_scope
+
+
 def validate_session_root_for_creation(
     candidate: ClaimRecord,
     *,
@@ -2962,7 +2978,10 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         heartbeat_at=data.get("heartbeat_at") if isinstance(data.get("heartbeat_at"), str) else None,
         status=status,
         updated_at=data.get("updated_at") if isinstance(data.get("updated_at"), str) else None,
-        parent_scope=data.get("parent_scope") if isinstance(data.get("parent_scope"), str) else None,
+        parent_scope=normalize_parent_scope(
+            data.get("parent_scope") if isinstance(data.get("parent_scope"), str) else None,
+            projects[0] if projects else None,
+        ),
         notes=data.get("notes") if isinstance(data.get("notes"), str) else None,
         plan_ref=data.get("plan_ref") if isinstance(data.get("plan_ref"), str) else None,
         source_file=source_file,
@@ -3354,7 +3373,7 @@ def build_candidate_claim(
         heartbeat_at=heartbeat_at,
         status=status,
         updated_at=updated_at,
-        parent_scope=parent_scope,
+        parent_scope=normalize_parent_scope(parent_scope, project),
         notes=notes,
         plan_ref=plan_ref,
         source_file=None,

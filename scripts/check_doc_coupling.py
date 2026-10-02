@@ -307,6 +307,31 @@ def print_suggestions(changed_files: set[str], couplings: list[dict]) -> None:
         print()
 
 
+DEFAULT_ACK_FILENAME = ".doc-coupling-acks"
+
+
+def default_ack_file() -> Path | None:
+    """Return `<git toplevel>/.doc-coupling-acks` when it exists, else None.
+
+    Consumer repos carry diverged copies of the pre-commit hook that call this
+    checker without --ack-file, so the checker itself honors the repo's ack file.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    top = result.stdout.strip()
+    if not top:
+        return None
+    candidate = Path(top) / DEFAULT_ACK_FILENAME
+    return candidate if candidate.is_file() else None
+
+
 def main() -> int:
     """CLI entry point. Parses args and checks that docs are updated when coupled source files change."""
     parser = argparse.ArgumentParser(description="Check doc-code coupling")
@@ -343,9 +368,13 @@ def main() -> int:
     parser.add_argument(
         "--ack-file",
         default=None,
-        help="Path to YAML file with acknowledged gaps (path + reason per entry)",
+        help="Path to YAML file with acknowledged gaps (path + reason per entry); defaults to <repo root>/.doc-coupling-acks when present",
     )
     args = parser.parse_args()
+    if not args.ack_file:
+        default_ack = default_ack_file()
+        if default_ack is not None:
+            args.ack_file = str(default_ack)
 
     config_path = resolve_config_path(args.config)
     if not config_path.exists():

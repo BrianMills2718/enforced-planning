@@ -55,7 +55,14 @@ SCHEMA = "fleet_drift/v1"
 PACKAGE_DIR = "enforced_planning"
 NULL_BLOB = "0" * 40
 
-DEFAULT_SCAN_ROOTS = ("/home/brian/projects", "/home/brian/code/active")
+_HOME = Path.home()
+#: `~/code` is the flat workspace root; `~/projects` and `~/code/active` are the
+#: legacy layouts. Overlaps are de-duplicated by realpath in discover_consumers.
+DEFAULT_SCAN_ROOTS = (
+    str(_HOME / "projects"),
+    str(_HOME / "code" / "active"),
+    str(_HOME / "code"),
+)
 DEFAULT_SCAN_DEPTH = 2
 DEFAULT_PROJECT_GRAPH = "/home/brian/code/active/project-meta/PROJECT_GRAPH.json"
 
@@ -426,7 +433,7 @@ def _iter_vendored_dirs(scan_root: Path, max_depth: int):
         for child in children:
             if not child.is_dir() or child.is_symlink():
                 continue
-            if child.name in SKIP_DIR_NAMES:
+            if child.name in SKIP_DIR_NAMES or child.name.endswith("-mega"):
                 continue
             if child.name == PACKAGE_DIR:
                 yield child

@@ -124,3 +124,105 @@ def test_validate_config_reports_missing_source_paths(
     )
 
     assert warnings == ["Coupled source doesn't exist: docs/missing-policy.md"]
+
+
+# --- default .doc-coupling-acks discovery (project-meta#2314) ---------------
+
+import subprocess
+import sys
+
+import yaml
+
+_SCRIPT = REPO_ROOT / "scripts" / "meta" / "check_doc_coupling.py"
+
+
+def _make_repo(tmp_path: Path, acks=None) -> Path:
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "src.py").write_text("x = 1\n")
+    (repo / "A.md").write_text("a\n")
+    (repo / "B.md").write_text("b\n")
+    (repo / "scripts" / "relationships.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "couplings": [
+                    {
+                        "sources": ["src.py"],
+                        "docs": ["A.md", "B.md"],
+                        "description": "src needs docs",
+                        "strict": True,
+                    }
+                ]
+            }
+        )
+    )
+    for cmd in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "t@example.com"],
+        ["git", "config", "user.name", "t"],
+        ["git", "add", "-A"],
+        ["git", "commit", "-q", "-m", "init"],
+    ):
+        subprocess.run(cmd, cwd=repo, check=True)
+    (repo / "src.py").write_text("x = 2\n")
+    subprocess.run(["git", "add", "src.py"], cwd=repo, check=True)
+    if acks is not None:
+        (repo / ".doc-coupling-acks").write_text(yaml.safe_dump(acks))
+    return repo
+
+
+def _run(repo: Path, *extra: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(_SCRIPT), "--staged", "--strict", *extra],
+        cwd=cwd or repo,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_no_ack_file_violation_still_fails(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path)
+    result = _run(repo)
+    assert result.returncode == 1, result.stdout + result.stderr
+
+
+def test_default_ack_file_covering_all_docs_passes_without_flag(tmp_path: Path) -> None:
+    acks = [{"path": "A.md", "reason": "ok"}, {"path": "B.md", "reason": "ok"}]
+    repo = _make_repo(tmp_path, acks)
+    result = _run(repo)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ACKNOWLEDGED GAPS" in result.stdout
+
+
+def test_default_ack_file_found_from_subdirectory_via_git_root(tmp_path: Path) -> None:
+    acks = [{"path": "A.md", "reason": "ok"}, {"path": "B.md", "reason": "ok"}]
+    repo = _make_repo(tmp_path, acks)
+    # config path is cwd-relative, so pass it explicitly from a subdirectory.
+    result = _run(
+        repo, "--config", str(repo / "scripts" / "relationships.yaml"), cwd=repo / "scripts"
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_default_ack_empty_reason_still_fails(tmp_path: Path) -> None:
+    acks = [{"path": "A.md", "reason": "ok"}, {"path": "B.md", "reason": "  "}]
+    repo = _make_repo(tmp_path, acks)
+    assert _run(repo).returncode == 1
+
+
+def test_default_ack_covering_only_some_docs_still_fails(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path, [{"path": "A.md", "reason": "ok"}])
+    assert _run(repo).returncode == 1
+
+
+def test_explicit_ack_file_overrides_default(tmp_path: Path) -> None:
+    good = [{"path": "A.md", "reason": "ok"}, {"path": "B.md", "reason": "ok"}]
+    repo = _make_repo(tmp_path, good)
+    other = tmp_path / "other-acks"
+    other.write_text(yaml.safe_dump([{"path": "A.md", "reason": "only one"}]))
+    assert _run(repo, "--ack-file", str(other)).returncode == 1
+    # and the reverse: explicit full ack passes even when default is partial
+    repo2 = _make_repo(tmp_path / "second", [{"path": "A.md", "reason": "ok"}])
+    full = tmp_path / "full-acks"
+    full.write_text(yaml.safe_dump(good))
+    assert _run(repo2, "--ack-file", str(full)).returncode == 0

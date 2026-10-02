@@ -1077,6 +1077,9 @@ rights over another lane's paths, and grouping does not link lifecycles the way
 A runtime session may own one unparented live claim root by default. Claim type
 classifies work and path-conflict behavior; it does not exempt a lane from
 session-root lifecycle enforcement. Related work must declare `parent_scope`.
+`--parent-scope` takes the parent's bare scope or the `<project>:<scope>` form
+the root-lane error prints; the claim's own project prefix is stripped on write
+and on read, so older children recorded with the prefix also find their parent.
 Before opening an unrelated root, close or transfer the existing root; use
 `SESSION_ALLOW_PARALLEL=1` / `--allow-parallel` only when multiple roots are an
 intentional part of the adopted plan graph. The claim check runs before branch

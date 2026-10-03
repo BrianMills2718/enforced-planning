@@ -41,3 +41,19 @@ def test_does_not_rewrite_unrelated_missing_path_with_worktrees_segment(
     missing = tmp_path / "not-a-repo" / "worktrees" / "feat" / "branch"
 
     assert resolve_canonical_repo_root(missing) == missing.resolve()
+
+
+def test_resolves_claude_harness_worktree_to_owning_repo(tmp_path: Path) -> None:
+    repo = tmp_path / "sample"
+    _init_repo(repo)
+    harness_worktree = repo / ".claude" / "worktrees" / "agent-abc123"
+    harness_worktree.mkdir(parents=True)
+
+    assert resolve_canonical_repo_root(harness_worktree) == repo.resolve()
+
+
+def test_does_not_rewrite_claude_dir_without_owning_repo(tmp_path: Path) -> None:
+    orphan = tmp_path / ".claude" / "worktrees" / "agent-abc123"
+    orphan.mkdir(parents=True)
+
+    assert resolve_canonical_repo_root(orphan) == orphan.resolve()

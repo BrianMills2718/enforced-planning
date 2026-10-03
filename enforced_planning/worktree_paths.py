@@ -28,6 +28,12 @@ def resolve_canonical_repo_root(repo_root: Path) -> Path:
             canonical_repo_root = ancestor.parent.resolve()
             if (canonical_repo_root / ".git").exists():
                 return canonical_repo_root
+            # Claude Code harness worktrees (EnterWorktree) live at
+            # <repo>/.claude/worktrees/<name>; the owning repo is one level up.
+            if ancestor.parent.name == ".claude":
+                canonical_repo_root = ancestor.parent.parent.resolve()
+                if (canonical_repo_root / ".git").exists():
+                    return canonical_repo_root
         if ancestor.name.endswith("_worktrees"):
             workspace_root = ancestor.parent
             canonical_name = ancestor.name.removesuffix("_worktrees")

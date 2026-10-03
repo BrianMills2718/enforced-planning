@@ -930,6 +930,22 @@ def _plan_git_hook_activation(repo_root: Path) -> tuple[str | None, str | None]:
     if inside.returncode != 0:
         return None, None
 
+    # A linked worktree shares its git config (and so core.hooksPath) with the main
+    # checkout. That value belongs to the main checkout: it is not a custom hook stack
+    # to refuse, and writing it from here would change every sibling worktree.
+    common = subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if common.returncode == 0:
+        git_dir = (repo_root / inside.stdout.strip()).resolve()
+        common_dir = (repo_root / common.stdout.strip()).resolve()
+        if git_dir != common_dir:
+            return None, None
+
     configured = subprocess.run(
         ["git", "config", "--local", "--get", "core.hooksPath"],
         cwd=str(repo_root),

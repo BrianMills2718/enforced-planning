@@ -2647,6 +2647,39 @@ def test_worktree_rollout_refuses_to_replace_custom_git_hook_path(tmp_path: Path
     assert not (tmp_path / "hooks" / "pre-push").exists()
 
 
+def test_worktree_rollout_in_linked_worktree_ignores_shared_hooks_path(tmp_path: Path) -> None:
+    """A linked worktree inherits the main checkout's core.hooksPath; that is not a custom stack."""
+
+    main = tmp_path / "main"
+    main.mkdir()
+    _git(main, "init", "-q", "-b", "main")
+    _git(main, "config", "user.email", "t@example.com")
+    _git(main, "config", "user.name", "t")
+    _write_minimal_claude(main)
+    (main / "Makefile").write_text("help:\n\t@echo hello\n", encoding="utf-8")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "init")
+    _git(main, "config", "--local", "core.hooksPath", str(main / "hooks"))
+    linked = tmp_path / "linked"
+    _git(main, "worktree", "add", "-q", "-b", "feature", str(linked))
+    assert _git(linked, "config", "--local", "--get", "core.hooksPath") == str(main / "hooks")
+
+    result = _run(
+        "--repo-root",
+        str(linked),
+        "--write",
+        "--worktree-only",
+        "--json",
+        cwd=PROJECT_META_ROOT,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["blockers"] == []
+    assert "configure:git.core.hooksPath=hooks" not in payload["applied_actions"]
+    assert _git(main, "config", "--local", "--get", "core.hooksPath") == str(main / "hooks")
+
+
 def test_worktree_rollout_repairs_non_executable_pre_push_hook(tmp_path: Path) -> None:
     """Content equality must not conceal an inactive non-executable hook."""
 

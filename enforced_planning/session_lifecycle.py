@@ -3030,10 +3030,38 @@ def _captured_lane_preflight(
     )
 
 
+def _is_closed_lane_placeholder(path: Path) -> bool:
+    """Return whether ``path`` is the empty directory a closed lane leaves behind."""
+
+    try:
+        return path.is_dir() and not any(path.iterdir())
+    except OSError:
+        return False
+
+
+def _leave_closed_lane_placeholder(worktree_path: Path) -> None:
+    """Recreate the removed lane path as an empty directory.
+
+    Another live agent session (a parent of the closing subagent, or a sibling)
+    can still record the lane as its working directory; that location is held
+    inside the agent client, not in any OS process this closeout can see or
+    move. When the path vanished, the CC Safety Net hook refused every tool
+    call in those sessions until a human restarted them (process_tracing,
+    2026-10-05; project-meta policy friction session-close-deletes-active-cwd).
+    An empty directory keeps their working directory valid, and ``git worktree
+    add`` accepts an empty target, so the lane name stays reusable.
+    """
+
+    try:
+        worktree_path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+
 def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
     """Remove one worktree path from a safe root-anchored control session."""
 
-    if not worktree_path.exists():
+    if not worktree_path.exists() or _is_closed_lane_placeholder(worktree_path):
         return "already_missing"
     if _cwd_inside(worktree_path):
         os.chdir(repo_root)
@@ -3060,6 +3088,7 @@ def _remove_worktree_path(repo_root: Path, worktree_path: Path) -> str:
         )
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip())
+    _leave_closed_lane_placeholder(worktree_path)
     return "removed"
 
 

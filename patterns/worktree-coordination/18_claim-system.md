@@ -1,5 +1,20 @@
 # Pattern: Claim System
 
+> **Superseded (enforced-planning #610, 2026-10-05).** The repo-local
+> `.claude/active-work.yaml` store and the `check_claims.py --claim/--feature/
+> --check-files/--list-features/--cleanup` commands below are retired. Claims
+> now live only in the canonical registry under
+> `~/.claude/coordination/claims/`, managed by
+> `python scripts/meta/check_coordination_claims.py --help` and the lane
+> commands in `docs/guides/WORKTREE_COORDINATION_OPERATOR_GUIDE.md`
+> (`make maintenance-worktree`, `make worktree`, `make session-close`).
+> `check_claims.py` remains only as a compatibility facade: it translates
+> `--release --id BRANCH`, `--verify-branch BRANCH`, and `--verify-claim` to
+> the canonical registry and rejects the retired flags with migration guidance.
+> A claim whose worktree or branch still exists is not released by the facade;
+> close it with `make session-close`. The rest of this page is kept as history
+> of the scope-claim idea.
+
 ## Problem
 
 When multiple AI instances (or developers) work in parallel:

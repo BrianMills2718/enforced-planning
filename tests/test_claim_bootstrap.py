@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 from dataclasses import replace
@@ -2631,6 +2632,42 @@ def test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths(
     assert (repo / "worktrees" / "fix" / "lane-b").is_dir()
     scopes = {claim.scope for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)}
     assert {"fix/lane-a", "fix/lane-b"} <= scopes
+
+
+def test_typed_maintenance_parallel_root_ignores_same_relative_path_in_another_project(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A root in another repository cannot overlap this lane's repo-relative paths."""
+    repo = _governed_repo(tmp_path)
+    other = tmp_path / "other-repo"
+    shutil.copytree(repo, other)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(
+            json.dumps(_maintenance_payload(repo, scope="fix/lane-a", branch="fix/lane-a", write_paths=["CLAUDE.md"]))
+        )
+    )
+
+    same_project_same_path = claim_bootstrap.parse_request_json(
+        json.dumps(
+            _maintenance_payload(
+                repo, scope="fix/lane-c", branch="fix/lane-c", write_paths=["CLAUDE.md"], allow_parallel=True
+            )
+        )
+    )
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
+        claim_bootstrap.execute_request(same_project_same_path)
+
+    other_project_same_path = claim_bootstrap.parse_request_json(
+        json.dumps(
+            _maintenance_payload(
+                other, scope="fix/lane-x", branch="fix/lane-x", write_paths=["CLAUDE.md"], allow_parallel=True
+            )
+        )
+    )
+    claim_bootstrap.execute_request(other_project_same_path)
+    assert (other / "worktrees" / "fix" / "lane-x").is_dir()
 
 
 def _lane_path_released(path) -> bool:

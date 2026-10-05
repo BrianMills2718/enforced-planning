@@ -28,7 +28,6 @@ GITHUB_TOKEN_ENV_VARS: tuple[str, ...] = (
 )
 
 IGNORABLE_STATUS_PREFIXES: tuple[str, ...] = (
-    "?? .claude/active-work.yaml",
     "?? .claude/sessions/",
 )
 

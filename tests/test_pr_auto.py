@@ -57,7 +57,11 @@ def test_origin_matches_expected_repo_compares_repo_name_only() -> None:
 
 
 def test_filter_non_ignorable_status_lines_drops_known_transient_metadata() -> None:
-    """Status filter should remove active-work/session noise and keep real dirt."""
+    """Status filter should remove session noise and keep real dirt.
+
+    The retired ``.claude/active-work.yaml`` is no longer transient metadata
+    (enforced-planning #610): a leftover copy is surfaced, not hidden.
+    """
     module = _load()
 
     filtered = module.filter_non_ignorable_status_lines(  # type: ignore[attr-defined]
@@ -69,6 +73,7 @@ def test_filter_non_ignorable_status_lines_drops_known_transient_metadata() -> N
     )
 
     assert filtered == [
+        "?? .claude/active-work.yaml",
         "M docs/plans/83_scripts-meta-wave10-merge-pr-and-pr-auto-convergence.md",
     ]
 

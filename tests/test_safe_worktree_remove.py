@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 
@@ -195,3 +196,56 @@ def test_provisioning_marker_blocks_removal_even_in_force_mode(tmp_path: Path) -
     assert blocked
     assert reason == "provisioning"
     assert info == {"marker_path": str(marker)}
+
+
+INSTALLED_MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "meta"
+    / "worktree-coordination"
+    / "safe_worktree_remove.py"
+)
+
+
+def _load_from(path: Path, name: str) -> object:
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+
+@pytest.mark.parametrize(
+    ("module_path", "module_name"),
+    [
+        (MODULE_PATH, "safe_worktree_remove_source_610"),
+        (INSTALLED_MODULE_PATH, "safe_worktree_remove_installed_610"),
+    ],
+)
+def test_retired_active_work_yaml_never_counts_as_a_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    module_path: Path,
+    module_name: str,
+) -> None:
+    """Issue #610: a leftover .claude/active-work.yaml must not claim a worktree."""
+    module = _load_from(module_path, module_name)
+    main_root = tmp_path / "repo"
+    (main_root / ".claude").mkdir(parents=True)
+    worktree_path = tmp_path / "repo" / "worktrees" / "lane"
+    worktree_path.mkdir(parents=True)
+    legacy = main_root / ".claude" / "active-work.yaml"
+    legacy.write_text(
+        yaml.safe_dump({"claims": [{"cc_id": "lane", "worktree_path": str(worktree_path)}]}),
+        encoding="utf-8",
+    )
+    empty_claims_dir = tmp_path / "claims"
+    empty_claims_dir.mkdir()
+    monkeypatch.setattr(module, "get_main_repo_root", lambda: main_root)
+    monkeypatch.setattr(module.coordination_claims, "CLAIMS_DIR", empty_claims_dir)  # type: ignore[attr-defined]
+
+    claimed, info = module.check_worktree_claimed(str(worktree_path))  # type: ignore[attr-defined]
+
+    assert (claimed, info) == (False, None)

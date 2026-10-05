@@ -75,37 +75,47 @@ def get_plan_number_from_branch(branch: str) -> int | None:
     return None
 
 
+def _canonical_claim_plan_number(branch: str) -> int | None:
+    """Return the plan number recorded on the live canonical claim for ``branch``.
+
+    Claims live in the package-backed registry (``~/.claude/coordination/claims``);
+    the retired repo-local ``.claude/active-work.yaml`` is never read
+    (enforced-planning #610). Consumers installed without the
+    ``enforced_planning`` package have no canonical registry to consult.
+    """
+    if not branch:
+        return None
+    for ancestor in Path(__file__).resolve().parents:
+        if (ancestor / "enforced_planning").is_dir():
+            if str(ancestor) not in sys.path:
+                sys.path.insert(0, str(ancestor))
+            break
+    try:
+        from enforced_planning import coordination_claims
+    except ImportError:
+        return None
+    for claim in coordination_claims.check_claims():
+        if claim.branch != branch or not claim.is_live():
+            continue
+        identity = coordination_claims.normalize_plan_identity(claim.plan_ref)
+        match = re.fullmatch(r"Plan #(\d+)", identity or "")
+        if match:
+            return int(match.group(1))
+    return None
+
+
 def get_active_plan_number() -> int | None:
     """Get the plan number for the current work context.
 
     Tries in order:
     1. Branch name (plan-NN-xxx)
-    2. Active claim from .claude/active-work.yaml
+    2. The live canonical claim for the current branch
     """
-    # Try branch name first
     branch = get_current_branch()
     plan_num = get_plan_number_from_branch(branch)
     if plan_num:
         return plan_num
-
-    # Try active claims
-    main_root = get_main_repo_root()
-    claims_file = main_root / ".claude/active-work.yaml"
-
-    if claims_file.exists():
-        try:
-            import yaml  # type: ignore[import-untyped]
-            with open(claims_file) as f:
-                data = yaml.safe_load(f) or {}
-
-            claims = data.get("claims", [])
-            for claim in claims:
-                if claim.get("cc_id") == branch and claim.get("plan"):
-                    return claim["plan"]
-        except Exception:
-            pass
-
-    return None
+    return _canonical_claim_plan_number(branch)
 
 
 def find_plan_file(plan_number: int) -> Path | None:

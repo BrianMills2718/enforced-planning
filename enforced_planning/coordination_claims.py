@@ -4459,6 +4459,32 @@ def release_claim(
     return False, f"No claim found for {agent} → {project}:{scope}"
 
 
+def release_claims_for_branch(branch: str) -> tuple[int, list[str]]:
+    """Release every live canonical claim attached to one branch.
+
+    Backs the legacy ``worktree-coordination/check_claims.py --release --id
+    BRANCH`` facade (called by ``merge_pr.py`` after a merge). A managed lane
+    whose worktree or branch still exists is refused by :func:`release_claim`
+    with a ``ValueError`` naming ``session-close``; that error propagates so the
+    caller can exit non-zero with the message instead of silently succeeding.
+    """
+
+    normalized = branch.strip()
+    if not normalized:
+        raise ValueError("branch must be non-empty")
+    released: list[str] = []
+    for claim in check_claims():
+        if claim.branch != normalized:
+            continue
+        project = claim.primary_project()
+        if not project:
+            continue
+        ok, message = release_claim(claim.agent, project, claim.scope)
+        if ok:
+            released.append(message)
+    return len(released), released
+
+
 def _archive_completed_claim_locked(
     claim_file: Path,
     *,

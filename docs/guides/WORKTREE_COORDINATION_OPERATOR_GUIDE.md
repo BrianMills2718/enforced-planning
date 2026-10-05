@@ -49,10 +49,16 @@ It also admits the bounded qualitative skill-feedback logger so closeout can
 still report control friction. Mutation-capable claim operations and composed
 shell commands continue to require ordinary claim authority.
 
-The older repo-local `.claude/active-work.yaml` plus legacy
-`scripts/meta/worktree-coordination/check_claims.py` surface may still be
-present in some repos for compatibility. They are not the canonical
-cross-project coordination authority.
+The older repo-local `.claude/active-work.yaml` is retired: no shipped script
+reads it (enforced-planning #610). A leftover copy is surfaced as ordinary
+untracked dirt, never treated as a claim. The legacy
+`scripts/meta/worktree-coordination/check_claims.py` path is now only a facade
+over the canonical registry: `--release --id BRANCH` calls
+`coordination_claims.release_claims_for_branch`, `--verify-branch` and
+`--verify-claim` look up canonical claims, and the retired claim-creation
+flags exit 2 with migration guidance. `merge_pr.py` uses `--release --id` after
+a merge. A claim whose worktree or branch still exists is refused (exit 1,
+naming `session-close`); close that lane with `make session-close`.
 
 ### A claim file with invalid YAML does not silently vanish
 
@@ -653,7 +659,9 @@ Use ordinary `session-close` for real linked worktrees and
 `make maintenance-worktree` refuses a second lane while the session already
 owns a claim root, unless `SESSION_ALLOW_PARALLEL=1` is set and every declared
 write path of the new lane is narrow (not `.`) and disjoint from each existing
-root's write paths. The new claim then records `parallel_root_authorized`. This
+root's write paths. Write paths are repository-relative, so a root in a
+different project never overlaps: there the new lane's paths need only be
+narrow. The new claim then records `parallel_root_authorized`. This
 replaced a blanket one-root rule that forced unrelated fixes into unrelated
 PRs (project-meta policy friction `one-claim-root-per-session`, 2026-10-05).
 

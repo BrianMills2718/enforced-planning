@@ -666,7 +666,8 @@ working directory; the agent client holds that location, so closeout cannot see
 or move it. When the path vanished, the CC Safety Net hook refused every tool
 call in those sessions until a human restarted them (process_tracing,
 2026-10-05; project-meta policy friction `session-close-deletes-active-cwd`).
-An empty directory at the lane path counts as already removed, and
+An empty directory at the lane path counts as already removed (including the
+`worktree_present_before` field of session-ended reconciliation receipts), and
 `git worktree add` accepts it, so the lane name stays reusable.
 
 ### Session-ended claim with a stale tracker identity

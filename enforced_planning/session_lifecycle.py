@@ -600,7 +600,7 @@ def _validate_session_ended_closeout_reconciliation(
                 "owner" if claim.session_id == resolved_actor else "successor"
             ),
             "recorded_worktree_path": str(recorded_worktree),
-            "worktree_present_before": recorded_worktree.is_dir(),
+            "worktree_present_before": recorded_worktree.is_dir() and not _is_closed_lane_placeholder(recorded_worktree),
             "claim_sha256": actual_claim_digest,
             "tracker_path": None,
             "tracker_sha256": None,
@@ -627,7 +627,7 @@ def _validate_session_ended_closeout_reconciliation(
             "owner" if claim.session_id == resolved_actor else "successor"
         ),
         "recorded_worktree_path": str(recorded_worktree),
-        "worktree_present_before": recorded_worktree.is_dir(),
+        "worktree_present_before": recorded_worktree.is_dir() and not _is_closed_lane_placeholder(recorded_worktree),
         "claim_sha256": actual_claim_digest,
         "tracker_path": str(tracker),
         "tracker_sha256": actual_tracker_digest,

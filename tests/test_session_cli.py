@@ -1566,7 +1566,7 @@ def test_parent_can_create_and_revoke_one_pristine_delegated_child(
     )
     assert revoked["action"] == "delegated_revoked"
     assert revoked["canonical_lock_reconciliation_required"] is True
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert not (
         claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "fix/delegated-child")
     ).exists()
@@ -1709,7 +1709,7 @@ def test_delegated_revoke_retries_exact_completed_child_after_archive_failure(
     )
     stranded = yaml.safe_load(child_claim_path.read_text(encoding="utf-8"))
     assert stranded["status"] == "completed"
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
 
     retried = session_lifecycle.revoke_delegated_session(**revoke_args)
     assert retried["action"] == "delegated_revoked"
@@ -3406,7 +3406,7 @@ def test_close_session_closes_branch_merged_to_default(
 
     assert payload["action"] == "closed"
     assert payload["disposition"] == "merged"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     branch_check = subprocess.run(
         ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
         cwd=repo_root,
@@ -3657,7 +3657,7 @@ def test_close_session_terminalizes_merged_child_then_parent_closes_shared_workt
 
     assert parent_result["action"] == "closed"
     assert not parent_claim_file.exists()
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
 
 
 def test_close_session_accepts_exact_squash_merge_patch_receipt(
@@ -3692,7 +3692,7 @@ def test_close_session_accepts_exact_squash_merge_patch_receipt(
     assert payload["merged_to_default"] is True
     assert payload["merge_commit"] == merge_commit
     assert payload["merge_evidence"] == "squash_patch_equivalent"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["merge_commit"] == merge_commit
@@ -3793,7 +3793,7 @@ def test_close_session_accepts_squash_patch_after_independent_same_file_change(
 
     assert payload["action"] == "closed"
     assert payload["merge_evidence"] == "squash_patch_equivalent"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["merge_commit"] == merge_commit
@@ -3852,7 +3852,7 @@ def test_close_session_accepts_squash_patch_after_independent_earlier_same_file_
 
     assert payload["action"] == "closed"
     assert payload["merge_evidence"] == "squash_patch_equivalent"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     claim_payload = _archived_claim_payload(payload["claim_archive_id"])
     assert claim_payload["merge_commit"] == merge_commit
@@ -3926,7 +3926,7 @@ def test_close_session_accepts_branch_merged_to_remote_default_when_local_defaul
     assert payload["merged_to_default"] is True
     assert payload["default_remote_ref"] == "refs/remotes/origin/main"
     assert payload["default_branch_pushed"] is True
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
 
 
 def test_close_session_deletes_merged_branch_with_stale_feature_upstream(
@@ -3972,7 +3972,7 @@ def test_close_session_deletes_merged_branch_with_stale_feature_upstream(
     assert payload["merged_to_default"] is True
     assert payload["force_delete_branch"] is True
     assert payload["branch_action"] == "deleted"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     branch_check = subprocess.run(
         ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
         cwd=repo_root,
@@ -4041,7 +4041,7 @@ def test_close_session_accepts_branch_merged_to_pushed_remote_default_when_local
 
     assert payload["merged_to_default"] is True
     assert payload["default_branch_pushed"] is True
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
 
 
 def test_close_session_accepts_remote_merged_branch_when_local_default_diverges(
@@ -4066,7 +4066,7 @@ def test_close_session_accepts_remote_merged_branch_when_local_default_diverges(
 
     assert payload["merged_to_default"] is True
     assert payload["default_branch_pushed"] is False
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
 
 
 def test_close_session_keeps_canonical_root_after_worktree_removal(
@@ -4180,7 +4180,7 @@ def test_close_session_reanchors_inside_worktree_cwd_before_removal(
     assert not claim_file.exists()
     tracker = yaml.safe_load(tracker_path.read_text(encoding="utf-8"))
     assert tracker["tracker"]["current_phase"] == "closed"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
 
 
 def test_close_session_fails_before_registry_mutation_when_ignored_directory_is_not_deletable(
@@ -4303,7 +4303,7 @@ def test_close_session_records_receipt_after_removing_loaded_runtime_worktree(
     )
 
     assert payload["action"] == "closed"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     assert _archived_claim_payload(payload["claim_archive_id"])["status"] == "completed"
     closeout_receipt = [
@@ -4527,7 +4527,7 @@ def test_close_session_reconciles_foreign_session_ended_linked_worktree(
         )
 
     assert payload["action"] == "closed"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     archived = _archived_claim_payload(payload["claim_archive_id"])
     receipt = archived["session_ended_closeout_reconciliation"]
@@ -4581,7 +4581,7 @@ def test_close_session_reconciles_owner_session_ended_linked_worktree(
         )
 
     assert payload["action"] == "closed"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     receipt = _archived_claim_payload(payload["claim_archive_id"])[
         "session_ended_closeout_reconciliation"
@@ -4640,7 +4640,7 @@ def test_close_session_reconciles_cross_client_session_ended_lane(
         )
 
     assert payload["action"] == "closed"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert not claim_file.exists()
     archived = _archived_claim_payload(payload["claim_archive_id"])
     receipt = archived["session_ended_closeout_reconciliation"]
@@ -4762,7 +4762,7 @@ def test_close_session_ended_reconciliation_retries_after_partial_cleanup(
             session_lifecycle.close_session(**close_kwargs)
         assert claim_file.read_bytes() == claim_before
         assert tracker.read_bytes() == tracker_before
-        assert not worktree.exists()
+        assert _lane_path_released(worktree)
         assert _git(repo_root, "show-ref", "--verify", f"refs/heads/{branch}")
 
         payload = session_lifecycle.close_session(**close_kwargs)
@@ -5232,7 +5232,7 @@ def test_close_session_abandons_unique_branch_only_with_explicit_authorization(
     )
 
     assert payload["disposition"] == "abandoned"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     branch_check = subprocess.run(
         ["git", "show-ref", "--verify", f"refs/heads/{branch}"],
         cwd=repo_root,
@@ -7728,3 +7728,9 @@ def test_claim_cli_stores_relative_worktree_path_as_absolute(
         (claims_dir / coordination_claims._claim_filename("codex", "enforced-planning", "relative-lane")).read_text()
     )
     assert stored["worktree_path"] == str((repo_root / "worktrees" / "lane").resolve())
+
+
+def _lane_path_released(path) -> bool:
+    """A closed lane's path is gone or left as an empty placeholder directory."""
+
+    return not path.exists() or (path.is_dir() and not any(path.iterdir()))

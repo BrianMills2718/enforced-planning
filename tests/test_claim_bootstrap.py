@@ -731,7 +731,7 @@ def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
     )
     assert closed["released"] is True
     assert closed["disposition"] == "merged"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     canonical_lock.unlock_repo(repo)
     assert (repo / "README.md").read_text(encoding="utf-8") == "# Weekly Plans\n"
 
@@ -1774,7 +1774,7 @@ def test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear(
         claim_bootstrap.execute_request(request)
 
     assert observed == {"worktree_exists": True, "branch_exists": True, "claim_exists": True}
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert not any(
         claim.scope == "fix/child-lane"
         for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
@@ -1858,7 +1858,7 @@ def test_delegated_pre_claim_failure_rolls_back_git_artifacts(
         claim_bootstrap.execute_request(request)
 
     assert rollback_calls == 1
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
         capture_output=True,
@@ -1895,7 +1895,7 @@ def test_public_delegated_revoke_reports_completed_when_lock_reconcile_fails(
         "type": "RuntimeError",
         "message": "bounded lock fault",
     }
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert not any(
         claim.scope == "fix/child-lane"
         for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
@@ -2129,7 +2129,7 @@ def test_typed_maintenance_rolls_back_partial_session_start_before_git_artifacts
         claim_bootstrap.execute_request(request)
 
     worktree = repo / "worktrees" / "fix" / "safe-lane"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert claim_bootstrap.coordination_claims.check_claims(repo.name) == []
     assert list(trackers_dir.rglob("*.yaml")) == []
     assert subprocess.run(
@@ -2631,3 +2631,9 @@ def test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths(
     assert (repo / "worktrees" / "fix" / "lane-b").is_dir()
     scopes = {claim.scope for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)}
     assert {"fix/lane-a", "fix/lane-b"} <= scopes
+
+
+def _lane_path_released(path) -> bool:
+    """A closed lane's path is gone or left as an empty placeholder directory."""
+
+    return not path.exists() or (path.is_dir() and not any(path.iterdir()))

@@ -648,6 +648,28 @@ contents, and submodules. It never calls worktree removal or branch deletion.
 Use ordinary `session-close` for real linked worktrees and
 `--reconcile-missing-worktree` only for an already-absent recorded worktree.
 
+### Several lanes in one session
+
+`make maintenance-worktree` refuses a second lane while the session already
+owns a claim root, unless `SESSION_ALLOW_PARALLEL=1` is set and every declared
+write path of the new lane is narrow (not `.`) and disjoint from each existing
+root's write paths. The new claim then records `parallel_root_authorized`. This
+replaced a blanket one-root rule that forced unrelated fixes into unrelated
+PRs (project-meta policy friction `one-claim-root-per-session`, 2026-10-05).
+
+### A closed lane leaves an empty directory
+
+Ordinary `session-close` removes the linked worktree and then recreates its path
+as an empty directory. Another live agent session, such as the parent or a
+sibling of the subagent that closed the lane, can still record that path as its
+working directory; the agent client holds that location, so closeout cannot see
+or move it. When the path vanished, the CC Safety Net hook refused every tool
+call in those sessions until a human restarted them (process_tracing,
+2026-10-05; project-meta policy friction `session-close-deletes-active-cwd`).
+An empty directory at the lane path counts as already removed (including the
+`worktree_present_before` field of session-ended reconciliation receipts), and
+`git worktree add` accepts it, so the lane name stays reusable.
+
 ### Session-ended claim with a stale tracker identity
 
 A historical session-start path could reuse one session tracker while moving

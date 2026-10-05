@@ -731,7 +731,7 @@ def test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree(
     )
     assert closed["released"] is True
     assert closed["disposition"] == "merged"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     canonical_lock.unlock_repo(repo)
     assert (repo / "README.md").read_text(encoding="utf-8") == "# Weekly Plans\n"
 
@@ -1774,7 +1774,7 @@ def test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear(
         claim_bootstrap.execute_request(request)
 
     assert observed == {"worktree_exists": True, "branch_exists": True, "claim_exists": True}
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert not any(
         claim.scope == "fix/child-lane"
         for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
@@ -1858,7 +1858,7 @@ def test_delegated_pre_claim_failure_rolls_back_git_artifacts(
         claim_bootstrap.execute_request(request)
 
     assert rollback_calls == 1
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert subprocess.run(
         ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/fix/child-lane"],
         capture_output=True,
@@ -1895,7 +1895,7 @@ def test_public_delegated_revoke_reports_completed_when_lock_reconcile_fails(
         "type": "RuntimeError",
         "message": "bounded lock fault",
     }
-    assert not child_worktree.exists()
+    assert _lane_path_released(child_worktree)
     assert not any(
         claim.scope == "fix/child-lane"
         for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)
@@ -2129,7 +2129,7 @@ def test_typed_maintenance_rolls_back_partial_session_start_before_git_artifacts
         claim_bootstrap.execute_request(request)
 
     worktree = repo / "worktrees" / "fix" / "safe-lane"
-    assert not worktree.exists()
+    assert _lane_path_released(worktree)
     assert claim_bootstrap.coordination_claims.check_claims(repo.name) == []
     assert list(trackers_dir.rglob("*.yaml")) == []
     assert subprocess.run(
@@ -2587,3 +2587,53 @@ def test_maintenance_lock_failure_rolls_back_lane_and_reconciles_canonical_check
     ).returncode != 0
     assert canonical_lock.verify_lock_integrity(repo)["verdict"] == canonical_lock.VERDICT_UNLOCKED
     assert not list(claims_dir.glob("*.yaml"))
+
+
+def test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SESSION_ALLOW_PARALLEL opens a second lane only when write paths are disjoint.
+
+    One-root-per-session forced unrelated fixes into unrelated PRs and parked
+    lanes with discard flags (project-meta policy friction
+    one-claim-root-per-session, 2026-10-05).
+    """
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    first = claim_bootstrap.parse_request_json(
+        json.dumps(_maintenance_payload(repo, scope="fix/lane-a", branch="fix/lane-a", write_paths=["CLAUDE.md"]))
+    )
+    claim_bootstrap.execute_request(first)
+
+    without_flag = claim_bootstrap.parse_request_json(
+        json.dumps(_maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"]))
+    )
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
+        claim_bootstrap.execute_request(without_flag)
+
+    overlapping = claim_bootstrap.parse_request_json(
+        json.dumps(
+            _maintenance_payload(
+                repo, scope="fix/lane-c", branch="fix/lane-c", write_paths=["CLAUDE.md"], allow_parallel=True
+            )
+        )
+    )
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
+        claim_bootstrap.execute_request(overlapping)
+
+    disjoint = claim_bootstrap.parse_request_json(
+        json.dumps(
+            _maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"], allow_parallel=True)
+        )
+    )
+    claim_bootstrap.execute_request(disjoint)
+    assert (repo / "worktrees" / "fix" / "lane-b").is_dir()
+    scopes = {claim.scope for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)}
+    assert {"fix/lane-a", "fix/lane-b"} <= scopes
+
+
+def _lane_path_released(path) -> bool:
+    """A closed lane's path is gone or left as an empty placeholder directory."""
+
+    return not path.exists() or (path.is_dir() and not any(path.iterdir()))

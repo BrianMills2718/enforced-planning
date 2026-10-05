@@ -120,7 +120,7 @@ def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> N
     thread_id = f"pytest-e2e-{uuid.uuid4().hex[:10]}"
     canonical_root = _canonical_repo_root(PROJECT_ROOT)
     worktree_dir = canonical_root / "worktrees" / branch
-    assert not worktree_dir.exists(), f"stale worktree already at {worktree_dir}"
+    assert _lane_path_released(worktree_dir), f"stale worktree already at {worktree_dir}"
     assert not _branch_exists(branch, cwd=canonical_root), f"stale branch already named {branch}"
 
     create = _run_make(
@@ -160,9 +160,15 @@ def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> N
         )
         assert close.returncode == 0, close.stdout + close.stderr
         assert "NOT CHECKED" not in close.stdout
-        assert not worktree_dir.exists(), f"make session-close reported ok but {worktree_dir} still exists"
+        assert _lane_path_released(worktree_dir), f"make session-close reported ok but {worktree_dir} still exists"
         assert not _branch_exists(branch, cwd=canonical_root), (
             "make session-close reported ok but branch still exists"
         )
         remaining_claims = list(CLAIMS_DIR.glob(f"*{branch}*"))
         assert not remaining_claims, f"claim file(s) not released: {remaining_claims}"
+
+
+def _lane_path_released(path) -> bool:
+    """A closed lane's path is gone or left as an empty placeholder directory."""
+
+    return not path.exists() or (path.is_dir() and not any(path.iterdir()))

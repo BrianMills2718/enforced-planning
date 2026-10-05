@@ -401,7 +401,8 @@ def test_remove_worktree_reanchors_process_cwd_before_removal(
 
     assert action == "removed"
     assert Path.cwd() == repo.resolve()
-    assert not worktree.exists()
+    assert worktree.is_dir() and not any(worktree.iterdir())
+    assert str(worktree.resolve()) not in _git(repo, "worktree", "list")
 
 
 def test_remove_clean_worktree_with_initialized_submodule(tmp_path: Path) -> None:
@@ -451,7 +452,7 @@ def test_remove_clean_worktree_with_initialized_submodule(tmp_path: Path) -> Non
     )
 
     assert session_lifecycle._remove_worktree_path(parent, worktree) == "removed"
-    assert not worktree.exists()
+    assert worktree.is_dir() and not any(worktree.iterdir())
 
 
 def test_bootstrap_closeout_resolves_real_target_instead_of_authority_sentinel(
@@ -879,3 +880,28 @@ def test_tracker_absent_refuses_untracked_files_it_cannot_capture(
             )
     assert claim_file.read_bytes() == before
     assert (worktree / "scratch-notes.txt").is_file()
+
+
+def test_closed_lane_leaves_reusable_placeholder_for_live_sessions(tmp_path: Path) -> None:
+    """A removed lane path stays a valid (empty) directory and can be reused.
+
+    Another agent session may still record the lane as its working directory;
+    a vanished path froze every tool call there (process_tracing, 2026-10-05).
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "seed")
+    worktree = tmp_path / "lane"
+    _git(repo, "worktree", "add", "-b", "lane", str(worktree))
+
+    assert session_lifecycle._remove_worktree_path(repo, worktree) == "removed"
+    assert worktree.is_dir() and not any(worktree.iterdir())
+    assert session_lifecycle._remove_worktree_path(repo, worktree) == "already_missing"
+
+    _git(repo, "worktree", "add", "-b", "lane-again", str(worktree))
+    assert (worktree / "README.md").read_text(encoding="utf-8") == "seed\n"

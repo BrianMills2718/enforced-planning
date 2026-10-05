@@ -12,7 +12,6 @@ Usage:
 import argparse
 import subprocess
 import sys
-import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,27 +43,53 @@ def get_git_toplevel() -> Path | None:
 
 
 def get_claims() -> list[dict]:
-    """Get active claims from .claude/active-work.yaml.
+    """Project this repository's live canonical claims into the status shape.
 
-    Always reads from the main repo (not worktree) to ensure consistent view.
+    Claims come from the package-backed registry
+    (``~/.claude/coordination/claims``); the retired repo-local
+    ``.claude/active-work.yaml`` is never read (enforced-planning #610).
+    Consumers installed without the ``enforced_planning`` package have no
+    canonical registry, so they report no claims.
     """
-    # Try to find main repo first
     main_repo = get_git_toplevel()
-    if main_repo:
-        claims_file = main_repo / ".claude" / "active-work.yaml"
-    else:
-        # Fallback to relative path
-        claims_file = Path(".claude/active-work.yaml")
-
-    if not claims_file.exists():
+    if main_repo is None:
         return []
-
+    for ancestor in (main_repo, *Path(__file__).resolve().parents):
+        if (ancestor / "enforced_planning").is_dir():
+            if str(ancestor) not in sys.path:
+                sys.path.insert(0, str(ancestor))
+            break
     try:
-        with open(claims_file) as f:
-            data = yaml.safe_load(f) or {}
-        return data.get("claims", [])
-    except Exception:
+        from enforced_planning import coordination_claims
+    except ImportError:
         return []
+
+    resolved_main = main_repo.resolve()
+    projected: list[dict] = []
+    for claim in coordination_claims.check_claims():
+        if not claim.is_live():
+            continue
+        if claim.repo_root:
+            if Path(claim.repo_root).expanduser().resolve() != resolved_main:
+                continue
+        elif main_repo.name not in claim.projects:
+            continue
+        plan_identity = coordination_claims.normalize_plan_identity(claim.plan_ref) or ""
+        suffix = plan_identity.rsplit("#", 1)[-1] if "#" in plan_identity else ""
+        projected.append(
+            {
+                "cc_id": claim.branch or claim.scope,
+                "branch": claim.branch,
+                "plan": int(suffix) if suffix.isdigit() else None,
+                "task": claim.intent,
+                "claimed_at": claim.claimed_at,
+                "worktree_path": claim.worktree_path,
+                "agent": claim.agent,
+                "scope": claim.scope,
+                "claim_type": claim.claim_type,
+            }
+        )
+    return projected
 
 
 def get_open_prs() -> list[dict]:

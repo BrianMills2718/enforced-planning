@@ -20,7 +20,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 
 def _find_framework_root() -> Path:
@@ -137,11 +136,13 @@ def check_worktree_claimed(
     worktree_path: str,
     claims_file: Path | None = None,
 ) -> tuple[bool, dict[str, Any] | None]:
-    """Check if a worktree has an active claim.
+    """Check canonical claim ownership for a worktree.
 
     Args:
         worktree_path: Path to the worktree to check
-        claims_file: Optional path to claims file (for testing)
+        claims_file: Optional alternate canonical claims directory (for
+            testing). The retired repo-local ``.claude/active-work.yaml`` is
+            never consulted (enforced-planning #610).
 
     Returns:
         (is_claimed, claim_info) - claim_info is the claim dict if found
@@ -169,27 +170,6 @@ def check_worktree_claimed(
             }
     finally:
         coordination_claims.CLAIMS_DIR = previous_claims_dir
-
-    if claims_file is None:
-        claims_file = get_main_repo_root() / ".claude" / "active-work.yaml"
-
-    if not claims_file.exists():
-        return False, None
-
-    try:
-        data = yaml.safe_load(claims_file.read_text()) or {}
-    except yaml.YAMLError:
-        return False, None
-
-    claims = data.get("claims", [])
-
-    for claim in claims:
-        claim_worktree = claim.get("worktree_path")
-        if claim_worktree:
-            # Normalize claim's worktree path too
-            normalized_claim_path = str(Path(claim_worktree).resolve())
-            if normalized_path == normalized_claim_path:
-                return True, claim
 
     return False, None
 
@@ -243,7 +223,7 @@ def should_block_removal(
 
     Checks three conditions (Plan #115: Worktree Ownership Enforcement):
     1. Ownership mismatch - claim exists but belongs to different CC instance
-    2. Active claim in .claude/active-work.yaml (same owner)
+    2. Active canonical claim (same owner)
     3. Recent session marker (< 24h old) - indicates active Claude session
 
     Args:

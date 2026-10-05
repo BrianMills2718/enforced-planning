@@ -150,6 +150,12 @@ def release_claim(*args: Any, **kwargs: Any) -> tuple[bool, str]:
     return _impl.release_claim(*args, **kwargs)
 
 
+def release_claims_for_branch(branch: str) -> tuple[int, list[str]]:
+    """Delegate branch-wide claim release while honoring script-level CLAIMS_DIR overrides."""
+    _sync_runtime_config()
+    return _impl.release_claims_for_branch(branch)
+
+
 def unregistered_claim_files() -> list[str]:
     """Delegate unregistered-format claim detection while honoring script-level CLAIMS_DIR overrides."""
     _sync_runtime_config()

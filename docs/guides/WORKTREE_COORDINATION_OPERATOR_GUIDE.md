@@ -49,10 +49,16 @@ It also admits the bounded qualitative skill-feedback logger so closeout can
 still report control friction. Mutation-capable claim operations and composed
 shell commands continue to require ordinary claim authority.
 
-The older repo-local `.claude/active-work.yaml` plus legacy
-`scripts/meta/worktree-coordination/check_claims.py` surface may still be
-present in some repos for compatibility. They are not the canonical
-cross-project coordination authority.
+The older repo-local `.claude/active-work.yaml` is retired: no shipped script
+reads it (enforced-planning #610). A leftover copy is surfaced as ordinary
+untracked dirt, never treated as a claim. The legacy
+`scripts/meta/worktree-coordination/check_claims.py` path is now only a facade
+over the canonical registry: `--release --id BRANCH` calls
+`coordination_claims.release_claims_for_branch`, `--verify-branch` and
+`--verify-claim` look up canonical claims, and the retired claim-creation
+flags exit 2 with migration guidance. `merge_pr.py` uses `--release --id` after
+a merge. A claim whose worktree or branch still exists is refused (exit 1,
+naming `session-close`); close that lane with `make session-close`.
 
 ### A claim file with invalid YAML does not silently vanish
 

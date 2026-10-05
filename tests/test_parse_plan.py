@@ -376,3 +376,64 @@ def test_parse_acceptance_criteria_reads_checkbox_items() -> None:
         {"description": "Docs are truthful", "met": True},
         {"description": "Tests pass upstream", "met": False},
     ]
+
+
+def _write_canonical_claim(claims_dir: Path, *, branch: str, plan_ref: str) -> None:
+    import yaml  # type: ignore[import-untyped]
+
+    claims_dir.mkdir(parents=True, exist_ok=True)
+    (claims_dir / "claim.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "agent": "codex",
+                "claimed_at": "2026-04-05T00:00:00+00:00",
+                "expires_at": "2099-04-05T12:00:00+00:00",
+                "projects": ["sample"],
+                "scope": branch,
+                "intent": "test",
+                "claim_type": "write",
+                "write_paths": ["scripts/x.py"],
+                "branch": branch,
+                "session_id": "codex:session",
+                "plan_ref": plan_ref,
+                "status": "active",
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _legacy_active_work(main_root: Path, *, branch: str, plan: int) -> None:
+    (main_root / ".claude").mkdir(parents=True, exist_ok=True)
+    (main_root / ".claude" / "active-work.yaml").write_text(
+        f"claims:\n  - cc_id: {branch}\n    plan: {plan}\n",
+        encoding="utf-8",
+    )
+
+
+def test_active_plan_number_comes_from_canonical_claim(tmp_path: Path, monkeypatch) -> None:
+    """Issue #610: the claim fallback reads the canonical registry, not active-work.yaml."""
+    from enforced_planning import coordination_claims
+
+    m = _load()
+    _write_canonical_claim(tmp_path / "claims", branch="fix-lane", plan_ref="Plan #42")
+    _legacy_active_work(tmp_path / "repo", branch="fix-lane", plan=7)
+    monkeypatch.setattr(m, "get_current_branch", lambda: "fix-lane")
+    monkeypatch.setattr(m, "get_main_repo_root", lambda: tmp_path / "repo")
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", tmp_path / "claims")
+
+    assert m.get_active_plan_number() == 42  # type: ignore[attr-defined]
+
+
+def test_legacy_active_work_yaml_alone_yields_no_plan(tmp_path: Path, monkeypatch) -> None:
+    from enforced_planning import coordination_claims
+
+    m = _load()
+    (tmp_path / "claims").mkdir()
+    _legacy_active_work(tmp_path / "repo", branch="fix-lane", plan=7)
+    monkeypatch.setattr(m, "get_current_branch", lambda: "fix-lane")
+    monkeypatch.setattr(m, "get_main_repo_root", lambda: tmp_path / "repo")
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", tmp_path / "claims")
+
+    assert m.get_active_plan_number() is None  # type: ignore[attr-defined]

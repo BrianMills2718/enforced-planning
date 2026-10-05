@@ -54,6 +54,16 @@ class ClaimBootstrapError(ValueError):
     """A bootstrap request was malformed or exceeded self-service authority."""
 
 
+def _disjoint_narrow_write_paths(requested: list[str], existing: list[str]) -> bool:
+    """Return whether two lanes' declared write paths are narrow and never overlap."""
+
+    if not requested or not existing or "." in requested or "." in existing:
+        return False
+    return not any(
+        coordination_claims._paths_overlap(left, right) for left in requested for right in existing
+    )
+
+
 class _StrictRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -149,6 +159,7 @@ class MaintenanceWorktreeRequest(_StrictRequest):
     claim_type: Literal["program"]
     write_paths: list[str] = Field(default_factory=lambda: ["."])
     new_files: list[str] = Field(default_factory=list, max_length=16)
+    allow_parallel: bool = False
 
     @field_validator("write_paths")
     @classmethod
@@ -1926,11 +1937,26 @@ def _execute_maintenance_worktree(
             for claim in coordination_claims.check_claims()
             if claim.is_live() and claim.session_id == session_id and not claim.parent_scope
         ]
-        if existing_roots:
-            labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
+        # A session may hold several roots only when asked (SESSION_ALLOW_PARALLEL)
+        # and when no declared write path overlaps another root's: tracker files
+        # and claims are already per lane, and parallel_root_authorized already
+        # exists on the claim. Refusing every second lane forced unrelated fixes
+        # into unrelated PRs and lanes to be parked with discard flags
+        # (project-meta policy friction one-claim-root-per-session, 2026-10-05).
+        blocking_roots = [
+            claim
+            for claim in existing_roots
+            if not (
+                getattr(request, "allow_parallel", False)
+                and _disjoint_narrow_write_paths(request.write_paths, claim.write_paths)
+            )
+        ]
+        if blocking_roots:
+            labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in blocking_roots))
             raise ClaimBootstrapError(
-                "worktree bootstrap requires the native session to own zero existing claim roots; "
-                f"close or transfer first: {labels}"
+                "worktree bootstrap requires the native session to own zero existing claim roots "
+                "unless SESSION_ALLOW_PARALLEL=1 and every write path is narrow and disjoint "
+                f"from that root's; close or transfer first: {labels}"
             )
 
     if goal_bound:
@@ -2073,6 +2099,7 @@ def _execute_maintenance_worktree(
             target_worktree_path=str(worktree) if selected_bootstrap else None,
             new_files=declared_new_files,
             verified_goal_default_revision=starting_head if goal_bound else None,
+            allow_parallel=bool(getattr(request, "allow_parallel", False)),
             verified_maintenance_default_revision=(starting_head if not goal_bound else None),
         )
 

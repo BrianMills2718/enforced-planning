@@ -653,7 +653,9 @@ Use ordinary `session-close` for real linked worktrees and
 `make maintenance-worktree` refuses a second lane while the session already
 owns a claim root, unless `SESSION_ALLOW_PARALLEL=1` is set and every declared
 write path of the new lane is narrow (not `.`) and disjoint from each existing
-root's write paths. The new claim then records `parallel_root_authorized`. This
+root's write paths. Write paths are repository-relative, so a root in a
+different project never overlaps: there the new lane's paths need only be
+narrow. The new claim then records `parallel_root_authorized`. This
 replaced a blanket one-root rule that forced unrelated fixes into unrelated
 PRs (project-meta policy friction `one-claim-root-per-session`, 2026-10-05).
 

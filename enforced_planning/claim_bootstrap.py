@@ -1943,12 +1943,23 @@ def _execute_maintenance_worktree(
         # exists on the claim. Refusing every second lane forced unrelated fixes
         # into unrelated PRs and lanes to be parked with discard flags
         # (project-meta policy friction one-claim-root-per-session, 2026-10-05).
+        # Write paths are repository-relative, so a root in another project can
+        # never overlap this lane's files: "scripts" here and "scripts/x" in a
+        # sibling repository name different files. Comparing them anyway refused
+        # unrelated cross-repository lanes (enforced-planning #610 bootstrap).
         blocking_roots = [
             claim
             for claim in existing_roots
             if not (
                 getattr(request, "allow_parallel", False)
-                and _disjoint_narrow_write_paths(request.write_paths, claim.write_paths)
+                and (
+                    _disjoint_narrow_write_paths(request.write_paths, claim.write_paths)
+                    or (
+                        claim.primary_project() != request.project
+                        and bool(request.write_paths)
+                        and "." not in request.write_paths
+                    )
+                )
             )
         ]
         if blocking_roots:

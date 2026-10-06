@@ -12,6 +12,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from enforced_planning import coordination_claims
+from enforced_planning.coordination_claims import (
+    MethodConformanceBindingV1,
+    resolve_method_conformance_binding,
+)
 from enforced_planning.plan_validation import PlanIntegrityResultV1, validate_plan_integrity_at_revision
 
 ExecutionProfile = Literal["light", "coordinated", "release"]
@@ -96,6 +100,7 @@ class PlanStartGateResultV2(StrictContract):
     readiness: PlanReadinessDecisionV1 | None
     lane: PlanLaneIdentityV2 | None
     reason: str
+    method_conformance: MethodConformanceBindingV1 | None = None
 
 
 def _plan_number(value: str | None) -> int | None:
@@ -141,6 +146,8 @@ def check_plan_start_readiness(
     parent_lane_id: str | None = None,
     allow_unplanned: bool = False,
     resume_requested: bool = False,
+    method_receipt_ref: str | None = None,
+    method_receipt_sha256: str | None = None,
 ) -> PlanStartGateResultV2:
     """Validate static readiness and the non-owning precondition for a resume.
 
@@ -149,6 +156,10 @@ def check_plan_start_readiness(
     can be created.
     """
     if execution_profile == "light" and qualified_plan_id is None and allow_unplanned:
+        if method_receipt_ref is not None or method_receipt_sha256 is not None:
+            raise ValueError(
+                "explicitly unplanned work cannot cite a method-conformance receipt or imply plan conformance"
+            )
         return PlanStartGateResultV2(
             allowed=True,
             planning_integrity=None,
@@ -186,6 +197,13 @@ def check_plan_start_readiness(
         raise ValueError("planning integrity did not resolve one full Git start revision")
     if integrity.source_revision != authority.plan_revision:
         raise ValueError("planning integrity resolved a different revision than the retained plan authority")
+    method_conformance = resolve_method_conformance_binding(
+        plan_root=authority.plan_root,
+        plan_revision=authority.plan_revision,
+        plan_number=plan_number,
+        receipt_ref=method_receipt_ref,
+        receipt_sha256=method_receipt_sha256,
+    )
     if not resume_requested:
         default_revision = coordination_claims.resolve_default_integration_revision(Path(repo_root))
         if authority.target_revision != default_revision:
@@ -267,4 +285,5 @@ def check_plan_start_readiness(
         readiness=readiness,
         lane=lane,
         reason=reason,
+        method_conformance=method_conformance,
     )

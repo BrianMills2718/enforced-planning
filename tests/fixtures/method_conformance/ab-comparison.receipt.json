@@ -1,0 +1,525 @@
+{
+  "schema_version": "planning-method-conformance-receipt.v1",
+  "record_type": "planning_method_conformance_receipt",
+  "receipt_id": "RECEIPT-plan-ab-comparison-729fdc0a67d1",
+  "plan": {
+    "plan_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+    "plan_sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+  },
+  "path_decision": {
+    "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/path-decision.json",
+    "sha256": "54eea1514b6cede5e357339901edd87149a30cc26af34363fcf6a2da39083037",
+    "selected_path": "durable_solo",
+    "classified_path": "durable_solo",
+    "errors": []
+  },
+  "route": "durable_solo",
+  "profile": {
+    "profile_id": "bounded-design",
+    "revision": "bounded-design@1",
+    "path": "contracts/method-conformance/profiles/bounded-design.v1.json",
+    "sha256": "ffa0d0dbe4b018c3b35e810465caebf5961c03296c6fc23d220c15ad39ce12a8"
+  },
+  "compiler": {
+    "path": "scripts/method_conformance/compiler.py",
+    "sha256": "9e43185f097d145859cb996e6715b750dd2e06a7d5f7715e912e6c8fb927c4fa"
+  },
+  "activation": {
+    "facts_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/ab-comparison.facts.json",
+    "facts_sha256": "bec2b4ce4dca37a37d84e58d4612e76497d854da22dcc2cd2dae786b15490371",
+    "facts": {
+      "shared_mechanism": true,
+      "empirical_comparison_proposed": true,
+      "llm_central": false,
+      "irreversible_or_spend_action": false,
+      "multiple_writers": false,
+      "consequential_boundary": false,
+      "inline_prototype": false
+    },
+    "fact_origins": {
+      "shared_mechanism": "declared:explicit_user",
+      "empirical_comparison_proposed": "declared:derived_current_boundary",
+      "llm_central": "declared:derived_current_boundary",
+      "irreversible_or_spend_action": "declared:derived_current_boundary",
+      "multiple_writers": "derived:path_decision.concurrent_writers",
+      "consequential_boundary": "derived:path_decision.persistent_migration|consequential_external_mutation",
+      "inline_prototype": "derived:classified_path==prototype"
+    },
+    "overlays": [
+      {
+        "overlay_id": "OV-PRIOR-ART",
+        "activation_fact": "shared_mechanism",
+        "active": true,
+        "reason": "shared_mechanism=true (declared:explicit_user)"
+      },
+      {
+        "overlay_id": "OV-EMPIRICAL-COMPARISON",
+        "activation_fact": "empirical_comparison_proposed",
+        "active": true,
+        "reason": "empirical_comparison_proposed=true (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-LLM-CENTRAL",
+        "activation_fact": "llm_central",
+        "active": false,
+        "reason": "llm_central=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-MULTIPLE-WRITERS",
+        "activation_fact": "multiple_writers",
+        "active": false,
+        "reason": "multiple_writers=false (derived:path_decision.concurrent_writers)"
+      },
+      {
+        "overlay_id": "OV-CONSEQUENTIAL-BOUNDARY",
+        "activation_fact": "consequential_boundary",
+        "active": false,
+        "reason": "consequential_boundary=false (derived:path_decision.persistent_migration|consequential_external_mutation)"
+      },
+      {
+        "overlay_id": "OV-INLINE-PROTOTYPE",
+        "activation_fact": "inline_prototype",
+        "active": false,
+        "reason": "inline_prototype=false (derived:classified_path==prototype)"
+      }
+    ]
+  },
+  "checklist": {
+    "checklist_id": "method-conformance.bounded-design",
+    "revision": "sha256:0af6cd9d0b5fb1d7364ee92603139202edec7177eb1b35c3dc3f8099cac8856b",
+    "definition_sha256": "6ff8bcbcb8413910fcf4cfccc30bf03b9a40889fb02c119c1b7d00322fe52045",
+    "bundle_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/ab-comparison.bundle.json",
+    "bundle_sha256": "4d1ca79ffbfd7d473007c24f518ab5fadea32703060163b74937bd5a6c39e32d",
+    "coverage": "complete",
+    "definition_matches_recompilation": true
+  },
+  "items": [
+    {
+      "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#actor-and-result",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/CORE-ACTOR-RESULT-EXAMPLE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the actor as the next agent session, states the desired result of resuming from a structured resume note instead of rereading the conversation, and gives a stable, concrete, user-visible example including the plan path and digest, next work unit, and open question."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ROUTE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "structural",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/path-decision.json",
+          "sha256": "54eea1514b6cede5e357339901edd87149a30cc26af34363fcf6a2da39083037"
+        }
+      ],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SUCCESS-DISPROOF",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#success-and-disproof",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/CORE-SUCCESS-DISPROOF",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly defines success as a fresh session reaching the correct next work unit and open question using only the resume note, with a reproducible test fixture. It also gives concrete disproof conditions: choosing a different next unit than transcript rereading, or requiring fields the existing handoff contract cannot express."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-AUTHORITY-NONGOALS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#authority-and-non-goals",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/CORE-AUTHORITY-NONGOALS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies Brian as the authority, grants the owning agent decision-making authority within that scope, and lists specific non-goals, including excluded systems, services, rollout, and migration activities."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-IRREVERSIBLE-SPEND",
+      "effect": "blocking",
+      "applicability_mode": "conditional",
+      "condition_fact": "irreversible_or_spend_action",
+      "condition_value": false,
+      "verifier_kind": "semantic",
+      "disposition": "not_applicable",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-UNCERTAINTIES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#uncertainties",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/CORE-UNCERTAINTIES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan explicitly lists two material uncertainties: whether the session-work snapshot names the open question and whether Codex exposes a session-close event. Each has resolving evidence, and the second also names an owner."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ACTIVATION-FACTS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/CORE-ACTIVATION-FACTS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan explicitly proposes an A/B comparison evaluated across multiple model-generated drafts, supporting `empirical_comparison_proposed=true`. It describes a shared resume-note mechanism/contract built from existing contracts, while explicitly stating there is no irreversible action or spend; the resume behavior itself is not stated to centrally depend on LLM calls, supporting the other declarations."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-DISPOSITION",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#prior-art-and-ownership",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-PRIOR-ART-DISPOSITION",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states that existing ownership, internal lineage, and external prior art were searched. It identifies each cited candidate or candidate group and assigns the required dispositions: extend, reuse, and bounded exception."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+      "effect": "advisory",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#prior-art-and-ownership",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-PRIOR-ART-PARALLEL-CHECK",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names a concrete structural check: a test asserts the resume note is generated only from `NextSkillHandoffV1` and the session-work snapshot, and fails if another module writes a file with the resume-note record type. This directly detects a silent parallel implementation of the same concern."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-EVAL-DECISION",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "unresolved",
+      "verifier_result": "fail",
+      "reason_codes": [
+        "semantic_unresolved"
+      ],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#evaluation",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-DECISION",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "unresolved",
+        "materiality": "material",
+        "missing": "The evidence does not name the specific decision the comparison could change, nor does it state what would be done differently under each possible result.",
+        "rationale": "It only says to run the comparison, select the format with the best average rubric score, and report the scores. It does not explicitly describe the decision affected or the actions corresponding to each possible outcome."
+      },
+      "suggested_action": "Add to the plan: The evidence does not name the specific decision the comparison could change, nor does it state what would be done differently under each possible result."
+    },
+    {
+      "item_id": "OV-EVAL-IRREDUCIBLE-UNCERTAINTY",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "unresolved",
+      "verifier_result": "fail",
+      "reason_codes": [
+        "semantic_unresolved"
+      ],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#evaluation",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-IRREDUCIBLE-UNCERTAINTY",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "unresolved",
+        "materiality": "material",
+        "missing": "The evidence does not name the irreducibly empirical uncertainty being resolved, nor explain why first principles and existing evidence or prior art cannot resolve it.",
+        "rationale": "It only specifies running an A/B comparison over five sessions and selecting the format with the best average rubric score. That describes an evaluation procedure but not the required uncertainty or the limits of non-empirical resolution."
+      },
+      "suggested_action": "Add to the plan: The evidence does not name the irreducibly empirical uncertainty being resolved, nor explain why first principles and existing evidence or prior art cannot resolve it."
+    },
+    {
+      "item_id": "OV-EVAL-PARITY",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "unresolved",
+      "verifier_result": "fail",
+      "reason_codes": [
+        "semantic_unresolved"
+      ],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#design-approach",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-PARITY",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "unresolved",
+        "materiality": "material",
+        "missing": "The evidence does not state any minimum capability parity requirements that every candidate must meet before comparison, such as required functions, inputs, outputs, or constraints.",
+        "rationale": "It only says that three models will draft formats and that the drafts will be compared on a readability rubric. This does not establish the baseline capabilities required for a meaningful comparison."
+      },
+      "suggested_action": "Add to the plan: The evidence does not state any minimum capability parity requirements that every candidate must meet before comparison, such as required functions, inputs, outputs, or constraints."
+    },
+    {
+      "item_id": "OV-EVAL-COST",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "unresolved",
+      "verifier_result": "fail",
+      "reason_codes": [
+        "semantic_unresolved"
+      ],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md#design-approach",
+          "sha256": "729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-COST",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "unresolved",
+        "materiality": "material",
+        "missing": "An explanation of why running the three-draft comparison costs less than choosing a format now and correcting or revising it later.",
+        "rationale": "The evidence describes an A/B comparison and how drafts will be scored, but it does not discuss the costs of running the comparison or compare them with the costs of making and later correcting a reversible choice."
+      },
+      "suggested_action": "Add to the plan: An explanation of why running the three-draft comparison costs less than choosing a format now and correcting or revising it later."
+    }
+  ],
+  "item_counts": {
+    "pass": 8,
+    "unresolved": 4,
+    "not_applicable": 1,
+    "unavailable": 0,
+    "missing": 0
+  },
+  "semantic_verifier": {
+    "kind": "llm_client",
+    "available": true,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "task": "company_planning.method_conformance.semantic_item_review"
+  },
+  "conformance_report": {
+    "schema_version": "1.0",
+    "record_type": "planning_conformance_report",
+    "report_id": "REPORT-plan-ab-comparison-729fdc0a67d1",
+    "snapshot_ref": "SNAPSHOT-plan-ab-comparison",
+    "snapshot_revision": "sha256:4d1ca79ffbfd7d473007c24f518ab5fadea32703060163b74937bd5a6c39e32d",
+    "packet_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+    "packet_revision": "sha256:729fdc0a67d1e79515ac5578a96151eccdac578639b06bbba53dd2557f8bb344",
+    "structural_status": "pass",
+    "semantic_review_status": "complete",
+    "diagnostics": [
+      {
+        "diagnostic_id": "DIAG-plan-ab-comparison-9",
+        "class": "semantic",
+        "severity": "warning",
+        "rule_id": "PL-MCR-SEMANTIC-UNRESOLVED",
+        "message": "OV-EVAL-DECISION: The evidence does not name the specific decision the comparison could change, nor does it state what would be done differently under each possible result.",
+        "source_locator": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+        "materiality": "material",
+        "suggested_action": "Add to the plan: The evidence does not name the specific decision the comparison could change, nor does it state what would be done differently under each possible result.",
+        "disposition": "unresolved",
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-DECISION"
+      },
+      {
+        "diagnostic_id": "DIAG-plan-ab-comparison-10",
+        "class": "semantic",
+        "severity": "warning",
+        "rule_id": "PL-MCR-SEMANTIC-UNRESOLVED",
+        "message": "OV-EVAL-IRREDUCIBLE-UNCERTAINTY: The evidence does not name the irreducibly empirical uncertainty being resolved, nor explain why first principles and existing evidence or prior art cannot resolve it.",
+        "source_locator": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+        "materiality": "material",
+        "suggested_action": "Add to the plan: The evidence does not name the irreducibly empirical uncertainty being resolved, nor explain why first principles and existing evidence or prior art cannot resolve it.",
+        "disposition": "unresolved",
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-IRREDUCIBLE-UNCERTAINTY"
+      },
+      {
+        "diagnostic_id": "DIAG-plan-ab-comparison-11",
+        "class": "semantic",
+        "severity": "warning",
+        "rule_id": "PL-MCR-SEMANTIC-UNRESOLVED",
+        "message": "OV-EVAL-PARITY: The evidence does not state any minimum capability parity requirements that every candidate must meet before comparison, such as required functions, inputs, outputs, or constraints.",
+        "source_locator": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+        "materiality": "material",
+        "suggested_action": "Add to the plan: The evidence does not state any minimum capability parity requirements that every candidate must meet before comparison, such as required functions, inputs, outputs, or constraints.",
+        "disposition": "unresolved",
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-PARITY"
+      },
+      {
+        "diagnostic_id": "DIAG-plan-ab-comparison-12",
+        "class": "semantic",
+        "severity": "warning",
+        "rule_id": "PL-MCR-SEMANTIC-UNRESOLVED",
+        "message": "OV-EVAL-COST: An explanation of why running the three-draft comparison costs less than choosing a format now and correcting or revising it later.",
+        "source_locator": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-ab-comparison.md",
+        "materiality": "material",
+        "suggested_action": "Add to the plan: An explanation of why running the three-draft comparison costs less than choosing a format now and correcting or revising it later.",
+        "disposition": "unresolved",
+        "trace_id": "company-planning/method-conformance/plan-ab-comparison/c49da14712f6/OV-EVAL-COST"
+      }
+    ],
+    "route": "durable_solo",
+    "adoption_readiness": "contributor_disposition_needed",
+    "limitations": [
+      "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+    ]
+  },
+  "advisory_deviations": [],
+  "result": "fail",
+  "reason_codes": [
+    "semantic_unresolved"
+  ],
+  "actionable_summary": [
+    "OV-EVAL-DECISION: semantic_unresolved -> Add to the plan: The evidence does not name the specific decision the comparison could change, nor does it state what would be done differently under each possible result.",
+    "OV-EVAL-IRREDUCIBLE-UNCERTAINTY: semantic_unresolved -> Add to the plan: The evidence does not name the irreducibly empirical uncertainty being resolved, nor explain why first principles and existing evidence or prior art cannot resolve it.",
+    "OV-EVAL-PARITY: semantic_unresolved -> Add to the plan: The evidence does not state any minimum capability parity requirements that every candidate must meet before comparison, such as required functions, inputs, outputs, or constraints.",
+    "OV-EVAL-COST: semantic_unresolved -> Add to the plan: An explanation of why running the three-draft comparison costs less than choosing a format now and correcting or revising it later."
+  ],
+  "limitations": [
+    "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+  ],
+  "caller": {
+    "client": "canonical-probe",
+    "session": null
+  },
+  "started_at": "2026-10-06T18:13:20Z",
+  "completed_at": "2026-10-06T18:13:31Z",
+  "duration_ms": 11362
+}

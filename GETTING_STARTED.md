@@ -78,6 +78,12 @@ python scripts/install_governed_repo.py --repo-root /path/to/your/project --writ
 python scripts/audit_governed_repo.py --repo-root /path/to/your/project --strict-governed
 ```
 
+The installer vendors the claim-admission package, including
+`enforced_planning/method_conformance_binding.py`, so an installed repository can
+opt into `plans.method_conformance.mode: required` (plan-backed claims must cite
+a passing Company Planning method-conformance receipt; see
+`docs/reference/METHOD_CONFORMANCE_BINDING.md`).
+
 Run the installer with `--check --json` before opening a narrow maintenance
 lane. Its `planned_write_paths` field names the actual repository files the
 installer would change; action labels such as `sync:Makefile.worktree` identify

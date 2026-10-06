@@ -66,6 +66,7 @@ SYNC_SUPPORT_FILES: dict[str, str] = {
     "scripts/meta/claim_bootstrap.py": "scripts/claim_bootstrap.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/method_conformance_binding.py": "enforced_planning/method_conformance_binding.py",
     "enforced_planning/concurrent_writers.py": "enforced_planning/concurrent_writers.py",
     "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
@@ -189,6 +190,7 @@ WORKTREE_ONLY_SYNC_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/blocker_policy.py": "enforced_planning/blocker_policy.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/method_conformance_binding.py": "enforced_planning/method_conformance_binding.py",
     "enforced_planning/concurrent_writers.py": "enforced_planning/concurrent_writers.py",
     "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
@@ -298,6 +300,7 @@ COORDINATION_MESSAGES_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/claim_mutation_receipts.py": "enforced_planning/claim_mutation_receipts.py",
     "enforced_planning/client_session_metadata.py": "enforced_planning/client_session_metadata.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/method_conformance_binding.py": "enforced_planning/method_conformance_binding.py",
     "enforced_planning/concurrent_writers.py": "enforced_planning/concurrent_writers.py",
     "enforced_planning/concern_routing.py": "enforced_planning/concern_routing.py",
     "enforced_planning/mailbox_execution_identity.py": "enforced_planning/mailbox_execution_identity.py",
@@ -362,6 +365,7 @@ COORDINATION_CLAIMS_SHARED_FILES: dict[str, str] = {
 }
 COORDINATION_CLAIMS_LOCAL_PACKAGE_FILES: dict[str, str] = {
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
+    "enforced_planning/method_conformance_binding.py": "enforced_planning/method_conformance_binding.py",
 }
 
 RELATIONSHIP_CONTEXT_TARGETS = (

@@ -47,6 +47,11 @@ from pydantic import (
 )
 
 from enforced_planning import claim_mutation_receipts
+from enforced_planning.method_conformance_binding import (
+    MethodConformanceBindingV1,
+    MethodConformanceRefusal,
+    resolve_method_conformance_binding,
+)
 from enforced_planning.claim_mutation_receipts import (
     CompletedClaimArchiveError,
     MutationAuditError,
@@ -808,6 +813,7 @@ class CanonicalWorkUnitBinding:
     plan_repo_root: str | None = None
     plan_revision: str | None = None
     plan_sha256: str | None = None
+    method_conformance: MethodConformanceBindingV1 | None = None
 
     def __iter__(self) -> Iterator[object]:
         """Retain the historical three-value unpacking API for local consumers."""
@@ -876,6 +882,8 @@ class ClaimRecord:
     target_worktree_path: str | None = None
     contact_ref: str | None = None
     new_files: tuple[str, ...] = ()
+    method_receipt_ref: str | None = None
+    method_receipt_sha256: str | None = None
 
     def primary_project(self) -> str | None:
         """Return the first project for CLI compatibility surfaces."""
@@ -2060,8 +2068,15 @@ def resolve_canonical_work_unit_binding(
     plan_repo_root: str | None = None,
     plan_start_point: str | None = None,
     target_repository_id: str | None = None,
+    method_receipt_ref: str | None = None,
+    method_receipt_sha256: str | None = None,
 ) -> CanonicalWorkUnitBinding:
-    """Validate an owning plan graph and its target revision independently."""
+    """Validate an owning plan graph and its target revision independently.
+
+    When the plan-authority repository requires Company Planning method
+    conformance (or the claim cites a receipt), the exact passing receipt is
+    re-resolved at the plan-authority revision before the unit is admitted.
+    """
 
     from enforced_planning.plan_validation import validate_plan_integrity_at_revision
 
@@ -2173,6 +2188,13 @@ def resolve_canonical_work_unit_binding(
             )
         approval_revisions.append(f"{approval_type}={matching[0]['approved_revision'].strip()}")
     graph_sha256 = hashlib.sha256(rendered.stdout.encode("utf-8")).hexdigest()
+    method_conformance = resolve_method_conformance_binding(
+        plan_root=authority_root,
+        plan_revision=authority_revision,
+        plan_number=plan_number,
+        receipt_ref=method_receipt_ref,
+        receipt_sha256=method_receipt_sha256,
+    )
     return CanonicalWorkUnitBinding(
         work_graph_sha256=graph_sha256,
         approval_revisions=tuple(sorted(approval_revisions)),
@@ -2180,6 +2202,7 @@ def resolve_canonical_work_unit_binding(
         plan_repo_root=str(authority_root) if cross_repository else None,
         plan_revision=authority_revision if cross_repository else None,
         plan_sha256=plan_sha256,
+        method_conformance=method_conformance,
     )
 
 
@@ -3026,6 +3049,12 @@ def normalize_claim(data: dict[str, Any], *, source_file: str | None = None) -> 
         target_worktree_path=target_worktree_path,
         contact_ref=data.get("contact_ref") if isinstance(data.get("contact_ref"), str) else None,
         new_files=tuple(_safe_string_list(data.get("new_files"))),
+        method_receipt_ref=(
+            data.get("method_receipt_ref") if isinstance(data.get("method_receipt_ref"), str) else None
+        ),
+        method_receipt_sha256=(
+            data.get("method_receipt_sha256") if isinstance(data.get("method_receipt_sha256"), str) else None
+        ),
     )
 
 
@@ -3336,6 +3365,8 @@ def build_candidate_claim(
     contact_ref: str | None = None,
     new_files: list[str] | tuple[str, ...] | None = None,
     schema_version: int | None = None,
+    method_receipt_ref: str | None = None,
+    method_receipt_sha256: str | None = None,
 ) -> ClaimRecord:
     """Build a normalized candidate claim from CLI or test inputs."""
     normalized_write_paths = [_normalize_repo_path(path) for path in (write_paths or [])]
@@ -3410,6 +3441,8 @@ def build_candidate_claim(
         target_worktree_path=effective_target_worktree,
         contact_ref=contact_ref,
         new_files=tuple(_normalize_repo_path(path) for path in (new_files or ())),
+        method_receipt_ref=method_receipt_ref,
+        method_receipt_sha256=method_receipt_sha256,
     )
 
 
@@ -3601,8 +3634,23 @@ def create_claim(
     new_files: list[str] | None = None,
     verified_goal_default_revision: str | None = None,
     verified_maintenance_default_revision: str | None = None,
+    method_receipt_ref: str | None = None,
+    method_receipt_sha256: str | None = None,
 ) -> tuple[bool, str]:
-    """Create a new claim after checking for hard conflicts."""
+    """Create a new claim after checking for hard conflicts.
+
+    A plan-backed write claim re-resolves its Company Planning
+    method-conformance receipt (``method_receipt_ref`` plus
+    ``method_receipt_sha256``) when the plan repository requires one or the
+    claim cites one. An unplanned claim can never cite plan conformance.
+    """
+    method_receipt_cited = method_receipt_ref is not None or method_receipt_sha256 is not None
+    if method_receipt_cited and not (write_paths and requires_work_graph(plan_ref)):
+        raise MethodConformanceRefusal(
+            "method_receipt_on_unplanned_claim",
+            "only a plan-backed write claim bound to a work unit can cite a method-conformance receipt; "
+            "explicitly unplanned work keeps its separate admission rule and cannot imply plan conformance",
+        )
     if verified_goal_default_revision is not None and not is_goal_authority_ref(plan_ref):
         raise ValueError("verified goal default revision is valid only for goal-bound ownership")
     if verified_maintenance_default_revision is not None and is_goal_authority_ref(plan_ref):
@@ -3669,11 +3717,17 @@ def create_claim(
                 plan_repo_root=plan_repo_root,
                 plan_start_point=plan_start_point,
                 target_repository_id=project,
+                method_receipt_ref=method_receipt_ref,
+                method_receipt_sha256=method_receipt_sha256,
             )
         )
         work_graph_sha256 = binding.work_graph_sha256
         approval_revisions = binding.approval_revisions
         start_revision = binding.start_revision
+        method_binding = binding.method_conformance
+        if method_binding is not None:
+            method_receipt_ref = method_binding.receipt_path
+            method_receipt_sha256 = method_binding.receipt_sha256
         retained_plan_repo_root = binding.plan_repo_root
         plan_revision = binding.plan_revision
         plan_sha256 = binding.plan_sha256
@@ -3780,6 +3834,8 @@ def create_claim(
         contact_ref=contact_ref,
         new_files=new_files,
         schema_version=6,
+        method_receipt_ref=method_receipt_ref,
+        method_receipt_sha256=method_receipt_sha256,
         **_progress_event_payload(initial_progress),
     )
     validate_claim_for_creation(candidate)
@@ -3853,6 +3909,9 @@ def create_claim(
         claim_payload = candidate.to_dict()
         claim_payload.pop("source_file", None)
         claim_payload.pop("project", None)
+        for key in ("method_receipt_ref", "method_receipt_sha256"):
+            if claim_payload.get(key) is None:
+                claim_payload.pop(key, None)
         if candidate.start_revision is None:
             claim_payload.pop("start_revision", None)
         _atomic_write_claim(claim_path, claim_payload)
@@ -5110,6 +5169,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Full immutable plan-authority revision for a qualified external plan.",
     )
     parser.add_argument(
+        "--method-receipt",
+        help=(
+            "Repository-relative path of the plan's passing Company Planning method-conformance receipt "
+            "(required for plan-backed claims when meta-process.yaml sets plans.method_conformance.mode: required)."
+        ),
+    )
+    parser.add_argument(
+        "--method-receipt-sha256",
+        help="SHA-256 of the receipt file bytes, from the plan's adoption decision.",
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         help=(
@@ -5559,6 +5629,8 @@ def main(argv: list[str] | None = None) -> int:
                 contact_ref=args.contact_ref,
                 require_native_session_binding=True,
                 require_native_session_marker=True,
+                method_receipt_ref=args.method_receipt,
+                method_receipt_sha256=args.method_receipt_sha256,
             )
         except MutationAuditError as exc:
             return _render_mutation_audit_failure(exc, as_json=args.json)

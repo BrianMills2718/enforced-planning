@@ -1,7 +1,7 @@
 # Method-conformance receipt binding for plan-backed claims
 
 Source: company-planning Plan #48, unit `WU-CP-MCR-002`. Implementation:
-`enforced_planning/method_conformance_binding.py`, called from
+`resolve_method_conformance_binding` in `enforced_planning/coordination_claims.py`, called from
 `resolve_canonical_work_unit_binding` (claim admission) and
 `check_plan_start_readiness` (plan-start gate).
 

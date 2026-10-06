@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 from enforced_planning import claim_mutation_receipts
-from enforced_planning.method_conformance_binding import (
+from enforced_planning.coordination_claims import (
     MethodConformanceRefusal,
     resolve_method_conformance_binding,
 )

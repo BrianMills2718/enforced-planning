@@ -1270,7 +1270,9 @@ When the plan repository's `meta-process.yaml` sets
 `--method-receipt <path>` and `--method-receipt-sha256 <digest>` naming the
 plan's passing Company Planning method-conformance receipt; the claim then
 retains `method_receipt_ref` and `method_receipt_sha256`. Refusal codes and the
-ownership split are in `docs/reference/METHOD_CONFORMANCE_BINDING.md`.
+ownership split are in `docs/reference/METHOD_CONFORMANCE_BINDING.md`; the
+resolver is `resolve_method_conformance_binding` in `coordination_claims.py`, so
+installed runtimes vendor nothing new.
 
 An exact `goal:<outcome-id>` ref is the narrow exception for one sequential
 outcome lane that has no work-graph consumer. It may own write paths without a

@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from enforced_planning import coordination_claims
-from enforced_planning.method_conformance_binding import (
+from enforced_planning.coordination_claims import (
     MethodConformanceBindingV1,
     resolve_method_conformance_binding,
 )

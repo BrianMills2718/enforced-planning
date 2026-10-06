@@ -72,7 +72,7 @@ by default.
 | `plans.plans_dir` | string | `"docs/plans"` | `check_plan_tests.py` (CLI arg), `complete_plan.py` (CLI arg) | `docs/plans` |
 | `plans.integrity.mode` | enum `off \| observe \| enforce` | `enforce` | plan validator, plan-start readiness, canonical plan-bound claim binding | Structural plan admission enforced; to disable set to `off` |
 | `plans.integrity.contract_version` | string | `"1.0.0"` | plan validator and admission boundaries | `1.0.0`; an explicitly unsupported version fails structurally |
-| `plans.method_conformance.mode` | enum `off \| required` | `off` | `enforced_planning/method_conformance_binding.py` via canonical plan-bound claim binding and plan-start readiness | With `required`, every plan-backed write claim must name the plan's passing Company Planning method-conformance receipt (`--method-receipt`, `--method-receipt-sha256`); see `docs/reference/METHOD_CONFORMANCE_BINDING.md` |
+| `plans.method_conformance.mode` | enum `off \| required` | `off` | `resolve_method_conformance_binding` in `enforced_planning/coordination_claims.py` via canonical plan-bound claim binding and plan-start readiness | With `required`, every plan-backed write claim must name the plan's passing Company Planning method-conformance receipt (`--method-receipt`, `--method-receipt-sha256`); see `docs/reference/METHOD_CONFORMANCE_BINDING.md` |
 | `plans.integrity.minimum_plan_number` | positive int | `1` | plan validator and admission boundaries | Plans below the floor are `not_applicable`; plans at/above it use the configured mode |
 
 Planning Integrity 1.0.0 validates exact Git-object plan/config bytes when a

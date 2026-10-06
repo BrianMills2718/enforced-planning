@@ -1265,6 +1265,13 @@ revision. A successful claim retains `work_graph_sha256`, `work_unit_id`, and
 the exact approval revisions. Existing historical claims remain readable, but
 creating or refreshing a plan-bound claim with write ownership cannot omit this binding.
 
+When the plan repository's `meta-process.yaml` sets
+`plans.method_conformance.mode: required`, the same claim must also pass
+`--method-receipt <path>` and `--method-receipt-sha256 <digest>` naming the
+plan's passing Company Planning method-conformance receipt; the claim then
+retains `method_receipt_ref` and `method_receipt_sha256`. Refusal codes and the
+ownership split are in `docs/reference/METHOD_CONFORMANCE_BINDING.md`.
+
 An exact `goal:<outcome-id>` ref is the narrow exception for one sequential
 outcome lane that has no work-graph consumer. It may own write paths without a
 manufactured graph or unit, and the sanctioned session entrypoint must preserve

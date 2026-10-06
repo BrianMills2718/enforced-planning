@@ -64,6 +64,11 @@ def _default_integrity_off(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda **_kwargs: _integrity_result(),
     )
     monkeypatch.setattr(
+        plan_readiness,
+        "resolve_method_conformance_binding",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
         plan_readiness.coordination_claims,
         "resolve_default_integration_revision",
         lambda _root: START_REVISION,
@@ -405,3 +410,36 @@ def test_external_plan_readiness_keeps_target_lane_revision_separate(
             "start_point": plan_revision,
         }
     ]
+
+
+def test_gate_forwards_method_receipt_and_refuses_when_binding_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Company Planning Plan #48: the plan-start gate re-resolves the cited receipt."""
+    from enforced_planning.coordination_claims import MethodConformanceRefusal
+
+    _patch_graph(monkeypatch, decision="ready")
+    seen: dict[str, object] = {}
+
+    def refuse(**kwargs: object) -> None:
+        seen.update(kwargs)
+        raise MethodConformanceRefusal("method_receipt_digest_mismatch", "fixture")
+
+    monkeypatch.setattr(plan_readiness, "resolve_method_conformance_binding", refuse)
+    with pytest.raises(ValueError, match="method_receipt_digest_mismatch"):
+        plan_readiness.check_plan_start_readiness(
+            qualified_plan_id=PLAN_ID,
+            execution_profile="coordinated",
+            query_command="plan-graph",
+            repository="project-meta",
+            lane_id="lane",
+            branch="plan-234",
+            worktree_path="/tmp/project-meta/worktrees/plan-234",
+            claim_identity="codex:project-meta:plan-234",
+            session_identity="codex:test",
+            repo_root="/tmp/project-meta",
+            method_receipt_ref="docs/plans/234.receipt.json",
+            method_receipt_sha256="0" * 64,
+        )
+    assert seen["receipt_ref"] == "docs/plans/234.receipt.json"
+    assert seen["plan_number"] == 234

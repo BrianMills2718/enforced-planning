@@ -1,0 +1,359 @@
+{
+  "schema_version": "planning-method-conformance-receipt.v1",
+  "record_type": "planning_method_conformance_receipt",
+  "receipt_id": "RECEIPT-plan-research-first-368343d92ea9",
+  "plan": {
+    "plan_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md",
+    "plan_sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+  },
+  "path_decision": {
+    "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/path-decision.json",
+    "sha256": "54eea1514b6cede5e357339901edd87149a30cc26af34363fcf6a2da39083037",
+    "selected_path": "durable_solo",
+    "classified_path": "durable_solo",
+    "errors": []
+  },
+  "route": "durable_solo",
+  "profile": {
+    "profile_id": "bounded-design",
+    "revision": "bounded-design@1",
+    "path": "contracts/method-conformance/profiles/bounded-design.v1.json",
+    "sha256": "ffa0d0dbe4b018c3b35e810465caebf5961c03296c6fc23d220c15ad39ce12a8"
+  },
+  "compiler": {
+    "path": "scripts/method_conformance/compiler.py",
+    "sha256": "9e43185f097d145859cb996e6715b750dd2e06a7d5f7715e912e6c8fb927c4fa"
+  },
+  "activation": {
+    "facts_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/research-first.facts.json",
+    "facts_sha256": "d4f38ee7c441ccddb0b90e68089cd202b4aa0006dad5a9a642d0f910fb9907b3",
+    "facts": {
+      "shared_mechanism": true,
+      "empirical_comparison_proposed": false,
+      "llm_central": false,
+      "irreversible_or_spend_action": false,
+      "multiple_writers": false,
+      "consequential_boundary": false,
+      "inline_prototype": false
+    },
+    "fact_origins": {
+      "shared_mechanism": "declared:explicit_user",
+      "empirical_comparison_proposed": "declared:derived_current_boundary",
+      "llm_central": "declared:derived_current_boundary",
+      "irreversible_or_spend_action": "declared:derived_current_boundary",
+      "multiple_writers": "derived:path_decision.concurrent_writers",
+      "consequential_boundary": "derived:path_decision.persistent_migration|consequential_external_mutation",
+      "inline_prototype": "derived:classified_path==prototype"
+    },
+    "overlays": [
+      {
+        "overlay_id": "OV-PRIOR-ART",
+        "activation_fact": "shared_mechanism",
+        "active": true,
+        "reason": "shared_mechanism=true (declared:explicit_user)"
+      },
+      {
+        "overlay_id": "OV-EMPIRICAL-COMPARISON",
+        "activation_fact": "empirical_comparison_proposed",
+        "active": false,
+        "reason": "empirical_comparison_proposed=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-LLM-CENTRAL",
+        "activation_fact": "llm_central",
+        "active": false,
+        "reason": "llm_central=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-MULTIPLE-WRITERS",
+        "activation_fact": "multiple_writers",
+        "active": false,
+        "reason": "multiple_writers=false (derived:path_decision.concurrent_writers)"
+      },
+      {
+        "overlay_id": "OV-CONSEQUENTIAL-BOUNDARY",
+        "activation_fact": "consequential_boundary",
+        "active": false,
+        "reason": "consequential_boundary=false (derived:path_decision.persistent_migration|consequential_external_mutation)"
+      },
+      {
+        "overlay_id": "OV-INLINE-PROTOTYPE",
+        "activation_fact": "inline_prototype",
+        "active": false,
+        "reason": "inline_prototype=false (derived:classified_path==prototype)"
+      }
+    ]
+  },
+  "checklist": {
+    "checklist_id": "method-conformance.bounded-design",
+    "revision": "sha256:be2b793a210f8acaa2faded40c0ac94102c8659fa2b63aade173c2bfe447cb2e",
+    "definition_sha256": "5fdd7257b0a0941016859299005824cd7d9facdbdc8f2c863ad780663270bbd0",
+    "bundle_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/research-first.bundle.json",
+    "bundle_sha256": "a34780ecd4915320c7ae4382ec7e6c8d22634f134fe72fd370f2bf8d84355822",
+    "coverage": "complete",
+    "definition_matches_recompilation": true
+  },
+  "items": [
+    {
+      "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md#actor-and-result",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/CORE-ACTOR-RESULT-EXAMPLE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the actor as the next agent session, states the desired result as resuming from a structured resume note instead of rereading the conversation, and gives a stable concrete example including the plan path and digest, next work unit, open question, and claiming the unit."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ROUTE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "structural",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/path-decision.json",
+          "sha256": "54eea1514b6cede5e357339901edd87149a30cc26af34363fcf6a2da39083037"
+        }
+      ],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SUCCESS-DISPROOF",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md#success-and-disproof",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/CORE-SUCCESS-DISPROOF",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly defines success as a fresh session reaching the correct next work unit and open question using only the resume note, with a reproducible test fixture. It gives concrete disproof conditions: choosing a different next unit than transcript rereading, or requiring fields the existing handoff contract cannot express."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-AUTHORITY-NONGOALS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md#authority-and-non-goals",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/CORE-AUTHORITY-NONGOALS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies Brian as the owner with authority over the Company Planning plugin and defines the single owning agent’s decision scope. It also explicitly lists multiple non-goals, including changes it will not make and activities it will not undertake."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-IRREVERSIBLE-SPEND",
+      "effect": "blocking",
+      "applicability_mode": "conditional",
+      "condition_fact": "irreversible_or_spend_action",
+      "condition_value": false,
+      "verifier_kind": "semantic",
+      "disposition": "not_applicable",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-UNCERTAINTIES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md#uncertainties",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/CORE-UNCERTAINTIES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly lists two material uncertainties and provides an owner or resolving evidence for each. The first is resolved by replaying three recorded sessions, and the second has the implementing agent as owner plus a specified hook-list check."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ACTIVATION-FACTS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/CORE-ACTIVATION-FACTS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan explicitly proposes a typed resume-note mechanism extending `NextSkillHandoffV1` and the session-work snapshot, consistent with `shared_mechanism: true`. It explicitly says no A/B comparison, benchmark, or bake-off, no centrally dependent LLM behavior, and no irreversible action or spend beyond ordinary development, matching the other declared facts."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-DISPOSITION",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md#prior-art-and-ownership",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/OV-PRIOR-ART-DISPOSITION",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states that existing ownership, internal lineage, and external prior art were searched. Each identified candidate is given a disposition: extend, reuse, or bounded exception."
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+      "effect": "advisory",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md#prior-art-and-ownership",
+          "sha256": "368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/plan-research-first/68d188346ad9/OV-PRIOR-ART-PARALLEL-CHECK",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names a concrete structural test: it verifies the resume note is generated only from `NextSkillHandoffV1` and the session-work snapshot, and fails if another module writes the resume-note record type. This directly detects a silent parallel implementation."
+      },
+      "suggested_action": null
+    }
+  ],
+  "item_counts": {
+    "pass": 8,
+    "unresolved": 0,
+    "not_applicable": 1,
+    "unavailable": 0,
+    "missing": 0
+  },
+  "semantic_verifier": {
+    "kind": "llm_client",
+    "available": true,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "task": "company_planning.method_conformance.semantic_item_review"
+  },
+  "conformance_report": {
+    "schema_version": "1.0",
+    "record_type": "planning_conformance_report",
+    "report_id": "REPORT-plan-research-first-368343d92ea9",
+    "snapshot_ref": "SNAPSHOT-plan-research-first",
+    "snapshot_revision": "sha256:a34780ecd4915320c7ae4382ec7e6c8d22634f134fe72fd370f2bf8d84355822",
+    "packet_ref": "plugins/company-planning/docs/evidence/method-conformance/canonical-probe/plan-research-first.md",
+    "packet_revision": "sha256:368343d92ea96cd9ee788c6482dd9bd15c4b39e760c776990c76769bba9bcc60",
+    "structural_status": "pass",
+    "semantic_review_status": "complete",
+    "diagnostics": [],
+    "route": "durable_solo",
+    "adoption_readiness": "ready_for_contributor",
+    "limitations": [
+      "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+    ]
+  },
+  "advisory_deviations": [],
+  "result": "pass",
+  "reason_codes": [],
+  "actionable_summary": [
+    "pass: 8 items evidenced, 1 confirmed not applicable, 0 advisory deviation(s)"
+  ],
+  "limitations": [
+    "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+  ],
+  "caller": {
+    "client": "canonical-probe",
+    "session": null
+  },
+  "started_at": "2026-10-06T18:13:37Z",
+  "completed_at": "2026-10-06T18:13:46Z",
+  "duration_ms": 9274
+}

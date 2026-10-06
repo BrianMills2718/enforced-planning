@@ -47,6 +47,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--scope", required=True)
     parser.add_argument("--session-id")
     parser.add_argument("--allow-unplanned", action="store_true")
+    parser.add_argument("--method-receipt", help="Repository-relative path of the plan's passing method-conformance receipt.")
+    parser.add_argument("--method-receipt-sha256", help="SHA-256 of the receipt file bytes.")
     parser.add_argument(
         "--resume", action="store_true", help="Explicitly resume an in-progress plan with no live lane."
     )
@@ -78,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
             plan_start_point=args.plan_start_point,
             allow_unplanned=args.allow_unplanned,
             resume_requested=args.resume,
+            method_receipt_ref=args.method_receipt,
+            method_receipt_sha256=args.method_receipt_sha256,
         )
     except ValueError as exc:
         print(f"Plan-start gate failed: {exc}", file=sys.stderr)

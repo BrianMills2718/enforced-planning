@@ -4866,11 +4866,14 @@ def test_close_session_archives_session_ended_canonical_root_without_removal(
     assert receipt["branch_action"] == "retained_canonical_branch"
 
 
+@pytest.mark.parametrize(("detached", "sibling"), [(False, False), (False, True), (True, False), (True, True)])
 def test_close_session_archives_session_ended_canonical_default_branch_without_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    detached: bool,
+    sibling: bool,
 ) -> None:
-    """Canonical-root reconciliation retains a legacy claim recorded on main itself."""
+    """Metadata archival retains main or a detached pin and other writers' custody."""
 
     claims_dir = tmp_path / "claims"
     trackers_dir = tmp_path / "sessions"
@@ -4885,6 +4888,9 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
     _git(repo_root, "add", "README.md")
     _git(repo_root, "commit", "-m", "initial")
     _git(repo_root, "update-ref", "refs/remotes/origin/main", "refs/heads/main")
+    head_before = _git(repo_root, "rev-parse", "HEAD")
+    if detached:
+        _git(repo_root, "switch", "--detach", head_before)
     session_lifecycle.start_session(
         agent="codex",
         project="inside-success-mega",
@@ -4892,7 +4898,7 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
         intent="archive legacy canonical-main custody",
         repo_root=str(repo_root),
         worktree_path=str(repo_root),
-        branch="main",
+        branch="HEAD" if detached else "main",
         broader_goal="Retain Finder Repository",
         current_phase="terminal metadata archival",
         plan_ref="UNPLANNED",
@@ -4912,6 +4918,24 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
     tracker = Path(yaml.safe_load(claim_before)["tracker_path"])
     claim_digest = hashlib.sha256(claim_before).hexdigest()
     tracker_digest = session_lifecycle._tracker_sha256(tracker)
+    sibling_file = claims_dir / "claude-code_inside-success-mega_other-writer.yaml"
+    sibling_before = None
+    if sibling:
+        other = coordination_claims.build_candidate_claim(
+            agent="claude-code", project="inside-success-mega", scope="other-writer",
+            intent="read the retained checkout", claim_type="review", read_paths=["README.md"],
+            repo_root=str(repo_root), worktree_path=str(repo_root),
+            branch="HEAD" if detached else "main", session_id="claude-code:other-writer",
+            session_name="other-writer", broader_goal="Other writer remains live",
+            claimed_at="2026-07-28T00:00:00+00:00", expires_at="2099-07-28T00:00:00+00:00",
+        )
+        other_payload = other.to_dict()
+        other_payload.pop("project")
+        other_payload.pop("source_file")
+        sibling_file.write_text(yaml.safe_dump(other_payload, sort_keys=False), encoding="utf-8")
+        sibling_before = sibling_file.read_bytes()
+    refs_before = _git(repo_root, "show-ref")
+    worktrees_before = _git(repo_root, "worktree", "list", "--porcelain")
 
     def fail_remove(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("canonical-root reconciliation must never remove a worktree")
@@ -4928,16 +4952,68 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
         reconcile_canonical_root=True,
         expected_claim_sha256=claim_digest,
         expected_tracker_sha256=tracker_digest,
+        **({"disposition": "archived", "disposition_reason": "Preserve the source pin",
+            "recovery_ref": "refs/remotes/origin/main"} if detached else {}),
     )
 
     assert payload["action"] == "closed"
     assert payload["worktree_action"] == "retained_canonical_root"
-    assert payload["branch_action"] == "retained_canonical_branch"
+    assert payload["branch_action"] == ("retained_detached_head" if detached else "retained_canonical_branch")
     assert payload["default_branch"] == "main"
-    assert payload["merge_evidence"] == "branch_ancestor"
+    assert payload["merge_evidence"] == (None if detached else "branch_ancestor")
     assert repo_root.is_dir()
-    assert _git(repo_root, "symbolic-ref", "--short", "HEAD") == "main"
+    assert _git(repo_root, "rev-parse", "HEAD") == head_before
+    assert _git(repo_root, "show-ref") == refs_before
+    assert _git(repo_root, "worktree", "list", "--porcelain") == worktrees_before
+    if detached:
+        assert subprocess.run(["git", "symbolic-ref", "--quiet", "HEAD"], cwd=repo_root, check=False).returncode == 1
+    else:
+        assert _git(repo_root, "symbolic-ref", "--short", "HEAD") == "main"
+    if sibling:
+        assert sibling_file.read_bytes() == sibling_before
     assert not claim_file.exists()
+    archived = _archived_claim_payload(payload["claim_archive_id"])
+    assert archived["canonical_root_reconciliation"]["head_commit"] == head_before
+
+
+@pytest.mark.parametrize(
+    ("disposition", "reason", "recovery", "change_head", "expected"),
+    [
+        ("merged", "retain pin", "refs/remotes/origin/hold", False, "disposition=archived"),
+        ("archived", None, "refs/remotes/origin/hold", False, "disposition=archived"),
+        ("archived", "retain pin", "HEAD", False, "independent remote"),
+        ("archived", "retain pin", "refs/remotes/origin/missing", False, "does not contain"),
+        ("archived", "retain pin", "refs/remotes/origin/main", False, "does not contain"),
+        ("archived", "retain pin", "refs/remotes/origin/hold", True, "HEAD changed"),
+    ],
+)
+def test_detached_canonical_preflight_requires_recoverable_unchanged_pin(
+    tmp_path: Path, disposition: str, reason: str | None,
+    recovery: str, change_head: bool, expected: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.email", "tests@example.com")
+    _git(repo_root, "config", "user.name", "Test User")
+    (repo_root / "README.md").write_text("baseline\n", encoding="utf-8")
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "baseline")
+    baseline = _git(repo_root, "rev-parse", "HEAD")
+    _git(repo_root, "update-ref", "refs/remotes/origin/main", baseline)
+    (repo_root / "README.md").write_text("pinned work\n", encoding="utf-8")
+    _git(repo_root, "commit", "-am", "pinned work")
+    pin = _git(repo_root, "rev-parse", "HEAD")
+    _git(repo_root, "update-ref", "refs/remotes/origin/hold", pin)
+    _git(repo_root, "switch", "--detach", baseline if change_head else pin)
+    refs_before = _git(repo_root, "show-ref")
+    with pytest.raises(ValueError, match=expected):
+        session_lifecycle._detached_canonical_preflight(
+            repo_root=repo_root, disposition=disposition, disposition_reason=reason,
+            recovery_ref=recovery, head_commit=pin,
+        )
+    assert _git(repo_root, "show-ref") == refs_before
+    assert _git(repo_root, "rev-parse", "HEAD") == (baseline if change_head else pin)
 
 
 @pytest.mark.parametrize(

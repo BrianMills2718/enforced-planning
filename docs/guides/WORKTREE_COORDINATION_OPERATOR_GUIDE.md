@@ -647,10 +647,17 @@ python scripts/session_close.py \
 This exceptional reconciliation fails closed unless the claim is exactly
 `session_ended`, both preserved files match their supplied digests and each
 other's identity, the recorded path is the existing clean canonical Git main
-worktree, and its checked-out branch matches the claim. It records the exact
+worktree, and its checked-out branch matches the claim. A detached checkout
+must be recorded as `branch: HEAD`; it additionally requires
+`--disposition archived`, a disposition reason, and `--recovery-ref
+refs/remotes/REMOTE/BRANCH` whose history contains the exact retained commit.
+The archive records that commit without claiming a source merge. It records the exact
 claim/tracker binding in the completed archive while retaining the repository
 directory, worktree registration, checked-out branch, branch ref, repository
 contents, and submodules. It never calls worktree removal or branch deletion.
+Other live claims may continue using this retained canonical checkout; their
+custody and files are not removed or changed by metadata archival. The live
+sibling guard still applies to ordinary closeout that removes a linked worktree.
 Use ordinary `session-close` for real linked worktrees and
 `--reconcile-missing-worktree` only for an already-absent recorded worktree.
 

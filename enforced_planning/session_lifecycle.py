@@ -847,7 +847,14 @@ def _validate_canonical_root_reconciliation(
         raise ValueError(
             "Canonical-root reconciliation requires a clean canonical checkout. Uncommitted state:\n" + dirty_details
         )
-    current_branch = git_output("symbolic-ref", "--quiet", "--short", "HEAD")
+    symbolic = subprocess.run(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+        cwd=recorded_worktree, capture_output=True, text=True, check=False,
+    )
+    if symbolic.returncode not in (0, 1):
+        raise ValueError("Canonical-root reconciliation could not prove checked-out branch identity.")
+    current_branch = symbolic.stdout.strip() if symbolic.returncode == 0 else "HEAD"
+    head_commit = git_output("rev-parse", "--verify", "HEAD^{commit}")
     if not claim.branch or current_branch != claim.branch:
         raise ValueError(
             "Canonical-root reconciliation requires the checked-out branch to match the recorded claim branch."
@@ -858,12 +865,13 @@ def _validate_canonical_root_reconciliation(
         "recorded_worktree_path": str(recorded_worktree),
         "canonical_repo_root": str(canonical_root),
         "branch": current_branch,
+        "head_commit": head_commit,
         "claim_path": str(claim_file),
         "claim_sha256": actual_claim_digest,
         "tracker_path": str(tracker),
         "tracker_sha256": actual_tracker_digest,
         "filesystem_action": "retained_canonical_root",
-        "branch_action": "retained_canonical_branch",
+        "branch_action": "retained_detached_head" if current_branch == "HEAD" else "retained_canonical_branch",
     }
 
 
@@ -2976,6 +2984,28 @@ def _validate_closeout_preflight(
         merge_evidence=None,
         recovery_ref=normalized_recovery_ref,
         force_delete_branch=delete_branch,
+    )
+
+
+def _detached_canonical_preflight(
+    *, repo_root: Path, disposition: str, disposition_reason: str | None,
+    recovery_ref: str | None, head_commit: str,
+) -> CloseoutPreflight:
+    """Archive metadata for a retained pin only with independent remote history."""
+    if disposition != "archived" or not disposition_reason or not disposition_reason.strip():
+        raise ValueError("Detached canonical closeout requires disposition=archived and a reason.")
+    if not recovery_ref or not recovery_ref.startswith("refs/remotes/"):
+        raise ValueError("Detached canonical closeout requires an independent remote recovery ref.")
+    if not _ref_exists(repo_root, recovery_ref) or not _is_ancestor(repo_root, head_commit, recovery_ref):
+        raise ValueError("Detached canonical recovery ref does not contain the retained HEAD commit.")
+    if _git_capture(repo_root, "rev-parse", "--verify", "HEAD^{commit}").strip() != head_commit:
+        raise ValueError("Detached canonical HEAD changed during closeout preflight.")
+    return CloseoutPreflight(
+        disposition=disposition, branch_exists=False,
+        default_branch=push_safety.resolve_default_branch(repo_root),
+        merged_to_default=None, default_remote_ref=None, default_branch_pushed=None,
+        merge_commit=None, merge_evidence=None, recovery_ref=recovery_ref,
+        force_delete_branch=False,
     )
 
 
@@ -5143,7 +5173,7 @@ def close_session(
                 "repository, worktree, and branch custody."
             )
         retained_parent_scope = parent_matches[0].scope
-    elif resolved_worktree_path:
+    elif resolved_worktree_path and canonical_root_reconciliation is None:
         canonical_worktree_path = resolved_worktree_path.resolve()
         sibling_scopes = sorted(
             sibling.scope
@@ -5195,6 +5225,12 @@ def close_session(
             disposition=disposition,
             disposition_reason=disposition_reason,
             capture=lane_state_capture,
+        )
+    elif canonical_root_reconciliation is not None and canonical_root_reconciliation["branch"] == "HEAD":
+        preflight = _detached_canonical_preflight(
+            repo_root=repo_root, disposition=disposition,
+            disposition_reason=disposition_reason, recovery_ref=recovery_ref,
+            head_commit=canonical_root_reconciliation["head_commit"],
         )
     else:
         preflight = _validate_closeout_preflight(

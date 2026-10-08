@@ -385,9 +385,52 @@ def session_tracker_path(
     # this preserves pre-bound trackers that fit on disk but exceed our safer
     # atomic-rewrite budget.
     legacy_name_fits_filesystem = len(legacy.name.encode()) <= MAX_TRACKER_FILENAME_BYTES
-    if legacy != bounded and legacy_name_fits_filesystem and legacy.is_file():
-        return legacy
-    return bounded
+    primary = (
+        legacy
+        if legacy != bounded and legacy_name_fits_filesystem and legacy.is_file()
+        else bounded
+    )
+    if not primary.is_file():
+        return primary
+    previous = read_session_tracker(primary)
+    tracker = previous.get("tracker")
+    if not isinstance(tracker, dict) or tracker.get("current_phase") != "closed":
+        return primary
+
+    # A closed lane is history, not an occupied goal. Keep its original path
+    # and allocate a deterministic successor path from the existing lane
+    # identity. Refreshing/closing the predecessor still selects itself.
+    identity_fields = (
+        "agent", "project", "session_id", "repo_root", "scope", "branch", "worktree_path"
+    )
+    identity = {name: getattr(contract, name) for name in identity_fields}
+    previous_claim = previous.get("claim")
+    if not isinstance(previous_claim, dict) or any(
+        not isinstance(previous_claim.get(name), str) or not previous_claim[name]
+        for name in identity_fields
+    ):
+        raise ValueError(f"Closed session tracker at {primary} has incomplete lane identity")
+    if any(previous_claim[name] != identity[name] for name in identity_fields[:4]):
+        raise ValueError(f"Closed session tracker at {primary} belongs to another session")
+    if all(previous_claim[name] == value for name, value in identity.items()):
+        return primary
+    lane_key = hashlib.sha256(
+        "\0".join(identity[name] for name in identity_fields).encode()
+    ).hexdigest()[:16]
+    successor = directory / _bounded_tracker_filename(
+        agent=contract.agent,
+        project=contract.project,
+        safe_session_id=safe_session_id,
+        # Put the distinguishing key before the potentially truncated goal.
+        session_name=f"lane-{lane_key}-{contract.session_name}",
+    )
+    if successor.is_file():
+        successor_claim = read_session_tracker(successor).get("claim")
+        if not isinstance(successor_claim, dict) or any(
+            successor_claim.get(name) != value for name, value in identity.items()
+        ):
+            raise ValueError(f"Successor session tracker at {successor} has conflicting lane identity")
+    return successor
 
 
 def find_session_tracker_path(

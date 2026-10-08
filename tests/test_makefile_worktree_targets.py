@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -115,6 +116,31 @@ def _maintenance_request(make_output: str) -> dict[str, object]:
     assert len(lines) == 1, f"expected one typed bootstrap invocation, got {len(lines)}"
     tokens = shlex.split(lines[0])
     return json.loads(tokens[tokens.index("--request-json") + 1])
+
+
+@pytest.mark.parametrize("parallel", ["0", "1"])
+@pytest.mark.parametrize("installed", [False, True])
+def test_goal_worktree_preserves_parallel_authorization_and_paths(
+    tmp_path: Path, parallel: str, installed: bool,
+) -> None:
+    """Both public Make entrypoints retain explicit disjoint-lane authorization."""
+    args = ["make", "-n"]
+    if installed:
+        rendered = tmp_path / "Makefile"
+        rendered.write_text(TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        args.extend(["-f", str(rendered)])
+    args.extend([
+        "goal-worktree", *_COMMON_MAKE_VARS, "BRANCH=goal-parallel-probe",
+        "GOAL_REF=goal:parallel-probe", "WORKTREE_AGENT=codex",
+        "WORKTREE_PROJECT=enforced-planning", f"SESSION_ALLOW_PARALLEL={parallel}",
+        "SESSION_WRITE_PATHS=src/first.py docs/second.md",
+    ])
+    result = subprocess.run(args, cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    request = _maintenance_request(result.stdout)
+    assert request["operation"] == "goal_worktree"
+    assert request["allow_parallel"] is (parallel == "1")
+    assert request["write_paths"] == ["src/first.py", "docs/second.md"]
 
 
 def test_install_codex_runtime_delegates_to_canonical_updater() -> None:

@@ -675,7 +675,7 @@ Use ordinary `session-close` for real linked worktrees and
 
 ### Several lanes in one session
 
-`make maintenance-worktree` refuses a second lane while the session already
+`make maintenance-worktree` and `make goal-worktree` refuse a second lane while the session already
 owns a claim root, unless `SESSION_ALLOW_PARALLEL=1` is set and every declared
 write path of the new lane is narrow (not `.`) and disjoint from each existing
 root's write paths. Write paths are repository-relative, so a root in a

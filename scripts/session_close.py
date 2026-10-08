@@ -274,9 +274,12 @@ def _resolve_canonical_lock_module(
             )
     bases.extend((here, here.parent))
     for base in dict.fromkeys(bases):
-        candidate = base / "worktree-coordination" / "canonical_lock.py"
-        if candidate.exists():
-            return candidate
+        for candidate in (
+            base / "canonical_lock.py",
+            base / "worktree-coordination" / "canonical_lock.py",
+        ):
+            if candidate.is_file():
+                return candidate
     return None
 
 
@@ -386,6 +389,16 @@ def main(argv: list[str] | None = None) -> int:
     # worktree containing this script, so a relative lookup after closeout can
     # no longer find the reconciliation helper.
     canonical_lock_module = _resolve_canonical_lock_module()
+    # close_session() can delete the branch. Retain its object identity before
+    # cleanup so our own commits cannot become apparent outside-writer work.
+    lane_ref = args.branch or args.scope
+    lane_head = subprocess.run(
+        ["git", "-C", str(durable_repo_root), "rev-parse", "--verify", "--quiet", f"{lane_ref}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    retained_lane_ref = lane_head.stdout.strip() if lane_head.returncode == 0 else lane_ref
     payload = session_lifecycle.close_session(**_supported_closeout_kwargs(args))
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -403,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
             dict.fromkeys(
                 ref
                 for ref in (
-                    args.branch or args.scope,
+                    retained_lane_ref,
                     args.merge_commit,
                     payload.get("merge_commit"),
                 )

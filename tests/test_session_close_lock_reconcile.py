@@ -110,9 +110,17 @@ def test_reconcile_actually_clears_a_stale_lock(tmp_path):
         )
 
 
-@pytest.mark.parametrize("script_directory", (Path("scripts"), Path("scripts/meta")))
+@pytest.mark.parametrize(
+    ("script_directory", "helper_relative_path"),
+    (
+        (Path("scripts"), Path("scripts/worktree-coordination/canonical_lock.py")),
+        (Path("scripts/meta"), Path("scripts/worktree-coordination/canonical_lock.py")),
+        (Path("scripts/meta"), Path("scripts/meta/canonical_lock.py")),
+    ),
+)
 def test_resolver_returns_executable_helper_outside_disposable_worktree(
     script_directory: Path,
+    helper_relative_path: Path,
     tmp_path: Path,
 ) -> None:
     """The retained helper must still execute after the lane is removed."""
@@ -124,9 +132,7 @@ def test_resolver_returns_executable_helper_outside_disposable_worktree(
     canonical = tmp_path / "canonical"
     canonical.mkdir()
     subprocess.run(["git", "init", "-q", str(canonical)], check=True)
-    # Both shipped entrypoints use the shared helper under scripts/, including
-    # the installed scripts/meta/session_close.py layout.
-    helper = canonical / "scripts" / "worktree-coordination" / "canonical_lock.py"
+    helper = canonical / helper_relative_path
     helper.parent.mkdir(parents=True)
     helper.write_text("print('durable-helper')\n", encoding="utf-8")
     script = canonical / script_directory / "session_close.py"
@@ -273,6 +279,59 @@ def test_parse_args_accepts_explicit_repo_root(script: Path, tmp_path: Path) -> 
         ]
     )
     assert args.repo_root == str(tmp_path)
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_closeout_retains_lane_history_after_deleting_its_branch(
+    script: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = _load(script, f"session_close_deleted_branch_{script.parent.name}")
+    repo = tmp_path / "consumer"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "closeout@example.invalid")
+    git("config", "user.name", "Closeout Test")
+    (repo / "base").write_text("base\n")
+    git("add", "base")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+    git("checkout", "-qb", "lane")
+    (repo / "owned").write_text("owned\n")
+    git("add", "owned")
+    git("commit", "-qm", "own lane content")
+    git("checkout", "-q", "main")
+    (repo / "foreign").write_text("foreign\n")
+    git("add", "foreign")
+    git("commit", "-qm", "other writer content")
+    git("merge", "--no-ff", "-qm", "integrate lane", "lane")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    args = SimpleNamespace(
+        project="consumer", scope="lane", branch="lane", merge_commit=None,
+        json=False, repo_root=str(repo),
+    )
+    monkeypatch.setattr(module, "parse_args", lambda _argv: args)
+    monkeypatch.setattr(module, "_materialize_shared_ref_history", lambda _root: None)
+    monkeypatch.setattr(module, "_lane_range_basis", lambda *_args, **_kwargs: (base, "start_revision"))
+    monkeypatch.setattr(module, "_supported_closeout_kwargs", lambda _args: {})
+    monkeypatch.setattr(module, "_resolve_canonical_lock_module", lambda: None)
+    monkeypatch.setattr(module, "_reconcile_canonical_lock", lambda *_args: None)
+
+    def close_session(**_kwargs):
+        git("branch", "-D", "lane")
+        return {
+            "action": "closed", "worktree_action": "removed", "branch_action": "deleted",
+            "disposition": "merged", "released": True, "merge_commit": None,
+        }
+
+    monkeypatch.setattr(module.session_lifecycle, "close_session", close_session)
+    assert module.main([]) == 0
+    report = capsys.readouterr().err
+    assert "other writer content" in report
+    assert "own lane content" not in report
 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)

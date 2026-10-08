@@ -645,8 +645,8 @@ python scripts/session_close.py \
 ```
 
 This exceptional reconciliation fails closed unless the claim is exactly
-`session_ended`, both preserved files match their supplied digests and each
-other's identity, the recorded path is the existing clean canonical Git main
+`session_ended`, both preserved files match their supplied digests and stable
+agent/project/session identity, the recorded path is the existing clean canonical Git main
 worktree, and its checked-out branch matches the claim. A detached checkout
 must be recorded as `branch: HEAD`; it additionally requires
 `--disposition archived`, a disposition reason, and `--recovery-ref
@@ -658,6 +658,9 @@ contents, and submodules. It never calls worktree removal or branch deletion.
 Other live claims may continue using this retained canonical checkout; their
 custody and files are not removed or changed by metadata archival. The live
 sibling guard still applies to ordinary closeout that removes a linked worktree.
+If a legacy tracker filename was reused by a later scope in the same session,
+the archive records that identity drift and preserves the tracker bytes unchanged.
+A tracker belonging to another agent, project, or session remains a refusal.
 Use ordinary `session-close` for real linked worktrees and
 `--reconcile-missing-worktree` only for an already-absent recorded worktree.
 

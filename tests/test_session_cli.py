@@ -4867,11 +4867,13 @@ def test_close_session_archives_session_ended_canonical_root_without_removal(
 
 
 @pytest.mark.parametrize(("detached", "sibling"), [(False, False), (False, True), (True, False), (True, True)])
+@pytest.mark.parametrize("tracker_case", ["exact", "stale_scope", "foreign_owner"])
 def test_close_session_archives_session_ended_canonical_default_branch_without_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     detached: bool,
     sibling: bool,
+    tracker_case: str,
 ) -> None:
     """Metadata archival retains main or a detached pin and other writers' custody."""
 
@@ -4916,6 +4918,13 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
     )
     claim_before = claim_file.read_bytes()
     tracker = Path(yaml.safe_load(claim_before)["tracker_path"])
+    tracker_payload = yaml.safe_load(tracker.read_text())
+    if tracker_case == "stale_scope":
+        tracker_payload["claim"]["scope"] = "later-scope"
+    elif tracker_case == "foreign_owner":
+        tracker_payload["claim"]["session_id"] = "codex:another-owner"
+    tracker.write_text(yaml.safe_dump(tracker_payload, sort_keys=False), encoding="utf-8")
+    tracker_before = tracker.read_bytes()
     claim_digest = hashlib.sha256(claim_before).hexdigest()
     tracker_digest = session_lifecycle._tracker_sha256(tracker)
     sibling_file = claims_dir / "claude-code_inside-success-mega_other-writer.yaml"
@@ -4945,6 +4954,19 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
 
     monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", fail_remove)
     monkeypatch.setattr(session_lifecycle, "_delete_branch", fail_delete)
+    if tracker_case == "foreign_owner":
+        with pytest.raises(ValueError, match="stable owner identity differs"):
+            _close_session_as_owner(
+                agent="codex", project="inside-success-mega", scope="legacy-main",
+                reconcile_canonical_root=True,
+                expected_claim_sha256=claim_digest,
+                expected_tracker_sha256=tracker_digest,
+            )
+        assert claim_file.read_bytes() == claim_before
+        assert tracker.read_bytes() == tracker_before
+        assert _git(repo_root, "show-ref") == refs_before
+        assert _git(repo_root, "worktree", "list", "--porcelain") == worktrees_before
+        return
     payload = _close_session_as_owner(
         agent="codex",
         project="inside-success-mega",
@@ -4974,6 +4996,11 @@ def test_close_session_archives_session_ended_canonical_default_branch_without_r
     assert not claim_file.exists()
     archived = _archived_claim_payload(payload["claim_archive_id"])
     assert archived["canonical_root_reconciliation"]["head_commit"] == head_before
+    if tracker_case == "stale_scope":
+        assert tracker.read_bytes() == tracker_before
+        assert archived["canonical_root_reconciliation"]["tracker_identity_drift"]["scope"] == {
+            "claim": "legacy-main", "tracker": "later-scope",
+        }
 
 
 @pytest.mark.parametrize(

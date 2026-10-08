@@ -775,8 +775,8 @@ def _validate_canonical_root_reconciliation(
     repo_root: Path,
     expected_claim_sha256: str | None,
     expected_tracker_sha256: str | None,
-) -> dict[str, str]:
-    """Bind a legacy claim to a clean canonical root without removing Git state."""
+) -> dict[str, Any]:
+    """Bind ended owned custody to a retained root and digest-bound tracker."""
 
     if claim.status != coordination_claims.SESSION_ENDED_STATUS:
         raise ValueError(
@@ -802,13 +802,9 @@ def _validate_canonical_root_reconciliation(
     expected_tracker_digest = (expected_tracker_sha256 or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", expected_tracker_digest):
         raise ValueError("Canonical-root reconciliation requires --tracker-sha256 as a SHA-256 digest.")
-    trackers = _exact_tracker_candidates(claim)
-    if not trackers:
-        raise ValueError("Canonical-root reconciliation requires one exact session tracker")
-    if len(trackers) != 1:
-        rendered = ", ".join(str(path) for path in trackers)
-        raise ValueError("Ambiguous exact session trackers for canonical-root reconciliation: " + rendered)
-    tracker = trackers[0]
+    # The legacy tracker-name collision may leave a later scope in this file.
+    # Reuse stable-owner validation; closeout never updates a non-matching tracker.
+    tracker, tracker_identity_drift = _session_ended_reconciliation_tracker(claim)
     if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
         raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
     actual_tracker_digest = _tracker_sha256(tracker)
@@ -862,6 +858,7 @@ def _validate_canonical_root_reconciliation(
     return {
         "schema_version": "1.0",
         "claim_status_before": claim.status,
+        "tracker_identity_drift": tracker_identity_drift,
         "recorded_worktree_path": str(recorded_worktree),
         "canonical_repo_root": str(canonical_root),
         "branch": current_branch,
@@ -5301,7 +5298,10 @@ def close_session(
         preferred_path=claim.tracker_path,
     )
     tracker_path_text = str(tracker_path) if tracker_path is not None else claim.tracker_path
-    if tracker_path is not None and session_ended_reconciliation is None:
+    preserve_stale_tracker = canonical_root_reconciliation is not None and bool(
+        canonical_root_reconciliation["tracker_identity_drift"]
+    )
+    if tracker_path is not None and session_ended_reconciliation is None and not preserve_stale_tracker:
         session_contracts.update_session_tracker(
             tracker_path,
             current_phase="closing",
@@ -5366,7 +5366,7 @@ def close_session(
             claims_dir=coordination_claims.CLAIMS_DIR,
         )
 
-    if tracker_path is not None:
+    if tracker_path is not None and not preserve_stale_tracker:
         session_contracts.update_session_tracker(
             tracker_path,
             current_phase="closed",

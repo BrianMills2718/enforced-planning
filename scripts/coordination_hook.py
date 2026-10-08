@@ -57,30 +57,27 @@ _bootstrap_package()
 
 from enforced_planning import (  # noqa: E402
     coordination_claims,
-    coordination_messages,
-    mailbox_execution_identity,
-    outcome_completion,
     prewrite_claim_fast,
     prewrite_claim_projection,
 )
 
+# The repair worker needs registry/projection code only. Loading the full
+# mailbox and completion stack consumed its bounded repair budget before it
+# could return an already-completed repair to the parent hook.
+if __name__ != "__main__" or "--repair-projection-only" not in sys.argv:
+    from enforced_planning import (  # noqa: E402
+        coordination_messages,
+        mailbox_execution_identity,
+        outcome_completion,
+    )
+
 SUPPORTED_EVENTS = {"SessionStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 MUTATION_TOOL_NAMES = frozenset({"bash", "apply_patch", "edit", "write"})
 REPOSITORY_SCAN_MAX_WORKERS = 16
-# Mid-turn events use this budget too, deliberately, and an earlier revision of
-# this change did not. The reasoning for a tighter mid-turn budget was that
-# PostToolUse fires on every tool call while Stop fires once, so a tool call
-# should not wait as long for the global registry lock. Measurement killed it:
-# the repair spawns a Python subprocess, and interpreter startup plus package
-# import is 0.40-0.45s warm and 3.35s cold on this machine. The dominant cost is
-# startup, not lock waiting, so a 0.5s mid-turn budget did not shorten a wait --
-# it turned a repairable turn back into the lost one this change exists to stop,
-# and `test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation`
-# went red with "claim projection repair exceeded 0.5s (last_phase=complete)".
-#
-# The healthy path never spawns anything: the guards in `_active_claims` only
-# reach the repair when the projection is missing or genuinely behind, and one
-# rebuild makes it current for the calls that follow.
+# Stop and PostToolUse share a bounded, killable projection-repair worker.
+# The worker loads registry/projection code only; unrelated mailbox/completion
+# imports previously consumed the deadline even after repair had completed.
+# Healthy projections never spawn a worker or acquire the registry lock.
 TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 1.5
 STARTUP_PROJECTION_READ_LOCK_TIMEOUT_SECONDS = 1.0
 STARTUP_PROJECTION_READ_LOCK_POLL_SECONDS = 0.01

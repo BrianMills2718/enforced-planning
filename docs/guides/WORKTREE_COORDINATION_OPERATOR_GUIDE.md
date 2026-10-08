@@ -1054,6 +1054,11 @@ silently creating a new one.
 
 ### What `session-close` tells you about the shared branch
 
+The source and installed Make recipes pass `WORKTREE_REPO_ROOT` explicitly to
+closeout. An overridden target repository therefore supplies both the worktree
+path and the durable repository whose remote refs are inspected; a central
+controller must not substitute its own checkout for that target.
+
 Every close prints one line to stderr saying whether `origin/main` moved from
 outside the lane while it was open, and lists what landed if it did. Policy
 `shared-surface-state-claims` requires checking a surface other agents can write

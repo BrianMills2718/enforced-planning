@@ -467,3 +467,25 @@ def test_unplanned_session_start_without_permission_names_its_recovery() -> None
     assert "Traceback (most recent call last)" not in combined, combined
     assert "ALLOW_UNPLANNED=1" in combined, combined
     assert "--allow-unplanned" in combined, combined
+
+
+def test_consumer_close_forwards_the_explicit_target_root(tmp_path: Path) -> None:
+    """Execute the installed recipe against a recorder, with a different target root."""
+    target = tmp_path / "consumer"
+    target.mkdir()
+    recorder = tmp_path / "record_close.py"
+    recorder.write_text("import json,sys; print(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+    result = subprocess.run(
+        [
+            "make", "-f", str(TEMPLATE_PATH), "session-close",
+            "BRANCH=cross-consumer-close", "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=consumer", f"WORKTREE_REPO_ROOT={target}",
+            f"WORKTREE_DIR={target / 'worktrees'}",
+            f"WORKTREE_SESSION_CLOSE_SCRIPT={recorder}", f"PYTHON={sys.executable}",
+        ],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    argv = json.loads(result.stdout)
+    assert argv[argv.index("--repo-root") + 1] == str(target)
+    assert argv[argv.index("--worktree-path") + 1] == str(target / "worktrees" / "cross-consumer-close")

@@ -2170,6 +2170,7 @@ def _execute_maintenance_worktree(
                     start_point=starting_head,
                     require_native_session_binding=True,
                     verified_goal_default_revision=starting_head,
+                    allow_parallel=request.allow_parallel,
                     broad_scope_mode="bootstrap" if bootstrap_broad else None,
                     broad_scope_reason=(
                         f"construct this {bootstrap_kind} lane, then narrow before its first repository write"

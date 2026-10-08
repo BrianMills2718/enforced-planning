@@ -241,6 +241,41 @@ def test_workspace_file_archive_preserves_bytes_and_removes_only_exact_source(
     assert len(receipt["result"]["sha256"]) == 64
 
 
+@pytest.mark.parametrize("outcome_mode", ["off", "enforce_selected"])
+def test_goal_worktree_parallel_reservation_retains_disjoint_root_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome_mode: str,
+) -> None:
+    """A real second goal claim survives reservation without widening write custody."""
+    repo, _graph, _stale, _fresh = _project_graph_fixture(tmp_path, outcome_mode=outcome_mode)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    first_scope = "fix/parallel-parent"
+    claim_bootstrap.execute_request(claim_bootstrap.parse_request_json(json.dumps(
+        _maintenance_payload(repo, scope=first_scope, branch=first_scope,
+                             write_paths=["docs/plans/CLAUDE.md"])
+    )))
+    for paths, parallel in [(["CLAUDE.md"], False), (["docs/plans/CLAUDE.md"], True)]:
+        denied = claim_bootstrap.parse_request_json(json.dumps(
+            _goal_worktree_payload(repo, write_paths=paths, allow_parallel=parallel)
+        ))
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
+            claim_bootstrap.execute_request(denied)
+    receipt = claim_bootstrap.execute_request(claim_bootstrap.parse_request_json(json.dumps(
+        _goal_worktree_payload(repo, write_paths=["CLAUDE.md"], allow_parallel=True)
+    )))
+    claims = {claim.scope: claim for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)}
+    assert set(claims) == {first_scope, "goal/owner-visible-outcome"}
+    goal = claims["goal/owner-visible-outcome"]
+    assert goal.write_paths == ["CLAUDE.md"]
+    assert goal.parallel_root_authorized is True
+    assert Path(goal.worktree_path).is_dir()
+    assert receipt["result"]["start_revision"] == goal.start_revision
+    if outcome_mode == "enforce_selected":
+        result = claim_bootstrap.session_lifecycle.outcome_admission.evaluate_selected_claim_admission(
+            goal, boundary="session_start", ordinary_allowed=True, renewal=True
+        )
+        assert result.decision.disposition == "deny"
+
+
 @pytest.mark.parametrize(
     "updates",
     [

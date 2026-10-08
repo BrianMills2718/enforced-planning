@@ -283,7 +283,7 @@ def test_parse_args_accepts_explicit_repo_root(script: Path, tmp_path: Path) -> 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
 def test_closeout_retains_lane_history_after_deleting_its_branch(
-    script: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    script: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = _load(script, f"session_close_deleted_branch_{script.parent.name}")
     repo = tmp_path / "consumer"
@@ -303,10 +303,12 @@ def test_closeout_retains_lane_history_after_deleting_its_branch(
     (repo / "owned").write_text("owned\n")
     git("add", "owned")
     git("commit", "-qm", "own lane content")
+    own_commit = git("rev-parse", "HEAD")
     git("checkout", "-q", "main")
     (repo / "foreign").write_text("foreign\n")
     git("add", "foreign")
     git("commit", "-qm", "other writer content")
+    foreign_commit = git("rev-parse", "HEAD")
     git("merge", "--no-ff", "-qm", "integrate lane", "lane")
     git("update-ref", "refs/remotes/origin/main", "HEAD")
     args = SimpleNamespace(
@@ -319,6 +321,15 @@ def test_closeout_retains_lane_history_after_deleting_its_branch(
     monkeypatch.setattr(module, "_supported_closeout_kwargs", lambda _args: {})
     monkeypatch.setattr(module, "_resolve_canonical_lock_module", lambda: None)
     monkeypatch.setattr(module, "_reconcile_canonical_lock", lambda *_args: None)
+    collect_report = module.concurrent_writers.collect_shared_ref_movement
+    reports = []
+
+    def capture_report(*args, **kwargs):
+        report = collect_report(*args, **kwargs)
+        reports.append(report)
+        return report
+
+    monkeypatch.setattr(module.concurrent_writers, "collect_shared_ref_movement", capture_report)
 
     def close_session(**_kwargs):
         git("branch", "-D", "lane")
@@ -329,9 +340,9 @@ def test_closeout_retains_lane_history_after_deleting_its_branch(
 
     monkeypatch.setattr(module.session_lifecycle, "close_session", close_session)
     assert module.main([]) == 0
-    report = capsys.readouterr().err
-    assert "other writer content" in report
-    assert "own lane content" not in report
+    reported_commits = {commit.sha for commit in reports[0].commits}
+    assert foreign_commit in reported_commits
+    assert own_commit not in reported_commits
 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)

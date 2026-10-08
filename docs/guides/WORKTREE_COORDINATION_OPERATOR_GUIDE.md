@@ -13,6 +13,10 @@ coordination. Other documentation has narrower roles:
 | Instruction-hook consumer behavior | Agent Skills `README.md` |
 | Rationale and rollout history | ADRs and plan files; not current operator handbooks |
 
+Framework `make test` and `make test-quick` suppress recursive Make directory
+banners so subprocess JSON replies remain parseable. Test counts, failures,
+and exit codes remain visible.
+
 ## Canonical Truth Surfaces
 
 | Truth | Surface |

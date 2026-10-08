@@ -19,6 +19,9 @@ install-codex-runtime:  ## Install an exact pushed revision into the clean detac
 	@test -n "$(RUNTIME_REVISION)" || { echo "RUNTIME_REVISION is required"; exit 1; }
 	@$(PYTHON) scripts/update_installed_runtime.py --revision "$(RUNTIME_REVISION)" --allow-detached-replacement --write
 
+# Keep recursive Make entrypoints' machine-readable replies free of directory banners.
+test test-quick: export MAKEFLAGS += --no-print-directory
+
 test:  ## Run full test suite
 	python -m pytest tests/ -v
 

@@ -19,6 +19,13 @@ from enforced_planning import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_native_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Synthetic lifecycle owners must not inherit the invoking live agent."""
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+
+
 def _claim_with_tracker(tracker: Path) -> SimpleNamespace:
     return SimpleNamespace(
         agent="codex",

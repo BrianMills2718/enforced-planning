@@ -224,8 +224,8 @@ def render_markdown(status: dict[str, Any]) -> str:
     # Fleet summary
     lines.append("## Fleet")
     lines.append("")
-    lines.append(f"| Metric | Count |")
-    lines.append(f"|--------|-------|")
+    lines.append("| Metric | Count |")
+    lines.append("|--------|-------|")
     lines.append(f"| Total repos | {fleet.get('repo_count', 0)} |")
     lines.append(f"| Governed | {fleet.get('governed_count', 0)} |")
     lines.append(f"| Partial | {fleet.get('partial_count', 0)} |")
@@ -247,8 +247,8 @@ def render_markdown(status: dict[str, Any]) -> str:
     # Plans summary
     lines.append("## Plans")
     lines.append("")
-    lines.append(f"| Status | Count |")
-    lines.append(f"|--------|-------|")
+    lines.append("| Status | Count |")
+    lines.append("|--------|-------|")
     lines.append(f"| Total | {plans.get('total', 0)} |")
     lines.append(f"| Complete | {plans.get('complete', 0)} |")
     lines.append(f"| In Progress | {plans.get('in_progress', 0)} |")
@@ -275,8 +275,8 @@ def render_markdown(status: dict[str, Any]) -> str:
     # Dependencies
     lines.append("## Dependencies")
     lines.append("")
-    lines.append(f"| Metric | Value |")
-    lines.append(f"|--------|-------|")
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
     lines.append(f"| Repos in dep map | {deps.get('repo_count', 0)} |")
     lines.append(f"| Cross-repo edges | {deps.get('cross_repo_edges', 0)} |")
     lines.append("")

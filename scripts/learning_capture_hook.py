@@ -32,9 +32,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from pydantic import ValidationError
+from pydantic import ValidationError  # noqa: E402
 
-from enforced_planning.correction_learning import CorrectionAuditReceiptV1
+from enforced_planning.correction_learning import CorrectionAuditReceiptV1  # noqa: E402
 
 try:
     from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation

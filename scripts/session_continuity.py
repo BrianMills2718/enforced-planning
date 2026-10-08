@@ -39,7 +39,7 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import (  # noqa: I001
+from enforced_planning import (  # noqa: E402, I001
     coordination_claims,
     coordination_messages,
     session_continuity,

@@ -55,7 +55,7 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import (
+from enforced_planning import (  # noqa: E402
     coordination_claims,
     coordination_messages,
     mailbox_execution_identity,

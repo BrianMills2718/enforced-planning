@@ -27,8 +27,8 @@ def _bootstrap_package() -> Path:
 
 REPOSITORY_ROOT = _bootstrap_package()
 
-from enforced_planning import coordination_claims
-from enforced_planning.blocker_policy import (
+from enforced_planning import coordination_claims  # noqa: E402
+from enforced_planning.blocker_policy import (  # noqa: E402
     BlockerDecisionInputV1,
     ClaimQueueSnapshotV1,
     evaluate_blocker_request,

@@ -16,7 +16,7 @@ for candidate in Path(__file__).resolve().parents:
 else:
     raise RuntimeError("unable to locate repository root containing enforced_planning")
 
-from enforced_planning.effective_project_profile import load_effective_project_profile
+from enforced_planning.effective_project_profile import load_effective_project_profile  # noqa: E402
 
 
 def main() -> int:

@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.worktree_paths import resolve_canonical_target_path
+from enforced_planning.worktree_paths import resolve_canonical_target_path  # noqa: E402
 
 PROJECT_META_ROOT = REPO_ROOT
 DEFAULT_TARGETS = ("vision", "STATUS_LEDGER.md")

@@ -30,7 +30,7 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning.outcome_completion import (
+from enforced_planning.outcome_completion import (  # noqa: E402
     OutcomeCompletionError,
     record_selected_outcome_completion_for_session,
 )

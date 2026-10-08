@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.prewrite_claim_fast import (
+from enforced_planning.prewrite_claim_fast import (  # noqa: E402
     DEFAULT_CLAIMS_DIR,
     DEFAULT_PROJECTION_PATH,
     DEFAULT_RECEIPT_PATH,
@@ -1596,14 +1596,15 @@ def main(argv: list[str] | None = None) -> int:
             native_session = effective_session_id(payload, args.client)
         except SessionTargetError:
             native_session = None
-        special_classifier = lambda command: _special_unclaimed_command(
-            command,
-            client=args.client,
-            claims_dir=args.claims_dir,
-            projection_path=projection_path,
-            subagent_event=_is_subagent_event(payload, client=args.client),
-            native_session=native_session,
-        )
+        def special_classifier(command):
+            return _special_unclaimed_command(
+                command,
+                client=args.client,
+                claims_dir=args.claims_dir,
+                projection_path=projection_path,
+                subagent_event=_is_subagent_event(payload, client=args.client),
+                native_session=native_session,
+            )
         early_bash_classification = None
         tool_input = payload.get("tool_input")
         if payload.get("tool_name") == "Bash" and isinstance(tool_input, dict):

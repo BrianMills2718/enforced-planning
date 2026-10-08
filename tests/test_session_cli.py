@@ -1468,6 +1468,7 @@ def _maintenance_refresh_args(tmp_path: Path, trackers_dir: Path) -> dict[str, o
         "read_paths": [],
         "tracker_dir": trackers_dir,
         "allow_unplanned": True,
+        "start_revision": "a" * 40,
     }
 
 

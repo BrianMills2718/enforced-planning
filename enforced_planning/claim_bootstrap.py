@@ -1904,7 +1904,7 @@ def _execute_maintenance_worktree(
     goal_bound = isinstance(request, GoalWorktreeRequest)
     owner_session_id = session_id
     parent_scope: str | None = None
-    claim_type: ClaimType = "program"
+    claim_type: ClaimType = "write" if goal_bound else "program"
     if delegated:
         owner_session_id = _delegated_session_id(
             agent=agent,
@@ -2143,6 +2143,35 @@ def _execute_maintenance_worktree(
         else:
             if goal_bound:
                 create_git_artifacts()
+                # Reuse the existing first-tracker activation boundary. In an
+                # enforce_selected repository, session start needs an exact
+                # pre-tracker reservation; it cannot create its own predecessor.
+                reserved, message = coordination_claims.create_claim(
+                    agent=agent,
+                    project=request.project,
+                    scope=request.scope,
+                    intent=goal,
+                    plan_ref=request.plan_ref,
+                    claim_type=claim_type,
+                    write_paths=request.write_paths,
+                    read_paths=[],
+                    repo_root=str(repo),
+                    worktree_path=str(worktree),
+                    branch=request.branch,
+                    session_id=owner_session_id,
+                    session_name=session_name,
+                    broader_goal=goal,
+                    start_point=starting_head,
+                    require_native_session_binding=True,
+                    broad_scope_mode="bootstrap" if bootstrap_broad else None,
+                    broad_scope_reason=(
+                        f"construct this {bootstrap_kind} lane, then narrow before its first repository write"
+                        if bootstrap_broad else None
+                    ),
+                    target_worktree_path=str(worktree) if bootstrap_broad else None,
+                )
+                if not reserved:
+                    raise ClaimBootstrapError(message)
             payload = start_primary_session(
                 start_revision=starting_head,
                 declared_new_files=new_files or None,

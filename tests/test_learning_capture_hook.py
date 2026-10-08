@@ -202,7 +202,8 @@ def test_incoherent_correction_receipt_never_blocks_completion(tmp_path: Path) -
 
 def receipts(tmp_path: Path) -> list[dict[str, object]]:
     """Load every emitted disposition receipt."""
-    return [json.loads(path.read_text(encoding="utf-8")) for path in tmp_path.glob("*/*.json")]
+    records = [json.loads(path.read_text(encoding="utf-8")) for path in tmp_path.glob("*/*.json")]
+    return [record for record in records if "report_sha256" in record and "decision" in record]
 
 
 def test_prompt_hook_injects_immediate_learning_checkpoint_without_storing_prose(

@@ -958,6 +958,7 @@ def _project_graph_fixture(
     tmp_path: Path,
     *,
     project_id: str = "agent-skills",
+    outcome_mode: str | None = None,
 ) -> tuple[Path, Path, str, str]:
     remote = tmp_path / "agent-skills.git"
     repo = tmp_path / "agent-skills"
@@ -970,6 +971,11 @@ def _project_graph_fixture(
     )
     (repo / "CLAUDE.md").write_text("# Agent Skills instructions\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "CLAUDE.md"], check=True, capture_output=True)
+    if outcome_mode is not None:
+        (repo / "meta-process.yaml").write_text(
+            f"meta_process:\n  claims:\n    outcome_admission_mode: {outcome_mode}\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "-C", str(repo), "add", "meta-process.yaml"], check=True, capture_output=True)
     subprocess.run(
         [
             "git", "-C", str(repo), "-c", "user.name=Test User", "-c",
@@ -1434,11 +1440,13 @@ def test_maintenance_bootstrap_rejects_ambiguous_new_file_contract(
         claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(tmp_path, **updates)))
 
 
+@pytest.mark.parametrize("outcome_mode", ["off", "enforce_selected"])
 def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    outcome_mode: str,
 ) -> None:
-    repo, _graph, stale_head, fresh_head = _project_graph_fixture(tmp_path)
+    repo, _graph, stale_head, fresh_head = _project_graph_fixture(tmp_path, outcome_mode=outcome_mode)
     authority = claim_bootstrap.RepositoryAuthority(
         "agent-skills", "Brian/agent-skills", "main", str(tmp_path / "agent-skills.git")
     )
@@ -1467,6 +1475,7 @@ def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authori
     assert receipt["result"]["start_revision"] == fresh_head
     assert claim.start_revision == fresh_head
     assert claim.plan_ref == "goal:owner-visible-outcome"
+    assert claim.claim_type == "write"
     assert claim.work_graph_path is None
     assert claim.work_unit_id is None
     assert tracker["claim"]["start_revision"] == fresh_head

@@ -12,10 +12,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from pydantic import ValidationError
+from pydantic import ValidationError  # noqa: E402
 
-from enforced_planning import coordination_claims
-from enforced_planning.outcome_admission import (
+from enforced_planning import coordination_claims  # noqa: E402
+from enforced_planning.outcome_admission import (  # noqa: E402
     DEFAULT_OUTCOME_ADMISSION_RECEIPT_PATH,
     OutcomeAdmissionBootstrapV1,
     bootstrap_admission_result,

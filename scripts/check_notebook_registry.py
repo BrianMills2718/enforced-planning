@@ -12,21 +12,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.notebook_registry_validation import ALLOWED_EXECUTION_MODES
-from enforced_planning.notebook_registry_validation import ALLOWED_JOURNEY_MODES
-from enforced_planning.notebook_registry_validation import ALLOWED_PHASE_STATUS
-from enforced_planning.notebook_registry_validation import HEADER_LABELS
-from enforced_planning.notebook_registry_validation import NotebookRegistryValidationResult
-from enforced_planning.notebook_registry_validation import PHASE_LABELS
-from enforced_planning.notebook_registry_validation import _to_list
-from enforced_planning.notebook_registry_validation import load_notebook
-from enforced_planning.notebook_registry_validation import load_notebook_registry
-from enforced_planning.notebook_registry_validation import load_yaml
-from enforced_planning.notebook_registry_validation import main as _main
-from enforced_planning.notebook_registry_validation import print_human_readable
-from enforced_planning.notebook_registry_validation import resolve_workspace_path as _resolve_workspace_path
-from enforced_planning.notebook_registry_validation import validate_notebook_registry as _validate_notebook_registry
-from enforced_planning.worktree_paths import detect_workspace_root
+from enforced_planning.notebook_registry_validation import ALLOWED_EXECUTION_MODES  # noqa: E402
+from enforced_planning.notebook_registry_validation import ALLOWED_JOURNEY_MODES  # noqa: E402
+from enforced_planning.notebook_registry_validation import ALLOWED_PHASE_STATUS  # noqa: E402
+from enforced_planning.notebook_registry_validation import HEADER_LABELS  # noqa: E402
+from enforced_planning.notebook_registry_validation import NotebookRegistryValidationResult  # noqa: E402
+from enforced_planning.notebook_registry_validation import PHASE_LABELS  # noqa: E402
+from enforced_planning.notebook_registry_validation import _to_list  # noqa: E402
+from enforced_planning.notebook_registry_validation import load_notebook  # noqa: E402
+from enforced_planning.notebook_registry_validation import load_notebook_registry  # noqa: E402
+from enforced_planning.notebook_registry_validation import load_yaml  # noqa: E402
+from enforced_planning.notebook_registry_validation import main as _main  # noqa: E402
+from enforced_planning.notebook_registry_validation import print_human_readable  # noqa: E402
+from enforced_planning.notebook_registry_validation import resolve_workspace_path as _resolve_workspace_path  # noqa: E402
+from enforced_planning.notebook_registry_validation import validate_notebook_registry as _validate_notebook_registry  # noqa: E402
+from enforced_planning.worktree_paths import detect_workspace_root  # noqa: E402
 
 
 def _detect_workspace_root(repo_root: Path) -> Path:

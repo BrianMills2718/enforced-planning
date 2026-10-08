@@ -11,8 +11,8 @@ FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 if str(FRAMEWORK_ROOT) not in sys.path:
     sys.path.insert(0, str(FRAMEWORK_ROOT))
 
-from enforced_planning.hook_wiring import *  # noqa: F403
-from enforced_planning.hook_wiring import main
+from enforced_planning.hook_wiring import *  # noqa: E402, F403
+from enforced_planning.hook_wiring import main  # noqa: E402
 
 
 if __name__ == "__main__":

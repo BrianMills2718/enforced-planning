@@ -138,3 +138,48 @@ def test_string_and_lazy_imports_count_as_edges(tmp_path: Path) -> None:
     assert "pkg.other" in lazy_imports
     assert "pkg.moved" in sensor._imports(alias, "pkg.alias", False)  # type: ignore[attr-defined]
     assert "pkg.not_a_module" not in sensor._imports(data, "pkg.data", False)  # type: ignore[attr-defined]
+
+
+def test_git_source_collection_excludes_environment_but_keeps_new_source(tmp_path: Path) -> None:
+    """Ignored dependencies cannot become source; a new real orphan still fails."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text(".venv/\nworktrees/\n", encoding="utf-8")
+    (tmp_path / "main.py").write_text("import live\n", encoding="utf-8")
+    (tmp_path / "live.py").write_text("VALUE = 1\n", encoding="utf-8")
+    for name in (".venv/lib/dependency.py", "worktrees/other/foreign.py"):
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("IGNORED = True\n", encoding="utf-8")
+    config = {"packages": ["."], "entrypoints": ["**/*.py"], "product_entrypoints": ["main.py"]}
+    sensor = _load()
+    report = sensor.analyse(tmp_path, config)
+    assert set(report.entrypoints) == {"main.py", "live.py"}
+    assert report.total_modules == 2
+    assert report.unreachable == []
+    config["entrypoints"] = ["main.py"]
+    (tmp_path / "orphan.py").write_text("UNCONNECTED = True\n", encoding="utf-8")
+    report = sensor.analyse(tmp_path, config)
+    assert report.unreachable == ["orphan.py"]
+    (tmp_path / "meta-process.yaml").write_text(
+        "meta_process:\n  quality:\n    reachability:\n      enabled: true\n"
+        "      packages: ['.']\n      entrypoints: [main.py]\n"
+        "      baseline: reachability_baseline.json\n", encoding="utf-8"
+    )
+    (tmp_path / "reachability_baseline.json").write_text('{"unreachable_count": 0, "unreachable": []}', encoding="utf-8")
+    result = _run(tmp_path)
+    assert result.returncode == 1
+    assert "orphan.py" in result.stdout
+    assert ".venv" not in result.stdout and "worktrees/" not in result.stdout
+
+
+def test_git_tracked_source_survives_an_ignore_pattern(tmp_path: Path) -> None:
+    """An ignore pattern cannot hide source already in Git's index."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "kept.py").write_text("VALUE = 1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "kept.py"], check=True)
+    (tmp_path / ".gitignore").write_text("*.py\n", encoding="utf-8")
+    (tmp_path / "dependency.py").write_text("IGNORED = True\n", encoding="utf-8")
+    report = _load().analyse(tmp_path, {"packages": ["."], "entrypoints": ["kept.py"]})
+    assert report.entrypoints == ["kept.py"]
+    assert report.total_modules == 1
+    assert report.unreachable == []

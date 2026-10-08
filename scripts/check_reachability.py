@@ -35,6 +35,7 @@ import ast
 import re
 import fnmatch
 import json
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -98,8 +99,9 @@ def _load_config(root: Path) -> dict[str, Any]:
 def _module_name(path: Path, root: Path, package_roots: list[Path]) -> str | None:
     """Map a file to its importable dotted name, or None if not importable."""
     for pkg in package_roots:
+        base = pkg if pkg == root else pkg.parent
         try:
-            rel = path.relative_to(pkg.parent)
+            rel = path.relative_to(base)
         except ValueError:
             continue
         parts = list(rel.with_suffix("").parts)
@@ -204,6 +206,26 @@ def _string_imports(tree: ast.Module, module: str, is_init: bool) -> list[str]:
 
 
 
+def _git_python_files(root: Path) -> set[Path] | None:
+    """Keep tracked and new source, excluding ignored dependency trees.
+
+    Standalone non-Git fixtures retain the filesystem-based sensor contract.
+    A Git failure in a repository is an error rather than a broader scan.
+    """
+    if not (root / ".git").exists():
+        return None
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others",
+         "--exclude-standard", "--", "*.py"],
+        check=True, capture_output=True, text=True,
+        encoding="utf-8", errors="surrogateescape",
+    )
+    return {
+        root / name for name in result.stdout.split("\0")
+        if name and (root / name).is_file()
+    }
+
+
 def analyse(root: Path, config: dict[str, Any]) -> Report:
     package_roots = [root / p for p in config.get("packages", [])]
     missing = [str(p) for p in package_roots if not p.is_dir()]
@@ -213,8 +235,11 @@ def analyse(root: Path, config: dict[str, Any]) -> Report:
             error=f"configured packages not found: {missing or 'none configured'}",
         )
 
+    git_files = _git_python_files(root)
     all_files = sorted(
         {f for pkg in package_roots for f in pkg.rglob("*.py")}
+        if git_files is None else
+        {f for f in git_files if any(f.is_relative_to(pkg) for pkg in package_roots)}
     )
     by_module: dict[str, Path] = {}
     for file in all_files:
@@ -226,7 +251,9 @@ def analyse(root: Path, config: dict[str, Any]) -> Report:
         found: list[Path] = []
         for pattern in patterns:
             found.extend(
-                f for f in sorted(root.glob(pattern)) if f.suffix == ".py" and f.is_file()
+                f for f in sorted(root.glob(pattern))
+                if f.suffix == ".py" and f.is_file()
+                and (git_files is None or f in git_files)
             )
         return found
 

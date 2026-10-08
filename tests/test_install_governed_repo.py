@@ -1388,6 +1388,14 @@ def _installed_planning_make_fixture(tmp_path: Path) -> tuple[dict[str, str], st
         encoding="utf-8",
     )
     provider_config.chmod(0o600)
+    # Isolate the operator identity without changing this host's disk admission.
+    storage_config = Path.home() / ".config/storage-policy.json"
+    if storage_config.is_file():
+        host_policy = json.loads(storage_config.read_text(encoding="utf-8"))
+        (isolated_home / ".config/storage-policy.json").write_text(
+            json.dumps({key: host_policy[key] for key in ("host", "reserve_gib") if key in host_policy}),
+            encoding="utf-8",
+        )
     environment = os.environ.copy()
     environment["HOME"] = str(isolated_home)
     environment["PYTHON"] = sys.executable

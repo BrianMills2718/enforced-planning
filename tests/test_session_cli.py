@@ -1448,8 +1448,17 @@ def test_existing_session_upsert_refreshes_projection_and_emits_receipt(
 def _maintenance_refresh_args(tmp_path: Path, trackers_dir: Path) -> dict[str, object]:
     branch = "fix/maintenance-provenance-refresh"
     goal = "Unplanned maintenance: fix maintenance provenance refresh"
-    worktree = tmp_path / "repo" / "worktrees" / branch
-    worktree.mkdir(parents=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.name", "Test User")
+    _git(repo, "config", "user.email", "tests@example.com")
+    (repo / ".gitignore").write_text("worktrees/\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-m", "maintenance fixture")
+    revision = _git(repo, "rev-parse", "HEAD")
+    worktree = repo / "worktrees" / branch
+    _git(repo, "worktree", "add", "-b", branch, str(worktree), "main")
     return {
         "agent": "codex",
         "project": "enforced-planning",
@@ -1468,7 +1477,8 @@ def _maintenance_refresh_args(tmp_path: Path, trackers_dir: Path) -> dict[str, o
         "read_paths": [],
         "tracker_dir": trackers_dir,
         "allow_unplanned": True,
-        "start_revision": "a" * 40,
+        "start_revision": revision,
+        "verified_maintenance_default_revision": revision,
     }
 
 

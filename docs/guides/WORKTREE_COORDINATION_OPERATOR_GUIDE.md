@@ -532,6 +532,15 @@ registry -- see the fix's own docstring and regression tests in
    the temporary repository-wide bootstrap scope must be narrowed before the
    first scoped write. A stale local default branch, malformed goal reference,
    or lifecycle failure leaves no partially owned lane.
+   In an `enforce_selected` repository, bootstrap first creates the exact
+   native-bound goal write reservation without a tracker, then uses the
+   existing selection-pending activation path to attach the first tracker.
+   That deferred activation does not select an outcome or authorize ordinary
+   repository writes. If activation fails, the transaction verifies custody,
+   removes only its own pristine Git artifacts, and then releases metadata.
+   `enforce_selected` requires bounded `SESSION_WRITE_PATHS` for a goal lane;
+   a whole-repository goal bootstrap is refused and rolled back. The temporary
+   broad-scope path remains available when selected admission is off.
    For bounded light maintenance without a numbered plan, use
    `make maintenance-worktree BRANCH=<name>`; the Make target builds one typed
    `maintenance_worktree` request and delegates claim, worktree, tracker, and

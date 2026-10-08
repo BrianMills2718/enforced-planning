@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator,
 
 from enforced_planning import (
     coordination_claims,
+    outcome_admission,
     repository_authority,
     session_contracts,
     session_lifecycle,
@@ -2143,6 +2144,11 @@ def _execute_maintenance_worktree(
         else:
             if goal_bound:
                 create_git_artifacts()
+                if bootstrap_broad and outcome_admission.load_outcome_admission_mode(worktree) == "enforce_selected":
+                    raise ClaimBootstrapError(
+                        "goal-worktree under enforce_selected requires bounded SESSION_WRITE_PATHS; "
+                        "whole-repository bootstrap scope cannot activate the first tracker"
+                    )
                 # Reuse the existing first-tracker activation boundary. In an
                 # enforce_selected repository, session start needs an exact
                 # pre-tracker reservation; it cannot create its own predecessor.
@@ -2163,6 +2169,7 @@ def _execute_maintenance_worktree(
                     broader_goal=goal,
                     start_point=starting_head,
                     require_native_session_binding=True,
+                    verified_goal_default_revision=starting_head,
                     broad_scope_mode="bootstrap" if bootstrap_broad else None,
                     broad_scope_reason=(
                         f"construct this {bootstrap_kind} lane, then narrow before its first repository write"
@@ -2251,6 +2258,20 @@ def _execute_maintenance_worktree(
                     tracker_verified = True
             except Exception as cleanup_exc:  # noqa: BLE001
                 cleanup_errors.append(f"tracker verification failed: {cleanup_exc}")
+        # A goal reservation now exists before first tracker activation. Remove
+        # only the verified transaction's Git artifacts before releasing its
+        # managed claim; release_claim deliberately refuses a surviving lane.
+        if branch_created and not cleanup_errors:
+            cleanup_errors.extend(
+                _rollback_created_worktree(
+                    repo=repo,
+                    worktree=worktree,
+                    branch=request.branch,
+                    expected_head=starting_head,
+                    branch_created=branch_created,
+                    created_dirs=created_dirs,
+                )
+            )
         if not cleanup_errors:
             try:
                 if claim_verified:
@@ -2268,18 +2289,7 @@ def _execute_maintenance_worktree(
                         tracker_path.unlink(missing_ok=True)
             except Exception as cleanup_exc:  # noqa: BLE001
                 cleanup_errors.append(f"claim/tracker cleanup failed: {cleanup_exc}")
-        if branch_created and not cleanup_errors:
-            cleanup_errors.extend(
-                _rollback_created_worktree(
-                    repo=repo,
-                    worktree=worktree,
-                    branch=request.branch,
-                    expected_head=starting_head,
-                    branch_created=branch_created,
-                    created_dirs=created_dirs,
-                )
-            )
-        elif not branch_created:
+        if not branch_created:
             for candidate in reversed(created_dirs):
                 try:
                     candidate.rmdir()

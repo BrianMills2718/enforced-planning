@@ -2036,6 +2036,7 @@ def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: 
             "BRANCH=plan-234-squash-closeout",
             "WORKTREE_AGENT=codex",
             "WORKTREE_PROJECT=fixture",
+            f"WORKTREE_REPO_ROOT={tmp_path}",
             f"WORKTREE_DIR={tmp_path / 'worktrees'}",
             f"WORKTREE_SESSION_CLOSE_SCRIPT={recorder}",
             f"WORKTREE_MERGE_COMMIT={merge_commit}",

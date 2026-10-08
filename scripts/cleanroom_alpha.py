@@ -14,17 +14,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.cleanroom_alpha import CleanroomError
-from enforced_planning.cleanroom_alpha import CleanroomSpec
-from enforced_planning.cleanroom_alpha import current_git_revision
-from enforced_planning.cleanroom_alpha import materialize_cleanroom
-from enforced_planning.cleanroom_alpha import load_consumer_config
-from enforced_planning.cleanroom_alpha import plan_cleanroom
-from enforced_planning.cleanroom_alpha import reset_cleanroom
-from enforced_planning.cleanroom_alpha import run_demo_loop
-from enforced_planning.cleanroom_alpha import status_cleanroom
-from enforced_planning.cleanroom_alpha import verify_cleanroom
-from enforced_planning.cleanroom_alpha import verify_loop_trace
+from enforced_planning.cleanroom_alpha import CleanroomError  # noqa: E402
+from enforced_planning.cleanroom_alpha import CleanroomSpec  # noqa: E402
+from enforced_planning.cleanroom_alpha import current_git_revision  # noqa: E402
+from enforced_planning.cleanroom_alpha import materialize_cleanroom  # noqa: E402
+from enforced_planning.cleanroom_alpha import load_consumer_config  # noqa: E402
+from enforced_planning.cleanroom_alpha import plan_cleanroom  # noqa: E402
+from enforced_planning.cleanroom_alpha import reset_cleanroom  # noqa: E402
+from enforced_planning.cleanroom_alpha import run_demo_loop  # noqa: E402
+from enforced_planning.cleanroom_alpha import status_cleanroom  # noqa: E402
+from enforced_planning.cleanroom_alpha import verify_cleanroom  # noqa: E402
+from enforced_planning.cleanroom_alpha import verify_loop_trace  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

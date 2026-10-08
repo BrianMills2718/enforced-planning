@@ -24,7 +24,7 @@ def _add_repo_root_to_path() -> None:
 
 _add_repo_root_to_path()
 
-from enforced_planning.governed_delivery import (
+from enforced_planning.governed_delivery import (  # noqa: E402
     GovernedDeliveryError,
     prepare_governed_task,
     probe_governed_task,

@@ -677,6 +677,9 @@ PRs (project-meta policy friction `one-claim-root-per-session`, 2026-10-05).
 
 ### A closed lane leaves an empty directory
 
+`worktree=removed` describes Git worktree removal. The retained empty directory
+is intentional, not failed cleanup; do not remove it as a closeout repair.
+
 Ordinary `session-close` removes the linked worktree and then recreates its path
 as an empty directory. Another live agent session, such as the parent or a
 sibling of the subagent that closed the lane, can still record that path as its

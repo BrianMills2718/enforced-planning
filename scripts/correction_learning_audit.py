@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from llm_client import call_llm_structured, render_prompt
+from llm_client import call_llm_structured, render_prompt  # noqa: E402
 
-from enforced_planning.correction_learning import (
+from enforced_planning.correction_learning import (  # noqa: E402
     CorrectionClassification,
     LearningCandidate,
     TranscriptExchange,

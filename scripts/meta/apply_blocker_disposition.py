@@ -27,8 +27,8 @@ def _bootstrap_package() -> Path:
 
 REPOSITORY_ROOT = _bootstrap_package()
 
-from enforced_planning.blocker_policy import BlockerDecisionInputV1, BlockerDecisionResultV1
-from enforced_planning.session_lifecycle import apply_blocker_disposition
+from enforced_planning.blocker_policy import BlockerDecisionInputV1, BlockerDecisionResultV1  # noqa: E402
+from enforced_planning.session_lifecycle import apply_blocker_disposition  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -2055,6 +2055,8 @@ def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: 
         "fixture",
         "--scope",
         "plan-234-squash-closeout",
+        "--repo-root",
+        str(tmp_path),
         "--worktree-path",
         str(tmp_path / "worktrees" / "plan-234-squash-closeout"),
         "--branch",

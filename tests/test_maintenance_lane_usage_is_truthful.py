@@ -20,8 +20,8 @@ MAKE_SURFACES = (
 def test_help_text_promises_a_self_sufficient_bootstrap(surface):
     """The documented branch-only entrypoint must not demand a hidden path."""
     line = next(
-        l for l in surface.read_text(encoding="utf-8").splitlines()
-        if l.startswith("maintenance-worktree:")
+        candidate for candidate in surface.read_text(encoding="utf-8").splitlines()
+        if candidate.startswith("maintenance-worktree:")
     )
     assert "needs BRANCH" in line
     if surface == REPO_ROOT / "Makefile":

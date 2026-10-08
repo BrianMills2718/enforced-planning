@@ -23,41 +23,41 @@ PLANS_DIR = ROOT / "docs" / "plans"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from enforced_planning.file_context import collect_context
-from enforced_planning.file_context import load_relationships
-from enforced_planning.plan_validation import PATH_CLEAN_RE
-from enforced_planning.plan_validation import PLANNING_INTEGRITY_COVERAGE_NONCLAIM
-from enforced_planning.plan_validation import PlanIntegrityResultV1
-from enforced_planning.plan_validation import PlanningIntegrityConfigV1
-from enforced_planning.plan_validation import PlanningIntegrityError
-from enforced_planning.plan_validation import REQUIRED_PLAN_SECTIONS
-from enforced_planning.plan_validation import ValidationResult
-from enforced_planning.plan_validation import collect_plan_requirements
-from enforced_planning.plan_validation import extract_inline_paths
-from enforced_planning.plan_validation import extract_paths
-from enforced_planning.plan_validation import extract_section
-from enforced_planning.plan_validation import find_plan_file
-from enforced_planning.plan_validation import get_current_plan_number as _get_current_plan_number
-from enforced_planning.plan_validation import get_plan_file as _get_plan_file
-from enforced_planning.plan_validation import looks_like_file_path
-from enforced_planning.plan_validation import main as _main
-from enforced_planning.plan_validation import normalize
-from enforced_planning.plan_validation import parse_contracts_used
-from enforced_planning.plan_validation import parse_data_flow
-from enforced_planning.plan_validation import parse_files_affected
-from enforced_planning.plan_validation import parse_mentioned_adrs
-from enforced_planning.plan_validation import parse_plan_status
-from enforced_planning.plan_validation import parse_references_reviewed
-from enforced_planning.plan_validation import parse_tools_used
-from enforced_planning.plan_validation import parse_uncertainty_register
-from enforced_planning.plan_validation import print_summary
-from enforced_planning.plan_validation import read_text
-from enforced_planning.plan_validation import split_lines
-from enforced_planning.plan_validation import validate_plan
-from enforced_planning.plan_validation import evaluate_plan_integrity_bytes
-from enforced_planning.plan_validation import parse_planning_integrity_config_bytes
-from enforced_planning.plan_validation import validate_plan_integrity_at_revision
-from enforced_planning.plan_validation import validate_plan_integrity_from_path
+from enforced_planning.file_context import collect_context  # noqa: E402
+from enforced_planning.file_context import load_relationships  # noqa: E402
+from enforced_planning.plan_validation import PATH_CLEAN_RE  # noqa: E402
+from enforced_planning.plan_validation import PLANNING_INTEGRITY_COVERAGE_NONCLAIM  # noqa: E402
+from enforced_planning.plan_validation import PlanIntegrityResultV1  # noqa: E402
+from enforced_planning.plan_validation import PlanningIntegrityConfigV1  # noqa: E402
+from enforced_planning.plan_validation import PlanningIntegrityError  # noqa: E402
+from enforced_planning.plan_validation import REQUIRED_PLAN_SECTIONS  # noqa: E402
+from enforced_planning.plan_validation import ValidationResult  # noqa: E402
+from enforced_planning.plan_validation import collect_plan_requirements  # noqa: E402
+from enforced_planning.plan_validation import extract_inline_paths  # noqa: E402
+from enforced_planning.plan_validation import extract_paths  # noqa: E402
+from enforced_planning.plan_validation import extract_section  # noqa: E402
+from enforced_planning.plan_validation import find_plan_file  # noqa: E402
+from enforced_planning.plan_validation import get_current_plan_number as _get_current_plan_number  # noqa: E402
+from enforced_planning.plan_validation import get_plan_file as _get_plan_file  # noqa: E402
+from enforced_planning.plan_validation import looks_like_file_path  # noqa: E402
+from enforced_planning.plan_validation import main as _main  # noqa: E402
+from enforced_planning.plan_validation import normalize  # noqa: E402
+from enforced_planning.plan_validation import parse_contracts_used  # noqa: E402
+from enforced_planning.plan_validation import parse_data_flow  # noqa: E402
+from enforced_planning.plan_validation import parse_files_affected  # noqa: E402
+from enforced_planning.plan_validation import parse_mentioned_adrs  # noqa: E402
+from enforced_planning.plan_validation import parse_plan_status  # noqa: E402
+from enforced_planning.plan_validation import parse_references_reviewed  # noqa: E402
+from enforced_planning.plan_validation import parse_tools_used  # noqa: E402
+from enforced_planning.plan_validation import parse_uncertainty_register  # noqa: E402
+from enforced_planning.plan_validation import print_summary  # noqa: E402
+from enforced_planning.plan_validation import read_text  # noqa: E402
+from enforced_planning.plan_validation import split_lines  # noqa: E402
+from enforced_planning.plan_validation import validate_plan  # noqa: E402
+from enforced_planning.plan_validation import evaluate_plan_integrity_bytes  # noqa: E402
+from enforced_planning.plan_validation import parse_planning_integrity_config_bytes  # noqa: E402
+from enforced_planning.plan_validation import validate_plan_integrity_at_revision  # noqa: E402
+from enforced_planning.plan_validation import validate_plan_integrity_from_path  # noqa: E402
 
 __all__ = (
     "PLANNING_INTEGRITY_COVERAGE_NONCLAIM",

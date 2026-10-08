@@ -18,7 +18,7 @@ else:
     if importlib.util.find_spec("enforced_planning") is None:
         raise RuntimeError("cannot locate installed enforced_planning package")
 
-from enforced_planning.surface_runtime import (
+from enforced_planning.surface_runtime import (  # noqa: E402
     SurfaceRuntimeError,
     audit_surface,
     list_leases,

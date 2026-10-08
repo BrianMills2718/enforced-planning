@@ -32,9 +32,9 @@ REPO_ROOT = _detect_repo_root(Path(__file__).resolve())
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.file_context import check_required_reads
-from enforced_planning.file_context import collect_context
-from enforced_planning.file_context import load_relationships
+from enforced_planning.file_context import check_required_reads  # noqa: E402
+from enforced_planning.file_context import collect_context  # noqa: E402
+from enforced_planning.file_context import load_relationships  # noqa: E402
 
 
 DEFAULT_CONFIG = Path("scripts/relationships.yaml")

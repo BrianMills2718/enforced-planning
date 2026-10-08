@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from enforced_planning import coordination_claims
 from enforced_planning import doc_authority
 from enforced_planning import session_lifecycle

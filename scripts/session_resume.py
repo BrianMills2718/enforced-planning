@@ -34,8 +34,8 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning import coordination_claims, session_lifecycle
-from enforced_planning.session_continuity import (
+from enforced_planning import coordination_claims, session_lifecycle  # noqa: E402
+from enforced_planning.session_continuity import (  # noqa: E402
     SuccessorCustodyAcceptanceV1,
     SuccessorCustodyOfferV1,
     accept_successor_custody_offer,

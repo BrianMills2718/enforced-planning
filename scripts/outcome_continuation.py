@@ -26,19 +26,19 @@ def _add_repo_root_to_path() -> None:
 
 _add_repo_root_to_path()
 
-from enforced_planning.coordination_claims import CLAIMS_DIR
-from enforced_planning.outcome_continuation import (
+from enforced_planning.coordination_claims import CLAIMS_DIR  # noqa: E402
+from enforced_planning.outcome_continuation import (  # noqa: E402
     ContinuationError,
     evaluate_scenario,
     load_scenario,
 )
-from enforced_planning.outcome_portfolio import (
+from enforced_planning.outcome_portfolio import (  # noqa: E402
     DEFAULT_OUTCOME_PORTFOLIO_LEDGER_PATH,
     OutcomePortfolioError,
     allocate_outcome_portfolio,
     dispose_outcome_portfolio_allocation,
 )
-from enforced_planning.outcome_selection import (
+from enforced_planning.outcome_selection import (  # noqa: E402
     OutcomeSelectionError,
     record_selected_outcome_progress_for_session,
     restart_selected_outcome_for_session,

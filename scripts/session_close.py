@@ -8,6 +8,7 @@ import inspect
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -368,9 +369,28 @@ def _report_shared_ref_movement(
         repo_root,
         ref="origin/main",
         since_revision=since_revision,
-        lane_refs=lane_refs,
+        lane_refs=lane_refs[:1],
         basis=basis,
     )
+    # The first ref owns the lane's history; integration refs own only their
+    # exact commit. Excluding a merge's ancestry would hide outside work too.
+    if report.state != concurrent_writers.UNAVAILABLE and lane_refs[1:]:
+        integration_commits = set()
+        for integration_ref in lane_refs[1:]:
+            resolved = subprocess.run(
+                ["git", "-C", str(repo_root), "rev-parse", "--verify", "--quiet", f"{integration_ref}^{{commit}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if resolved.returncode == 0:
+                integration_commits.add(resolved.stdout.strip())
+        commits = tuple(commit for commit in report.commits if commit.sha not in integration_commits)
+        report = replace(
+            report,
+            commits=commits,
+            state=concurrent_writers.OBSERVED if commits else concurrent_writers.OBSERVED_EMPTY,
+        )
     print(concurrent_writers.render_report(report), file=sys.stderr)
 
 

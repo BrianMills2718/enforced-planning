@@ -2448,7 +2448,9 @@ installed beside `scripts/meta/session_close.py` or under
 `scripts/worktree-coordination/`; both layouts reconcile the lock after claim
 release. Retaining the commit identity keeps the lane's own commits out of the
 outside-writer report after its branch is deleted. Supply `--merge-commit` when
-the integration commit must also be excluded, including a squash merge.
+the integration commit must also be excluded, including a squash merge. Only
+that exact integration commit is excluded; outside commits preceding the merge
+remain visible in the report.
 
 After a task branch is merged, ordinary repository writes remain denied until
 the claim is dispositioned. Two strict control paths remain available through

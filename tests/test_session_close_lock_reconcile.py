@@ -282,8 +282,9 @@ def test_parse_args_accepts_explicit_repo_root(script: Path, tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+@pytest.mark.parametrize("integration", ["merge", "squash", "merge_without_identity"])
 def test_closeout_retains_lane_history_after_deleting_its_branch(
-    script: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    script: Path, integration: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = _load(script, f"session_close_deleted_branch_{script.parent.name}")
     repo = tmp_path / "consumer"
@@ -297,22 +298,28 @@ def test_closeout_retains_lane_history_after_deleting_its_branch(
     git("config", "user.name", "Closeout Test")
     (repo / "base").write_text("base\n")
     git("add", "base")
-    git("commit", "-qm", "base")
+    git("commit", "-qm", "[Trivial] Add base fixture")
     base = git("rev-parse", "HEAD")
     git("checkout", "-qb", "lane")
     (repo / "owned").write_text("owned\n")
     git("add", "owned")
-    git("commit", "-qm", "own lane content")
+    git("commit", "-qm", "[Trivial] Add own lane fixture")
     own_commit = git("rev-parse", "HEAD")
     git("checkout", "-q", "main")
     (repo / "foreign").write_text("foreign\n")
     git("add", "foreign")
-    git("commit", "-qm", "other writer content")
+    git("commit", "-qm", "[Trivial] Add outside writer fixture")
     foreign_commit = git("rev-parse", "HEAD")
-    git("merge", "--no-ff", "-qm", "integrate lane", "lane")
+    if integration == "squash":
+        git("merge", "--squash", "-q", "lane")
+        git("commit", "-qm", "[Trivial] Integrate lane fixture")
+    else:
+        git("merge", "--no-ff", "-qm", "[Trivial] Integrate lane fixture", "lane")
+    merge_commit = git("rev-parse", "HEAD")
     git("update-ref", "refs/remotes/origin/main", "HEAD")
     args = SimpleNamespace(
-        project="consumer", scope="lane", branch="lane", merge_commit=None,
+        project="consumer", scope="lane", branch="lane",
+        merge_commit=None if integration == "merge_without_identity" else merge_commit,
         json=False, repo_root=str(repo),
     )
     monkeypatch.setattr(module, "parse_args", lambda _argv: args)
@@ -321,15 +328,14 @@ def test_closeout_retains_lane_history_after_deleting_its_branch(
     monkeypatch.setattr(module, "_supported_closeout_kwargs", lambda _args: {})
     monkeypatch.setattr(module, "_resolve_canonical_lock_module", lambda: None)
     monkeypatch.setattr(module, "_reconcile_canonical_lock", lambda *_args: None)
-    collect_report = module.concurrent_writers.collect_shared_ref_movement
+    render_report = module.concurrent_writers.render_report
     reports = []
 
-    def capture_report(*args, **kwargs):
-        report = collect_report(*args, **kwargs)
+    def capture_report(report):
         reports.append(report)
-        return report
+        return render_report(report)
 
-    monkeypatch.setattr(module.concurrent_writers, "collect_shared_ref_movement", capture_report)
+    monkeypatch.setattr(module.concurrent_writers, "render_report", capture_report)
 
     def close_session(**_kwargs):
         git("branch", "-D", "lane")
@@ -341,7 +347,10 @@ def test_closeout_retains_lane_history_after_deleting_its_branch(
     monkeypatch.setattr(module.session_lifecycle, "close_session", close_session)
     assert module.main([]) == 0
     reported_commits = {commit.sha for commit in reports[0].commits}
-    assert foreign_commit in reported_commits
+    expected_commits = {foreign_commit}
+    if integration == "merge_without_identity":
+        expected_commits.add(merge_commit)
+    assert reported_commits == expected_commits
     assert own_commit not in reported_commits
 
 

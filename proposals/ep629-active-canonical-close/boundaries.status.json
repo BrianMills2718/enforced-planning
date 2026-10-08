@@ -1,0 +1,25 @@
+{
+  "label": "ep629-new-boundaries",
+  "pid": 3163631,
+  "started_at": "2026-10-08T22:45:50.996370+00:00",
+  "command": [
+    "env",
+    "GIT_CONFIG_GLOBAL=/dev/null",
+    "GIT_CONFIG_NOSYSTEM=1",
+    "python3",
+    "-m",
+    "pytest",
+    "tests/test_session_cli.py",
+    "tests/test_session_close_lock_reconcile.py",
+    "-k",
+    "rechecks_digests_at_write or unpushed_source or retained_environment_option_refuses",
+    "-v",
+    "-s"
+  ],
+  "cwd": ".",
+  "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176",
+  "status": "finished",
+  "exit_code": 0,
+  "elapsed_seconds": 13.814,
+  "finished_at": "2026-10-08T22:46:07.738396+00:00"
+}

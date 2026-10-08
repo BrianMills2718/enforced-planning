@@ -641,6 +641,47 @@ registry -- see the fix's own docstring and regression tests in
    non-live, retain its completed audit record, remove the worktree, and safely
    delete the local branch.
 
+### Complete active canonical environment maintenance
+
+A native session may finish an existing ignored `.venv` maintenance claim on
+the canonical checkout while continuing other work. Ordinary `session-close`
+refuses a canonical root before changing coordination state. Use the explicit
+retained-root mode from the exact owning native runtime:
+
+```bash
+python scripts/session_close.py \
+  --agent codex --project PROJECT --scope SCOPE \
+  --repo-root /absolute/canonical/repository \
+  --retain-canonical-environment \
+  --claim-sha256 EXACT_CLAIM_SHA256 \
+  --tracker-sha256 EXACT_TRACKER_SHA256 \
+  --json
+```
+
+In an installed consumer the entrypoint is `scripts/meta/session_close.py`.
+Obtain the digests with `sha256sum` on the exact claim and its recorded tracker;
+if either changes before close, inspect the new state and obtain fresh digests.
+The route requires an `active` `write` claim with exactly `write_paths: [.venv]`,
+an ignored and entirely untracked environment, an exact tracker lane identity,
+the real canonical Git main worktree, clean source and the recorded checked-out
+default branch integrated into its remote default ref. It rejects a different
+path/branch override, broader write scope, stale digests, and other close modes.
+It shares the ordinary mailbox and owned-document obligation checks. A wrapper
+paired with an older lifecycle refuses this option rather than dropping it.
+
+The completed archive records `claim_status_before: active` and
+`completion_kind: environment_maintenance`. Output reports
+`worktree_action: retained_canonical_root` and
+`branch_action: retained_canonical_branch`. No worktree/branch removal or
+runtime-end event occurs. Other live claims using the retained checkout remain
+untouched. This closes only the environment claim; it grants no canonical
+tracked-source write authority. The legacy ended-runtime route below retains
+its genuine `session_ended` requirement. The historical exact-owner
+`session-abandon` mitigation remains an abandonment record, not evidence that
+this completed close route ran.
+
+Repair authority and evidence: [EP629 repair plan](../../proposals/ep629-active-canonical-close/plan.md).
+
 ### Legacy canonical-root claim reconciliation
 
 An older operator lane may have recorded the canonical repository checkout as

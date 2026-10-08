@@ -775,10 +775,16 @@ def _validate_canonical_root_reconciliation(
     repo_root: Path,
     expected_claim_sha256: str | None,
     expected_tracker_sha256: str | None,
+    retain_active_environment: bool = False,
 ) -> dict[str, Any]:
-    """Bind ended owned custody to a retained root and digest-bound tracker."""
+    """Bind ended custody, or exact active environment custody, to a retained root."""
 
-    if claim.status != coordination_claims.SESSION_ENDED_STATUS:
+    if retain_active_environment:
+        if claim.status != "active" or claim.claim_type != "write" or claim.write_paths != [".venv"]:
+            raise ValueError(
+                "Active canonical environment close requires an active write claim restricted to exactly .venv."
+            )
+    elif claim.status != coordination_claims.SESSION_ENDED_STATUS:
         raise ValueError(
             f"Canonical-root reconciliation requires an exact session_ended claim; found {claim.status!r}."
         )
@@ -805,6 +811,8 @@ def _validate_canonical_root_reconciliation(
     # The legacy tracker-name collision may leave a later scope in this file.
     # Reuse stable-owner validation; closeout never updates a non-matching tracker.
     tracker, tracker_identity_drift = _session_ended_reconciliation_tracker(claim)
+    if retain_active_environment and tracker_identity_drift:
+        raise ValueError("Active canonical environment close requires exact tracker lane identity.")
     if claim.tracker_path and Path(claim.tracker_path).expanduser() != tracker:
         raise ValueError("Claim tracker path does not match the exact reconciliation tracker")
     actual_tracker_digest = _tracker_sha256(tracker)
@@ -838,6 +846,14 @@ def _validate_canonical_root_reconciliation(
         raise ValueError("Canonical-root reconciliation rejects linked worktrees and non-canonical Git identities.")
     if not (recorded_worktree / ".git").is_dir():
         raise ValueError("Canonical-root reconciliation requires a main-worktree .git directory")
+    if retain_active_environment:
+        tracked = _git_capture(recorded_worktree, "ls-files", "--", ".venv").strip()
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--quiet", "--", ".venv/"],
+            cwd=recorded_worktree, capture_output=True, text=True, check=False,
+        )
+        if tracked or ignored.returncode != 0:
+            raise ValueError("Active canonical environment close requires an ignored, entirely untracked .venv.")
     clean, dirty_details = _worktree_is_clean(str(recorded_worktree))
     if not clean:
         raise ValueError(
@@ -855,8 +871,15 @@ def _validate_canonical_root_reconciliation(
         raise ValueError(
             "Canonical-root reconciliation requires the checked-out branch to match the recorded claim branch."
         )
+    if retain_active_environment:
+        default_branch = push_safety.resolve_default_branch(recorded_worktree)
+        if current_branch != default_branch:
+            raise ValueError("Active canonical environment close requires the canonical default branch.")
+        if not _ref_exists(recorded_worktree, f"refs/remotes/origin/{default_branch}"):
+            raise ValueError("Active canonical environment close requires a pushed remote default branch.")
     return {
         "schema_version": "1.0",
+        "completion_kind": "environment_maintenance" if retain_active_environment else "legacy_session_ended",
         "claim_status_before": claim.status,
         "tracker_identity_drift": tracker_identity_drift,
         "recorded_worktree_path": str(recorded_worktree),
@@ -5072,6 +5095,7 @@ def close_session(
     terminalize_shared_child: bool = False,
     tracker_absent: bool = False,
     recovery_archive_dir: str | None = None,
+    retain_canonical_environment: bool = False,
 ) -> dict[str, Any]:
     """Finish, clean up, and release one claimed lane as a single sanctioned flow.
 
@@ -5087,6 +5111,7 @@ def close_session(
             reconcile_missing_worktree,
             reconcile_canonical_root,
             reconcile_session_ended,
+            retain_canonical_environment,
         )
     )
     if reconciliation_modes > 1:
@@ -5101,6 +5126,17 @@ def close_session(
     resolved_branch = branch or claim.branch
     repo_root = _resolve_claim_repo_root(claim)
     updated_at = datetime.now(timezone.utc).isoformat()
+    if reconcile_canonical_root or retain_canonical_environment:
+        if resolved_worktree_path.resolve() != Path(claim.worktree_path or "").expanduser().resolve():
+            raise ValueError("Retained canonical close rejects a different worktree override.")
+        if resolved_branch != claim.branch or terminalize_shared_child:
+            raise ValueError("Retained canonical close rejects branch overrides and shared-child terminalization.")
+    elif not terminalize_shared_child and resolved_worktree_path.resolve() == repo_root.resolve():
+        raise ValueError(
+            "Refusing ordinary close of the canonical repository root. "
+            "Use --retain-canonical-environment for exact active .venv custody or "
+            "--reconcile-canonical-root only after genuine session_ended."
+        )
 
     session_ended_reconciliation = (
         _validate_session_ended_closeout_reconciliation(
@@ -5133,8 +5169,9 @@ def close_session(
             repo_root=repo_root,
             expected_claim_sha256=expected_claim_sha256,
             expected_tracker_sha256=expected_tracker_sha256,
+            retain_active_environment=retain_canonical_environment,
         )
-        if reconcile_canonical_root
+        if reconcile_canonical_root or retain_canonical_environment
         else None
     )
     retained_parent_scope: str | None = None
@@ -5288,6 +5325,13 @@ def close_session(
     # terminal closeout receipt until the final completed state is durable.
     if session_ended_reconciliation is None:
         with coordination_claims.claim_registry_lock(coordination_claims.CLAIMS_DIR):
+            if retain_canonical_environment and canonical_root_reconciliation is not None:
+                if _claim_sha256(claim_file) != canonical_root_reconciliation["claim_sha256"]:
+                    raise ValueError("Active canonical environment claim changed before mutation.")
+                if _tracker_sha256(Path(canonical_root_reconciliation["tracker_path"])) != canonical_root_reconciliation[
+                    "tracker_sha256"
+                ]:
+                    raise ValueError("Active canonical environment tracker changed before mutation.")
             _write_claim_and_refresh_projection(claim_file, payload, coordination_claims.CLAIMS_DIR)
 
     tracker_path = session_contracts.find_session_tracker_path(

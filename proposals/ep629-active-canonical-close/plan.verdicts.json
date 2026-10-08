@@ -1,0 +1,146 @@
+{
+  "11fe3f40bfc9c66c0fe07df46ac5a2e136061604b5a8c183664accbf40557a93": {
+    "item_id": "CORE-AUTHORITY-NONGOALS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies authority: Brian requested the work and approved proceeding, while workspace authority, AGENTS.md, and the native claimed worktree govern implementation. It also explicitly lists the plan\u2019s non-goals, including AES325 changes, general source-write permission, Wiki mutation, environment conversion, and fleet rollout.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-AUTHORITY-NONGOALS",
+    "verdict": "pass"
+  },
+  "2cacb18ad6fe4c04b8214eeb5a50ff10754c9107f89b3e9b3b6595d99de1e19b": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence provides a model link and explicitly names the relied-on elements. It also specifies what the examined CLI regression trace must show for each element, including claim/state, tracker/digest, actor markers, checkout custody, archive binding/receipt, and the JSON view.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  },
+  "3a3e0ae0b39c87040f3291e1374f81528b7fe66dcab83c49208fbc8fc972e156": {
+    "item_id": "CORE-IRREVERSIBLE-SPEND",
+    "materiality": "material",
+    "missing": "For any proposed irreversible action or spend, the evidence does not explicitly name the boundary, authorizer, and containment. It states that no such action or spend is proposed and gives Brian\u2019s authority only for newly required actions outside the plan, not for a proposed item.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence says \u201cNo irreversible operation or product LLM spend is proposed,\u201d while describing the existing checker as using an approved route and cost cap. Because no proposed irreversible item is identified with all three required controls, the requirement is not substantively demonstrated.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-IRREVERSIBLE-SPEND",
+    "verdict": "unresolved"
+  },
+  "4d7957edd7f3406d487fbe5b55d68663c3e1740c640f0af6824010f52c3129bc": {
+    "item_id": "CORE-UNCERTAINTIES",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence identifies the material uncertainty areas and assigns an owner or specifies resolving evidence for each: parser invocation and byte equality, Git before/after assertions, refusal tests, full traces, or the existing issue owner. It also explicitly states that no product choice is pending.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-UNCERTAINTIES",
+    "verdict": "pass"
+  },
+  "65b6ae6a87e09f619dc7e0c44602075353b6dffaae09c9d946c92ff4ab2c1898": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence provides a system-model link, names each relied-on element, and specifies what the examined CLI regression trace must show for each: identity/state, tracker/digest, actor markers, checkout custody, archive receipt, and CLI view. It also states that the trace review includes every named element.",
+    "trace_id": "company-planning/method-conformance/plan/a35608ca9bdb/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  },
+  "796fdd4808e5c2c597490ead88da7d5ee16007873c608deff6ac2f2118236fac": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly declares shared_mechanism=true for the new shared close lifecycle and installed CLI contract, and empirical_comparison_proposed=false because the plan uses regression verification rather than comparing alternatives. It also explicitly declares llm_central=false for the deterministic product path and irreversible_or_spend_action=true because the standing semantic adoption checker may consume a bounded budget.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "96c12af2a89d5394b2a4f0dcc6a5977092ed7cae8359872cb979725c4ec985bd": {
+    "item_id": "OV-PRIOR-ART-DISPOSITION",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states that internal candidates were searched and gives a disposition for each using reuse, extend, or bounded exception, including ownership and lineage mechanisms. It also identifies external prior art (Git\u2019s worktree manual), records its search date, and explicitly dispositions it as reuse; it additionally states that no registry or outside library is superseded or newly introduced.",
+    "trace_id": "company-planning/method-conformance/plan/5f49c514f38d/OV-PRIOR-ART-DISPOSITION",
+    "verdict": "pass"
+  },
+  "9c0edab6618aefe68e72f8e64c586d8adcfde521f25bd1baf7e5805f43a224c9": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly declares shared_mechanism=true for the shared close lifecycle and CLI contract, and irreversible_or_spend_action=true for the bounded semantic adoption checker spend. It explicitly declares empirical_comparison_proposed=false while describing regression verification rather than an experiment selecting alternatives, and llm_central=false because the product path is deterministic and the checker does not implement product behavior.",
+    "trace_id": "company-planning/method-conformance/plan/a35608ca9bdb/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "9c9005a0a9b72554c5e3c5bcf16118e6550ab1910bca13c40b7381b1be630624": {
+    "item_id": "OV-PRIOR-ART-DISPOSITION",
+    "materiality": "material",
+    "missing": "Relevant external prior art was not searched; the evidence instead says external replacement research is exempt. It also does not explicitly disposition every named internal candidate individually, particularly canonical-root reconciliation, native prewrite CLI grammar, installer mappings, Plan 138, and the Project Meta owner map.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly describes internal searches and gives several disposition statements, including reuse, extend, unchanged retention, and a bounded exception. However, an exemption from external replacement research does not satisfy the requirement that relevant external prior art was searched, and the named internal search candidates are not each explicitly assigned one of the required dispositions.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/OV-PRIOR-ART-DISPOSITION",
+    "verdict": "unresolved"
+  },
+  "9cb401c2c504a9e08cedb847047e5a7a4baf159e7b277cf3e2b78c041cc2180f": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly defines success through the named regression run, including required trace contents, transitions, negative cases, gates, and integration checks. It also gives concrete disproof conditions, including accepted negative cases, mutations of retained state, a fake SessionEnd, or a green claim that omits a failing gate.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-SUCCESS-DISPROOF",
+    "verdict": "pass"
+  },
+  "b95d439b1194f37aa691d2d0fddc4aca50c6e9b87309984b94f394799f26fca3": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly declares `shared_mechanism=true` for the shared close lifecycle and CLI contract, and `irreversible_or_spend_action=true` for the bounded semantic adoption checker spend. It explicitly explains that regression verification is not an empirical comparison and that the product path is deterministic rather than centrally dependent on LLM calls, so the false declarations are not contradicted by the quoted plan.",
+    "trace_id": "company-planning/method-conformance/plan/5f49c514f38d/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "ba40a175e5e1349af04fcbd0eac336bc06011b362fb11235c07a3bb8e9c94771": {
+    "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the actor as Brian\u2019s agent doing environment-only maintenance, states the desired result as retiring its claim without terminating the active runtime, and gives a stable concrete example involving an active `.venv` write claim closing to an archived completed claim with specific CLI-visible reporting.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-ACTOR-RESULT-EXAMPLE",
+    "verdict": "pass"
+  },
+  "bc5536d4a248d7bb3a00b349b027f498bbc26e3c20d0ffaf6092ad960ae2bb19": {
+    "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names concrete checks: source and installer-declared scripts/meta/session_close.py must byte-match, and real CLI tests must reach the same close_session owner and archive receipt. It explicitly states this catches a silent consumer-only second close path.",
+    "trace_id": "company-planning/method-conformance/plan/5f49c514f38d/OV-PRIOR-ART-PARALLEL-CHECK",
+    "verdict": "pass"
+  },
+  "c5e8571f16f2f03a344a97e0ba32f09d59e72b01024daa79be449bf7306f66b4": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names the EP629 native CLI regression run, identifies `checks.log` as its location, and specifies extensive trace evidence beyond final outcomes, including arguments, session markers, digests, refs, worktree state, bytes, environment, logs, outputs, exit codes, tracebacks, and integration receipts. It also explicitly states that code work has no no-run exemption and limits the operator-guide exemption to pure documentation wording checked against the run.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "d9499bd52f0d507f38706389f097da2961d85bd23aac882372c4103f4d57239c": {
+    "item_id": "CORE-IRREVERSIBLE-SPEND",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence identifies the proposed spend, its boundary (the existing checker via the approved client and route), its authorizer (Brian\u2019s standing instruction and explicit \u201cproceed\u201d), and its containment (budget cap, caching, no overrides/evaluation, and exclusion of other paid runs). It also states that other actions outside the boundary require Brian\u2019s separate authority.",
+    "trace_id": "company-planning/method-conformance/plan/5f49c514f38d/CORE-IRREVERSIBLE-SPEND",
+    "verdict": "pass"
+  },
+  "eddb8b273c67b3d46aae1448a6efb0ee6541944dabda35d98c525f332fe57e43": {
+    "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names a concrete structural check: source and installer-declared `scripts/meta/session_close.py` must byte-match. It also specifies a consumer-path observation\u2014real CLI tests must reach the same `close_session` owner and archive receipt\u2014and states that this catches a silent consumer-only second close path.",
+    "trace_id": "company-planning/method-conformance/plan/ca41ca208746/OV-PRIOR-ART-PARALLEL-CHECK",
+    "verdict": "pass"
+  }
+}

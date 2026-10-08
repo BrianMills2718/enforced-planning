@@ -1,0 +1,21 @@
+{
+  "label": "ep629-red",
+  "pid": 3115550,
+  "started_at": "2026-10-08T22:42:04.626343+00:00",
+  "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "tests/test_session_cli.py",
+    "-k",
+    "active_canonical_environment_close_cli_retains_custody or ordinary_close_refuses_canonical_root",
+    "-x",
+    "-v"
+  ],
+  "cwd": ".",
+  "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176",
+  "status": "finished",
+  "exit_code": 1,
+  "elapsed_seconds": 4.328,
+  "finished_at": "2026-10-08T22:42:08.954558+00:00"
+}

@@ -175,10 +175,15 @@ adoption.
    `make session-close` supplies `WORKTREE_REPO_ROOT` so fetch, merge-base, and
    shared-ref range evidence are read from that target repository.
    A legacy `session_ended` claim that recorded the canonical repository root
-   is the one exception to physical cleanup: use `session-close
+   has a metadata-only close route: use `session-close
    --reconcile-canonical-root` with exact claim and tracker SHA-256 digests so
    only coordination metadata is archived and the repository and branch stay
    intact.
+   Completed active canonical environment maintenance uses the separate
+   `session-close --retain-canonical-environment` option with exact claim and
+   tracker digests. It requires the exact native owner, an active write claim
+   restricted to ignored `.venv`, and a clean pushed canonical default branch;
+   the checkout, environment and branch are retained without ending the runtime.
    A merged temporary child sharing its exact parent worktree and branch is the
    other metadata-only exception: close the child first with
    `session-close --terminalize-shared-child`, then close the retained parent
@@ -238,6 +243,9 @@ adoption.
     branch-protection strictness.
 
 ## Notes
+
+- Active canonical environment close: [repair plan](proposals/ep629-active-canonical-close/plan.md)
+  and [completion contract](proposals/ep629-active-canonical-close/ep629-active-canonical-close.goal.md).
 
 - This repo is the framework source of truth; installed governed repos are
   consumers of generated/copied surfaces from here.

@@ -1,0 +1,231 @@
+START ep629-red 2026-10-08T22:42:04.706827+00:00
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/brian/code/enforced-planning/worktrees/fix-active-canonical-env-close-20261008
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 204 items / 195 deselected / 9 selected
+
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-codex] FAILED [ 11%]
+
+=================================== FAILURES ===================================
+_ test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-codex] _
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-1204/test_active_canonical_environm0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70edd522a2a0>
+capsys = <_pytest.capture.CaptureFixture object at 0x70edd522a360>
+agent = 'codex', branch = 'main', script = 'scripts/session_close.py'
+
+    @pytest.mark.parametrize("agent", ["codex", "claude-code"])
+    @pytest.mark.parametrize("branch", ["main", "master"])
+    @pytest.mark.parametrize("script", ["scripts/session_close.py", "scripts/meta/session_close.py"])
+    def test_active_canonical_environment_close_cli_retains_custody(
+        tmp_path, monkeypatch, capsys, agent, branch, script,
+    ):
+>       repo, claim_file, tracker, environment, owner = _active_canonical_environment_lane(
+            tmp_path, monkeypatch, agent=agent, branch=branch,
+        )
+
+tests/test_session_cli.py:4831: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_session_cli.py:4802: in _active_canonical_environment_lane
+    _git(repo, "commit", "-m", "baseline")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+cwd = PosixPath('/tmp/pytest-of-brian/pytest-1204/test_active_canonical_environm0/canonical')
+args = ('commit', '-m', 'baseline')
+
+    def _git(cwd: Path, *args: str) -> str:
+        """Run one real Git command for lifecycle integration fixtures."""
+    
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+>       assert result.returncode == 0, result.stderr or result.stdout
+E       AssertionError: aes commit rule: refuse [none] — no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-1204/test_active_canonical_environm0/canonical/.git/aes/commit-rule-2026-10-08.jsonl)
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['git', 'commit', '-m', 'baseline'], returncode=1, stdout='', stderr='aes commit rule: refuse [none] — no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-1204/test_active_canonical_environm0/canonical/.git/aes/commit-rule-2026-10-08.jsonl)\n').returncode
+
+tests/test_session_cli.py:66: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-codex]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+====================== 1 failed, 195 deselected in 3.35s =======================
+END {"label": "ep629-red", "pid": 3115550, "started_at": "2026-10-08T22:42:04.626343+00:00", "command": ["python3", "-m", "pytest", "tests/test_session_cli.py", "-k", "active_canonical_environment_close_cli_retains_custody or ordinary_close_refuses_canonical_root", "-x", "-v"], "cwd": ".", "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176", "status": "finished", "exit_code": 1, "elapsed_seconds": 4.328, "finished_at": "2026-10-08T22:42:08.954558+00:00"}
+START ep629-focused 2026-10-08T22:43:33.582346+00:00
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/brian/code/enforced-planning/worktrees/fix-active-canonical-env-close-20261008
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 204 items / 180 deselected / 24 selected
+
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-codex] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm0/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "fa2e5b2832904cc1542aaf8c2cd09e5d17764629c46ff09c48235377fe15d103", "--tracker-sha256", "6907c38f5856feb6f90e04f3774935697646c309fe4012e0ba191548812fab10", "--json"], "archive_id": "f9f17b349a75913dab742bb5d1de4b99400a8015f975fe0a7cbc308f42c28b46", "refs": "3dd876c66b12f8b03bf8c65f0b360e805ea07ffa refs/heads/main\n3dd876c66b12f8b03bf8c65f0b360e805ea07ffa refs/remotes/origin/HEAD\n3dd876c66b12f8b03bf8c65f0b360e805ea07ffa refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm0/canonical\nHEAD 3dd876c66b12f8b03bf8c65f0b360e805ea07ffa\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "f2e9f42ff62d1f4b59da6b7f124ad77941599163127abf41a3704e3640c52894"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-claude-code] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm1/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "2e92ee71b67244c4c28e0774cfb4c9667a239fa6398afde2fa2c27d103ace3cf", "--tracker-sha256", "bdffa1d9ef67c44b80df344034ff337fe18e30f4699ef5a2e0c7beeb349a93fe", "--json"], "archive_id": "e9fa24757ad29b51b849125ef6e9a160ff79ca22e79a550bbd19fbc2127d3b09", "refs": "b045e848ed5bcba6e95bbf01f902b031b3502cf5 refs/heads/main\nb045e848ed5bcba6e95bbf01f902b031b3502cf5 refs/remotes/origin/HEAD\nb045e848ed5bcba6e95bbf01f902b031b3502cf5 refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm1/canonical\nHEAD b045e848ed5bcba6e95bbf01f902b031b3502cf5\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "96aad36c1f3307da23fb3d0a1de6c5357aa09bfc31d293ceb395878e3df3b08d"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-master-codex] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm2/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "c68855721f4e1c3c9b79893c3d57144c94c70b6fa540827cba23c01072652114", "--tracker-sha256", "f76d60a6df79b805449c44eefda825b05fa5493167bb825968367331bc1892e6", "--json"], "archive_id": "e2d24ac1316c09aec4c8c5dbb5174b8cfcbb42ada0a24946733f4a9f57223dcb", "refs": "ab74b9d1c4ed653c56b83d5c682c4b57154ac85f refs/heads/master\nab74b9d1c4ed653c56b83d5c682c4b57154ac85f refs/remotes/origin/HEAD\nab74b9d1c4ed653c56b83d5c682c4b57154ac85f refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm2/canonical\nHEAD ab74b9d1c4ed653c56b83d5c682c4b57154ac85f\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "08f559eda40d9a0adfbeb644c08c7a8a295eef7037afc8344a7928466c928762"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-master-claude-code] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm3/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "3c4f82d100803a9533aacab901b199e59eb75d4281e825a3d0bf4215f90ad358", "--tracker-sha256", "5d253800f77307de009f8538a25330eb7d1514b3b8fd99a86f2e1e49cc791f73", "--json"], "archive_id": "d04a94fa3bcfc51bab4ca2f7cb66c8815baab240744472346ccdf973f04b54ee", "refs": "bbf55ef72233824efa6f05ec510d818d7a0ee762 refs/heads/master\nbbf55ef72233824efa6f05ec510d818d7a0ee762 refs/remotes/origin/HEAD\nbbf55ef72233824efa6f05ec510d818d7a0ee762 refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm3/canonical\nHEAD bbf55ef72233824efa6f05ec510d818d7a0ee762\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "542231d5b83bb19068107263e8f8284e50b2187b5888105ead7ead6ca3631bf1"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-main-codex] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm4/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "f0bf132d1462465d56ad51d1c35371811b78fde25919185fa358e68c60d2e24e", "--tracker-sha256", "112901e48f40f9993a0ce0814f47f00a1ce980e1c7df1a8d28aa88caf2d90a9b", "--json"], "archive_id": "5c84fb990a15c956076878215df2654c89bebe9f6fec2b8ba0c0df2a8cced2db", "refs": "59f961034c63d3954b7473a438d4eade53c27444 refs/heads/main\n59f961034c63d3954b7473a438d4eade53c27444 refs/remotes/origin/HEAD\n59f961034c63d3954b7473a438d4eade53c27444 refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm4/canonical\nHEAD 59f961034c63d3954b7473a438d4eade53c27444\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "32f1a4c294be780b0a01026754bb55c4ee9bb79d95e1511dd063b00eacdbc7c8"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-main-claude-code] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm5/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "b640d5b603b8fd06c03c0ea490fbf7e19d7536705a011f5779b836e5e3d50e95", "--tracker-sha256", "7fbd3f6bd13e1f1021471cc100aad8e0e06d665a6c5b230fca53e0b107c7e17c", "--json"], "archive_id": "258cf617ca2aa9fa51b79433eb6ba6146cfa87ab1bf11876f06cff097fd1ff6d", "refs": "ec30535a046a69f47aed36e58f0fecb0cf66bb71 refs/heads/main\nec30535a046a69f47aed36e58f0fecb0cf66bb71 refs/remotes/origin/HEAD\nec30535a046a69f47aed36e58f0fecb0cf66bb71 refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm5/canonical\nHEAD ec30535a046a69f47aed36e58f0fecb0cf66bb71\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "1725d49f9de60f7bc8e5be679b741b5c7e23493185ace00bb9d6662faacd5bb2"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-master-codex] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm6/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "fcc75b35cbf15d1cf7c07874d41c09b65b318ee793b6d9a0a43ba2e5eb005cbf", "--tracker-sha256", "d903c62627d3c0aebe089703e16f2199350e599a1aabddf21d2d59d3216a55a1", "--json"], "archive_id": "4dd46da377f1f8c1341805d587336e7c40d35198ebc3aa88c84560bc8dd0a0cd", "refs": "e2c8acd7e0ae5aa4b3e45d5de02e4e840944ca9c refs/heads/master\ne2c8acd7e0ae5aa4b3e45d5de02e4e840944ca9c refs/remotes/origin/HEAD\ne2c8acd7e0ae5aa4b3e45d5de02e4e840944ca9c refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm6/canonical\nHEAD e2c8acd7e0ae5aa4b3e45d5de02e4e840944ca9c\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "87b52b971e82d9885c03d18a9890be25bce87c09101ba52b555b7cdf83134bd0"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-master-claude-code] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm7/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "e99fc863753dfd4b643312721fa4a2759bb0b463ca1d9dcc630acc1843d71e36", "--tracker-sha256", "c30dbcff7d9a18d380809ca361a63f0cce78aa3b5c19af40e686344261b76de5", "--json"], "archive_id": "3aada2a9b651c0977181b3522197fc20ab7ea139e8e3d7c25368724d97a51c31", "refs": "45d5fab6951406c732d17cc176ffe257bc180dab refs/heads/master\n45d5fab6951406c732d17cc176ffe257bc180dab refs/remotes/origin/HEAD\n45d5fab6951406c732d17cc176ffe257bc180dab refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1207/test_active_canonical_environm7/canonical\nHEAD 45d5fab6951406c732d17cc176ffe257bc180dab\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "2f585e1826c28cbc3d22dbcce933e7cb35e85f3ef7f08f214ce9dc6a38151976"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[foreign_actor] EP629 refused foreign_actor: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[claim_digest] EP629 refused claim_digest: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[tracker_digest] EP629 refused tracker_digest: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[dirty_source] EP629 refused dirty_source: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[tracked_environment] EP629 refused tracked_environment: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[unignored_environment] EP629 refused unignored_environment: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[broad_scope] EP629 refused broad_scope: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[branch_identity] EP629 refused branch_identity: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[tracker_identity] EP629 refused tracker_identity: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[inactive] EP629 refused inactive: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[linked_worktree] EP629 refused linked_worktree: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[path_override] EP629 refused path_override: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[branch_override] EP629 refused branch_override: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[mixed_modes] EP629 refused mixed_modes: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[missing_remote] EP629 refused missing_remote: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_ordinary_close_refuses_canonical_root_before_closing_state PASSED
+
+================ 24 passed, 180 deselected in 66.29s (0:01:06) =================
+END {"label": "ep629-focused", "pid": 3134895, "started_at": "2026-10-08T22:43:33.505575+00:00", "command": ["python3", "-m", "pytest", "tests/test_session_cli.py", "-k", "active_canonical_environment or ordinary_close_refuses_canonical_root", "-v", "-s"], "cwd": ".", "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176", "status": "finished", "exit_code": 0, "elapsed_seconds": 67.415, "finished_at": "2026-10-08T22:44:49.719541+00:00"}
+START ep629-new-boundaries 2026-10-08T22:45:51.094397+00:00
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/brian/code/enforced-planning/worktrees/fix-active-canonical-env-close-20261008
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 234 items / 229 deselected / 5 selected
+
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[unpushed_source] EP629 refused unpushed_source: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_rechecks_digests_at_write[claim] PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_rechecks_digests_at_write[tracker] PASSED
+tests/test_session_close_lock_reconcile.py::test_retained_environment_option_refuses_an_older_lifecycle[scripts] PASSED
+tests/test_session_close_lock_reconcile.py::test_retained_environment_option_refuses_an_older_lifecycle[meta] PASSED
+
+====================== 5 passed, 229 deselected in 12.83s ======================
+END {"label": "ep629-new-boundaries", "pid": 3163631, "started_at": "2026-10-08T22:45:50.996370+00:00", "command": ["env", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "python3", "-m", "pytest", "tests/test_session_cli.py", "tests/test_session_close_lock_reconcile.py", "-k", "rechecks_digests_at_write or unpushed_source or retained_environment_option_refuses", "-v", "-s"], "cwd": ".", "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176", "status": "finished", "exit_code": 0, "elapsed_seconds": 13.814, "finished_at": "2026-10-08T22:46:07.738396+00:00"}
+START ep629-final-focused 2026-10-08T23:00:14.979029+00:00
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/brian/code/enforced-planning/worktrees/fix-ep629-retained-close-20261008
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 234 items / 204 deselected / 30 selected
+
+tests/test_session_cli.py::test_close_session_terminalizes_merged_child_then_parent_closes_shared_worktree PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-codex] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm0/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "30670feadefed8db71d33d0d6a790cf0693538377acb7820f3d49d816ba58bea", "--tracker-sha256", "77f744083823c578d0e9b06bc92b107f11834f24ddd6fd0c6c9bf3ee7654c14d", "--json"], "archive_id": "8256e13ef45c2a69a0de058aeae341cb5b419381e50c4abb7a705c633f1e5bc8", "refs": "3dd801b3c1edb3845d2929820d948d6ba6dbe4d6 refs/heads/main\n3dd801b3c1edb3845d2929820d948d6ba6dbe4d6 refs/remotes/origin/HEAD\n3dd801b3c1edb3845d2929820d948d6ba6dbe4d6 refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm0/canonical\nHEAD 3dd801b3c1edb3845d2929820d948d6ba6dbe4d6\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "6827f41df9f2d9a44f78960590f1e154623bb062566abe73c56d0cf6d6429a91"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-main-claude-code] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm1/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "66f1f130533e54fff451a8aeebb4805973ed5d18206e52aa3bc222ca2ee001cf", "--tracker-sha256", "f0a4bbc41493356e1530bbfe358dc8b77f50bc119cc28626665ad190c180088b", "--json"], "archive_id": "3e6caecb1824c68873e7e6ce1f2efa29d9f0888f4b48b5c72dce3f8d94b7226e", "refs": "0c90ce5668c1da437b719b1a792cee77c1898bfd refs/heads/main\n0c90ce5668c1da437b719b1a792cee77c1898bfd refs/remotes/origin/HEAD\n0c90ce5668c1da437b719b1a792cee77c1898bfd refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm1/canonical\nHEAD 0c90ce5668c1da437b719b1a792cee77c1898bfd\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "3b36f18cc3699be6942f3b928353ce46287fea7af7b3ec6f66d04f66482299fb"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-master-codex] START ep629-self-test 2026-10-08T23:00:47.617272+00:00
+{"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm2/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "7b9a8df6f63048d47bf690aac01bf716e7fec8d527107063ca8549acc3c47162", "--tracker-sha256", "3e68e39ab2c2ee0becffd04c3a9fcccd3c7a2589204456f1b21d985fa0b375e5", "--json"], "archive_id": "378c31ed179dd0117ca3f18ccad4a0d36409383f67a32bb6b7ac5ec3f1f64965", "refs": "8af14e01994656b7699cf6d15d98cd833d03ffd4 refs/heads/master\n8af14e01994656b7699cf6d15d98cd833d03ffd4 refs/remotes/origin/HEAD\n8af14e01994656b7699cf6d15d98cd833d03ffd4 refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm2/canonical\nHEAD 8af14e01994656b7699cf6d15d98cd833d03ffd4\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "d4ff17b9fbe1b3a148fcaee9c2693ad917cbbb455fd83ed56e257779a0ccc65b"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/session_close.py-master-claude-code] {"EP629": "retained", "script": "scripts/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm3/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "0a53fcc88ea78875390c7a4941b17f523eaa09cf13f9c691a1b5fd0493aaebf6", "--tracker-sha256", "be5c4c77a899117e2dc631477a72c200cedce1ffff4656a04f415ada20d9bf33", "--json"], "archive_id": "a388b884ad3a63bf2d830e71c92d009ec9531f44e9f9c0549bdffa70c2fad86c", "refs": "f1ab2b79428d1f0934bd45f90de23b78aae6e684 refs/heads/master\nf1ab2b79428d1f0934bd45f90de23b78aae6e684 refs/remotes/origin/HEAD\nf1ab2b79428d1f0934bd45f90de23b78aae6e684 refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm3/canonical\nHEAD f1ab2b79428d1f0934bd45f90de23b78aae6e684\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "7323b17904146ff1a3200592de3859dcef8a516adffe987406e4e5024f7ae6f7"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-main-codex] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm4/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "a4d7c10e0a265310f84223ed2bf8c213f578ac50b479b02fc6e196c5716be051", "--tracker-sha256", "ae7a88b1d226aff39e18c3b4de6eac2195fb2a8d5b83ae1ba65cd3d5247fe9b6", "--json"], "archive_id": "e4adfd6f24985375cd55cf124d04d672f5e23a51ccc6a3bf6021826876183e29", "refs": "2e2ac804604e2e3fd3820db935ed1a16b94a56f3 refs/heads/main\n2e2ac804604e2e3fd3820db935ed1a16b94a56f3 refs/remotes/origin/HEAD\n2e2ac804604e2e3fd3820db935ed1a16b94a56f3 refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm4/canonical\nHEAD 2e2ac804604e2e3fd3820db935ed1a16b94a56f3\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "764912fa8a017ba6659918cb6b6831621ddd3fa9ecdc7f8edcb03dc4dad84b6c"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-main-claude-code] Framework root: /home/brian/code/enforced-planning/worktrees/fix-ep629-retained-close-20261008
+
+=== File Existence Check ===
+  OK
+
+=== Markdown Link Check ===
+  OK
+
+=== Doc Surface Check ===
+  OK
+
+=== Plan Surface Check ===
+  OK
+
+=== Install Test ===
+  OK
+
+=== Facade Sync Completeness Check ===
+  OK
+
+
+ALL CHECKS PASSED
+END {"label": "ep629-self-test", "pid": 3360672, "started_at": "2026-10-08T23:00:47.483871+00:00", "command": ["python3", "scripts/self_test.py"], "cwd": ".", "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176", "status": "finished", "exit_code": 0, "elapsed_seconds": 29.959, "finished_at": "2026-10-08T23:01:20.382035+00:00"}
+{"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm5/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "bac4f2dad4be8a54f69bfde0f4af4fa5378eeb0a44ea442842abb9487198d772", "--tracker-sha256", "ce20a7d9545f5654a808e1474d24b254ac40ecf5add87d0af0b506dad7fbf04a", "--json"], "archive_id": "2a3e8b32a86fafd539d53bf33fa96190f224f0bb7f332e7b0abd35e2cc858e26", "refs": "6db48f0481bc177e4995543815091d445f619333 refs/heads/main\n6db48f0481bc177e4995543815091d445f619333 refs/remotes/origin/HEAD\n6db48f0481bc177e4995543815091d445f619333 refs/remotes/origin/main", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm5/canonical\nHEAD 6db48f0481bc177e4995543815091d445f619333\nbranch refs/heads/main", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "66af83096877d397140e28dc44f4bfc856e9b012b1ead1b9b4bbecb8dcfb03d8"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-master-codex] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "codex", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm6/canonical", "--session-id", "codex:environment-owner", "--retain-canonical-environment", "--claim-sha256", "761e6ad704876dae1ce3b72e2c5f85b2ba3fa5a38361e0d1279bab1fb39cf1db", "--tracker-sha256", "85c6deca711b02a325e3ce32a6e7f28084a15215e74edd3398bcbac144acfcda", "--json"], "archive_id": "d316f6b79e52fec623a6d1173b4a2daad9dad5222a7412fd8520cb87e8b59248", "refs": "a64016349fa2a0074ba4ff3861d8975a11b1bb91 refs/heads/master\na64016349fa2a0074ba4ff3861d8975a11b1bb91 refs/remotes/origin/HEAD\na64016349fa2a0074ba4ff3861d8975a11b1bb91 refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm6/canonical\nHEAD a64016349fa2a0074ba4ff3861d8975a11b1bb91\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "d56c2d7832da21a5e09fee01cac5706416265b411f66e1e1c0b51a6a2c805820"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_cli_retains_custody[scripts/meta/session_close.py-master-claude-code] {"EP629": "retained", "script": "scripts/meta/session_close.py", "argv": ["--agent", "claude-code", "--project", "environment-consumer", "--scope", "verify-existing-env", "--repo-root", "/tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm7/canonical", "--session-id", "claude-code:environment-owner", "--retain-canonical-environment", "--claim-sha256", "144cfddf02c5b3a8bdb91ea5001b7eb06c03f584b6aad40075af2ef502ca79db", "--tracker-sha256", "0e1b739d78c236cec6a87c526bada84192b67edf15209231206e86021762ce1a", "--json"], "archive_id": "618a912c9c137c8545dd0386e712bdb031d332abbcd377cecc52c2d576eb4e32", "refs": "44d5e1a370319dcff3029d6f75cf46e2d489efaa refs/heads/master\n44d5e1a370319dcff3029d6f75cf46e2d489efaa refs/remotes/origin/HEAD\n44d5e1a370319dcff3029d6f75cf46e2d489efaa refs/remotes/origin/master", "worktrees": "worktree /tmp/pytest-of-brian/pytest-1251/test_active_canonical_environm7/canonical\nHEAD 44d5e1a370319dcff3029d6f75cf46e2d489efaa\nbranch refs/heads/master", "environment_sha256": "09a48094e33ac5800924599cb5e369fab3559c716dfadbf25d8859eff4cfc36a", "sibling_sha256": "19dda694878652d93bab318ad6765348e3bb748c2a50c878095408a03ecfeca4"}
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[foreign_actor] EP629 refused foreign_actor: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[claim_digest] EP629 refused claim_digest: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[tracker_digest] EP629 refused tracker_digest: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[dirty_source] EP629 refused dirty_source: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[tracked_environment] EP629 refused tracked_environment: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[unignored_environment] EP629 refused unignored_environment: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[broad_scope] EP629 refused broad_scope: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[branch_identity] EP629 refused branch_identity: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[tracker_identity] EP629 refused tracker_identity: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[inactive] EP629 refused inactive: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[linked_worktree] EP629 refused linked_worktree: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[path_override] EP629 refused path_override: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[branch_override] EP629 refused branch_override: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[mixed_modes] EP629 refused mixed_modes: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[missing_remote] EP629 refused missing_remote: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_refuses_before_mutation[unpushed_source] EP629 refused unpushed_source: exact claim/tracker and Git/environment custody unchanged
+PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_rechecks_digests_at_write[claim] PASSED
+tests/test_session_cli.py::test_active_canonical_environment_close_rechecks_digests_at_write[tracker] PASSED
+tests/test_session_cli.py::test_ordinary_close_refuses_canonical_root_before_closing_state PASSED
+tests/test_session_close_lock_reconcile.py::test_retained_environment_option_refuses_an_older_lifecycle[scripts] PASSED
+tests/test_session_close_lock_reconcile.py::test_retained_environment_option_refuses_an_older_lifecycle[meta] PASSED
+
+================ 30 passed, 204 deselected in 168.84s (0:02:48) ================
+END {"label": "ep629-final-focused", "pid": 3352651, "started_at": "2026-10-08T23:00:14.868382+00:00", "command": ["env", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "python3", "-m", "pytest", "tests/test_session_cli.py", "tests/test_session_close_lock_reconcile.py", "-k", "active_canonical_environment or ordinary_close_refuses_canonical_root or retained_environment_option_refuses or terminalizes_merged_child_then_parent", "-v", "-s"], "cwd": ".", "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176", "status": "finished", "exit_code": 0, "elapsed_seconds": 170.172, "finished_at": "2026-10-08T23:03:19.712944+00:00"}

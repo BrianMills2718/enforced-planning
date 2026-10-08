@@ -4787,6 +4787,248 @@ def test_close_session_ended_reconciliation_retries_after_partial_cleanup(
     assert receipt["branch_action"] == "deleted"
 
 
+def _active_canonical_environment_lane(tmp_path, monkeypatch, *, agent="codex", branch="main"):
+    """Real Git custody, ignored environment bytes, and an isolated native claim."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    claims = tmp_path / "claims"
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims)
+    repo = tmp_path / "canonical"
+    repo.mkdir()
+    _git(repo, "init", "-b", branch)
+    _git(repo, "config", "user.name", "Test")
+    _git(repo, "config", "user.email", "tests@example.com")
+    (repo / ".gitignore").write_text(".venv/\n")
+    (repo / "README.md").write_text("source unchanged\n")
+    _git(repo, "add", ".gitignore", "README.md")
+    _git(repo, "commit", "-m", "baseline")
+    remote = tmp_path / "origin.git"
+    _git(tmp_path, "init", "--bare", str(remote))
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-u", "origin", branch)
+    _git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", f"refs/remotes/origin/{branch}")
+    environment = repo / ".venv" / "pyvenv.cfg"
+    environment.parent.mkdir()
+    environment.write_bytes(b"preserve original seven packages\n")
+    owner = f"{agent}:environment-owner"
+    with _native_actor(agent, owner):
+        started = session_lifecycle.start_session(
+            agent=agent, project="environment-consumer", scope="verify-existing-env",
+            intent="finish ignored environment maintenance", repo_root=str(repo),
+            worktree_path=str(repo), branch=branch, claim_type="write", write_paths=[".venv"],
+            broader_goal="Retain canonical source and environment", current_phase="verified",
+            plan_ref="UNPLANNED", session_id=owner, tracker_dir=tmp_path / "sessions",
+            broad_scope_mode="bounded", broad_scope_reason="Only ignored .venv distributions",
+        )
+    claim = claims / coordination_claims._claim_filename(agent, "environment-consumer", "verify-existing-env")
+    return repo, claim, Path(started["tracker_path"]), environment, owner
+
+
+@pytest.mark.parametrize("agent", ["codex", "claude-code"])
+@pytest.mark.parametrize("branch", ["main", "master"])
+@pytest.mark.parametrize("script", ["scripts/session_close.py", "scripts/meta/session_close.py"])
+def test_active_canonical_environment_close_cli_retains_custody(
+    tmp_path, monkeypatch, capsys, agent, branch, script,
+):
+    repo, claim_file, tracker, environment, owner = _active_canonical_environment_lane(
+        tmp_path, monkeypatch, agent=agent, branch=branch,
+    )
+    other_agent = "claude-code" if agent == "codex" else "codex"
+    with _native_actor(other_agent, f"{other_agent}:sibling"):
+        session_lifecycle.start_session(
+            agent=other_agent, project="environment-consumer", scope="retained-sibling",
+            intent="independent source custody", repo_root=str(repo), worktree_path=str(repo),
+            branch=branch, claim_type="write", write_paths=["README.md"],
+            broader_goal="Independent source maintenance", current_phase="working",
+            plan_ref="UNPLANNED", session_id=f"{other_agent}:sibling", tracker_dir=tmp_path / "sessions",
+        )
+    sibling = coordination_claims.CLAIMS_DIR / coordination_claims._claim_filename(
+        other_agent, "environment-consumer", "retained-sibling",
+    )
+    sibling_before = sibling.read_bytes()
+    refs_before = _git(repo, "show-ref")
+    worktrees_before = _git(repo, "worktree", "list", "--porcelain")
+    environment_before = environment.read_bytes()
+    claim_digest = hashlib.sha256(claim_file.read_bytes()).hexdigest()
+    tracker_digest = hashlib.sha256(tracker.read_bytes()).hexdigest()
+    path = Path(__file__).resolve().parents[1] / script
+    spec = importlib.util.spec_from_file_location(f"ep629_{agent}_{branch}_{path.parent.name}", path)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    # This isolated consumer has no installed locker. Never reconcile host claims.
+    monkeypatch.setattr(cli, "_resolve_canonical_lock_module", lambda: None)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("retained canonical close must not remove worktree or branch")
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", forbidden)
+    monkeypatch.setattr(session_lifecycle, "_delete_branch", forbidden)
+    argv = ["--agent", agent, "--project", "environment-consumer", "--scope", "verify-existing-env",
+            "--repo-root", str(repo), "--session-id", owner, "--retain-canonical-environment",
+            "--claim-sha256", claim_digest, "--tracker-sha256", tracker_digest, "--json"]
+    with _native_actor(agent, owner):
+        assert cli.main(argv) == 0
+    output = json.loads(capsys.readouterr().out)
+    archived = _archived_claim_payload(output["claim_archive_id"])
+    assert output["released"] is True
+    assert output["worktree_action"] == "retained_canonical_root"
+    assert output["branch_action"] == "retained_canonical_branch"
+    assert archived["status"] == "completed"
+    assert "session_ended_at" not in archived
+    receipt = archived["canonical_root_reconciliation"]
+    assert receipt["claim_status_before"] == "active"
+    assert receipt["completion_kind"] == "environment_maintenance"
+    assert receipt["claim_sha256"] == claim_digest
+    assert receipt["tracker_sha256"] == tracker_digest
+    assert not claim_file.exists()
+    assert yaml.safe_load(tracker.read_text())["tracker"]["current_phase"] == "closed"
+    assert sibling.read_bytes() == sibling_before
+    assert environment.read_bytes() == environment_before
+    assert _git(repo, "show-ref") == refs_before
+    assert _git(repo, "worktree", "list", "--porcelain") == worktrees_before
+    assert _git(repo, "symbolic-ref", "--short", "HEAD") == branch
+    assert _git(repo, "status", "--porcelain") == ""
+    print(json.dumps({"EP629": "retained", "script": script, "argv": argv,
+                      "archive_id": output["claim_archive_id"], "refs": refs_before,
+                      "worktrees": worktrees_before, "environment_sha256": hashlib.sha256(environment_before).hexdigest(),
+                      "sibling_sha256": hashlib.sha256(sibling_before).hexdigest()}))
+
+
+@pytest.mark.parametrize("failure", [
+    "foreign_actor", "claim_digest", "tracker_digest", "dirty_source", "tracked_environment",
+    "unignored_environment", "broad_scope", "branch_identity", "tracker_identity", "inactive",
+    "linked_worktree", "path_override", "branch_override", "mixed_modes", "missing_remote", "unpushed_source",
+])
+def test_active_canonical_environment_close_refuses_before_mutation(tmp_path, monkeypatch, failure):
+    repo, claim_file, tracker, environment, owner = _active_canonical_environment_lane(tmp_path, monkeypatch)
+    payload = yaml.safe_load(claim_file.read_text())
+    kwargs = {"retain_canonical_environment": True}
+    actor = owner
+    if failure == "foreign_actor":
+        actor = "codex:foreign"
+    elif failure == "dirty_source":
+        (repo / "README.md").write_text("uncommitted source\n")
+    elif failure == "tracked_environment":
+        _git(repo, "add", "-f", ".venv/pyvenv.cfg")
+        _git(repo, "commit", "-m", "tracked environment")
+        _git(repo, "push")
+    elif failure == "unignored_environment":
+        (repo / ".gitignore").write_text("")
+        _git(repo, "add", ".gitignore")
+        _git(repo, "commit", "-m", "unignored environment")
+        _git(repo, "push")
+    elif failure == "broad_scope":
+        payload["write_paths"] = [".venv", "README.md"]
+    elif failure == "branch_identity":
+        payload["branch"] = "wrong-branch"
+        data = yaml.safe_load(tracker.read_text())
+        data["claim"]["branch"] = "wrong-branch"
+        tracker.write_text(yaml.safe_dump(data))
+    elif failure == "tracker_identity":
+        data = yaml.safe_load(tracker.read_text())
+        data["claim"]["scope"] = "later-scope"
+        tracker.write_text(yaml.safe_dump(data))
+    elif failure == "inactive":
+        payload["status"] = "handoff"
+    elif failure == "linked_worktree":
+        linked = tmp_path / "linked"
+        _git(repo, "worktree", "add", "-b", "linked-env", str(linked))
+        payload["worktree_path"] = str(linked)
+        payload["branch"] = "linked-env"
+    elif failure == "path_override":
+        kwargs["worktree_path"] = str(tmp_path / "different")
+    elif failure == "branch_override":
+        kwargs["branch"] = "different"
+    elif failure == "mixed_modes":
+        kwargs["reconcile_canonical_root"] = True
+    elif failure == "missing_remote":
+        _git(repo, "update-ref", "-d", "refs/remotes/origin/main")
+    elif failure == "unpushed_source":
+        (repo / "README.md").write_text("committed but not pushed source\n")
+        _git(repo, "add", "README.md")
+        _git(repo, "commit", "-m", "unpushed source")
+    claim_file.write_text(yaml.safe_dump(payload, sort_keys=False))
+    claim_before, tracker_before = claim_file.read_bytes(), tracker.read_bytes()
+    refs_before = _git(repo, "show-ref")
+    worktrees_before = _git(repo, "worktree", "list", "--porcelain")
+    environment_before = environment.read_bytes()
+    kwargs["expected_claim_sha256"] = "0" * 64 if failure == "claim_digest" else hashlib.sha256(claim_before).hexdigest()
+    kwargs["expected_tracker_sha256"] = "0" * 64 if failure == "tracker_digest" else hashlib.sha256(tracker_before).hexdigest()
+    reasons = {
+        "foreign_actor": "belongs to session", "claim_digest": "claim digest mismatch",
+        "tracker_digest": "tracker digest mismatch", "dirty_source": "clean canonical checkout",
+        "tracked_environment": "ignored, entirely untracked", "unignored_environment": "ignored, entirely untracked",
+        "broad_scope": "restricted to exactly .venv", "branch_identity": "checked-out branch",
+        "tracker_identity": "exact tracker lane identity", "inactive": "active write claim",
+        "linked_worktree": "equal the canonical repository root", "path_override": "different worktree override",
+        "branch_override": "branch overrides", "mixed_modes": "Choose only one reconciliation mode",
+        "missing_remote": "pushed remote default branch", "unpushed_source": "commits not present",
+    }
+    with _native_actor("codex", actor), pytest.raises(ValueError, match=reasons[failure]):
+        session_lifecycle.close_session(
+            agent="codex", project="environment-consumer", scope="verify-existing-env",
+            actor_session_id=actor, **kwargs,
+        )
+    assert claim_file.read_bytes() == claim_before
+    assert tracker.read_bytes() == tracker_before
+    assert _git(repo, "show-ref") == refs_before
+    assert _git(repo, "worktree", "list", "--porcelain") == worktrees_before
+    assert environment.read_bytes() == environment_before
+    print(f"EP629 refused {failure}: exact claim/tracker and Git/environment custody unchanged")
+
+
+@pytest.mark.parametrize("changed", ["claim", "tracker"])
+def test_active_canonical_environment_close_rechecks_digests_at_write(tmp_path, monkeypatch, changed):
+    repo, claim_file, tracker, environment, owner = _active_canonical_environment_lane(tmp_path, monkeypatch)
+    claim_digest = hashlib.sha256(claim_file.read_bytes()).hexdigest()
+    tracker_digest = hashlib.sha256(tracker.read_bytes()).hexdigest()
+    target = claim_file if changed == "claim" else tracker
+    injected = []
+
+    def concurrent_metadata_update(**kwargs):
+        data = yaml.safe_load(target.read_text())
+        if changed == "claim":
+            data["notes"] = "racing progress"
+        else:
+            data["tracker"]["notes"] = "racing progress"
+        target.write_text(yaml.safe_dump(data, sort_keys=False))
+        injected.append(target.read_bytes())
+        return {"mailbox_disposition": None, "mailbox_message_ids": []}
+
+    monkeypatch.setattr(session_lifecycle, "_resolve_active_mailbox_for_closeout", concurrent_metadata_update)
+    with _native_actor("codex", owner), pytest.raises(ValueError, match=f"{changed} changed before mutation"):
+        session_lifecycle.close_session(
+            agent="codex", project="environment-consumer", scope="verify-existing-env", actor_session_id=owner,
+            retain_canonical_environment=True, expected_claim_sha256=claim_digest, expected_tracker_sha256=tracker_digest,
+        )
+    assert target.read_bytes() == injected[0]
+    assert yaml.safe_load(claim_file.read_text())["status"] == "active"
+    assert yaml.safe_load(tracker.read_text())["tracker"]["current_phase"] == "verified"
+    assert _git(repo, "status", "--porcelain") == ""
+    assert environment.read_bytes() == b"preserve original seven packages\n"
+
+
+def test_ordinary_close_refuses_canonical_root_before_closing_state(tmp_path, monkeypatch):
+    repo, claim_file, tracker, _environment, owner = _active_canonical_environment_lane(tmp_path, monkeypatch)
+    _git(repo, "switch", "-c", "integrated-canonical-feature")
+    payload = yaml.safe_load(claim_file.read_text())
+    payload["branch"] = "integrated-canonical-feature"
+    claim_file.write_text(yaml.safe_dump(payload, sort_keys=False))
+    before, tracker_before = claim_file.read_bytes(), tracker.read_bytes()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("ordinary close must refuse before attempting canonical removal")
+
+    monkeypatch.setattr(session_lifecycle, "_remove_worktree_path", forbidden)
+    with _native_actor("codex", owner), pytest.raises(ValueError, match="canonical repository root"):
+        session_lifecycle.close_session(
+            agent="codex", project="environment-consumer", scope="verify-existing-env", actor_session_id=owner,
+        )
+    assert claim_file.read_bytes() == before
+    assert tracker.read_bytes() == tracker_before
+    assert _git(repo, "branch", "--show-current") == "integrated-canonical-feature"
+
+
 def test_close_session_archives_session_ended_canonical_root_without_removal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -128,10 +128,10 @@ def test_validate_config_reports_missing_source_paths(
 
 # --- default .doc-coupling-acks discovery (project-meta#2314) ---------------
 
-import subprocess
-import sys
+import subprocess  # noqa: E402
+import sys  # noqa: E402
 
-import yaml
+import yaml  # noqa: E402
 
 _SCRIPT = REPO_ROOT / "scripts" / "meta" / "check_doc_coupling.py"
 

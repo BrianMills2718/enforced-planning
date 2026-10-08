@@ -21,7 +21,7 @@ def _bootstrap_package() -> None:
 
 _bootstrap_package()
 
-from enforced_planning.claim_bootstrap import (
+from enforced_planning.claim_bootstrap import (  # noqa: E402
     ClaimBootstrapError,
     execute_request,
     parse_request_json,

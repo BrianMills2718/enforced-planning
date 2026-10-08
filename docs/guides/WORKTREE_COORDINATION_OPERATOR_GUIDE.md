@@ -13,6 +13,10 @@ coordination. Other documentation has narrower roles:
 | Instruction-hook consumer behavior | Agent Skills `README.md` |
 | Rationale and rollout history | ADRs and plan files; not current operator handbooks |
 
+Framework `make test` and `make test-quick` suppress recursive Make directory
+banners so subprocess JSON replies remain parseable. Test counts, failures,
+and exit codes remain visible.
+
 ## Canonical Truth Surfaces
 
 | Truth | Surface |
@@ -532,6 +536,15 @@ registry -- see the fix's own docstring and regression tests in
    the temporary repository-wide bootstrap scope must be narrowed before the
    first scoped write. A stale local default branch, malformed goal reference,
    or lifecycle failure leaves no partially owned lane.
+   In an `enforce_selected` repository, bootstrap first creates the exact
+   native-bound goal write reservation without a tracker, then uses the
+   existing selection-pending activation path to attach the first tracker.
+   That deferred activation does not select an outcome or authorize ordinary
+   repository writes. If activation fails, the transaction verifies custody,
+   removes only its own pristine Git artifacts, and then releases metadata.
+   `enforce_selected` requires bounded `SESSION_WRITE_PATHS` for a goal lane;
+   a whole-repository goal bootstrap is refused and rolled back. The temporary
+   broad-scope path remains available when selected admission is off.
    For bounded light maintenance without a numbered plan, use
    `make maintenance-worktree BRANCH=<name>`; the Make target builds one typed
    `maintenance_worktree` request and delegates claim, worktree, tracker, and
@@ -666,7 +679,7 @@ Use ordinary `session-close` for real linked worktrees and
 
 ### Several lanes in one session
 
-`make maintenance-worktree` refuses a second lane while the session already
+`make maintenance-worktree` and `make goal-worktree` refuse a second lane while the session already
 owns a claim root, unless `SESSION_ALLOW_PARALLEL=1` is set and every declared
 write path of the new lane is narrow (not `.`) and disjoint from each existing
 root's write paths. Write paths are repository-relative, so a root in a
@@ -676,6 +689,9 @@ replaced a blanket one-root rule that forced unrelated fixes into unrelated
 PRs (project-meta policy friction `one-claim-root-per-session`, 2026-10-05).
 
 ### A closed lane leaves an empty directory
+
+`worktree=removed` describes Git worktree removal. The retained empty directory
+is intentional, not failed cleanup; do not remove it as a closeout repair.
 
 Ordinary `session-close` removes the linked worktree and then recreates its path
 as an empty directory. Another live agent session, such as the parent or a
@@ -1041,6 +1057,11 @@ runtime, reattach it to the existing plan- or goal-bound lane instead of
 silently creating a new one.
 
 ### What `session-close` tells you about the shared branch
+
+The source and installed Make recipes pass `WORKTREE_REPO_ROOT` explicitly to
+closeout. An overridden target repository therefore supplies both the worktree
+path and the durable repository whose remote refs are inspected; a central
+controller must not substitute its own checkout for that target.
 
 Every close prints one line to stderr saying whether `origin/main` moved from
 outside the lane while it was open, and lists what landed if it did. Policy

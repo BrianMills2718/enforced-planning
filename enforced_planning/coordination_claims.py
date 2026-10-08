@@ -3962,9 +3962,13 @@ def create_claim(
             if verified_goal_default_revision is not None
             else resolve_default_integration_revision(root)
         )
-        if verified_goal_default_revision is not None and not (tracker_path and branch and worktree_path):
+        if verified_goal_default_revision is not None and not (
+            branch and worktree_path
+            and (tracker_path or (require_native_session_binding and resolved_claim_type == "write"))
+        ):
             raise ValueError(
-                "verified goal default revision requires one exact tracker, branch, and worktree transaction"
+                "verified goal default revision requires one exact tracker transaction or "
+                "native-bound write reservation, with branch and worktree custody"
             )
         if START_REVISION_PATTERN.fullmatch(default_revision) is None:
             raise ValueError("verified goal default revision must be one full lowercase Git object ID")
@@ -3978,8 +3982,8 @@ def create_claim(
             start_revision=start_revision,
             branch=branch,
             worktree_path=worktree_path,
-            require_branch=tracker_path is not None,
-            require_worktree=tracker_path is not None,
+            require_branch=tracker_path is not None or verified_goal_default_revision is not None,
+            require_worktree=tracker_path is not None or verified_goal_default_revision is not None,
         )
     elif write_paths and verified_maintenance_default_revision is not None:
         if not (require_native_session_binding and tracker_path and branch and worktree_path and repo_root):

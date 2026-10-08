@@ -22,7 +22,7 @@ ROOT = _framework_root()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from enforced_planning.integration_authority import (
+from enforced_planning.integration_authority import (  # noqa: E402
     IntegrationAuthorityAssertionV1,
     IntegrationAuthorityError,
     IntegrationTargetV1,

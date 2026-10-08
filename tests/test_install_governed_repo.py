@@ -1388,6 +1388,14 @@ def _installed_planning_make_fixture(tmp_path: Path) -> tuple[dict[str, str], st
         encoding="utf-8",
     )
     provider_config.chmod(0o600)
+    # Isolate the operator identity without changing this host's disk admission.
+    storage_config = Path.home() / ".config/storage-policy.json"
+    if storage_config.is_file():
+        host_policy = json.loads(storage_config.read_text(encoding="utf-8"))
+        (isolated_home / ".config/storage-policy.json").write_text(
+            json.dumps({key: host_policy[key] for key in ("host", "reserve_gib") if key in host_policy}),
+            encoding="utf-8",
+        )
     environment = os.environ.copy()
     environment["HOME"] = str(isolated_home)
     environment["PYTHON"] = sys.executable
@@ -2036,6 +2044,7 @@ def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: 
             "BRANCH=plan-234-squash-closeout",
             "WORKTREE_AGENT=codex",
             "WORKTREE_PROJECT=fixture",
+            f"WORKTREE_REPO_ROOT={tmp_path}",
             f"WORKTREE_DIR={tmp_path / 'worktrees'}",
             f"WORKTREE_SESSION_CLOSE_SCRIPT={recorder}",
             f"WORKTREE_MERGE_COMMIT={merge_commit}",
@@ -2055,6 +2064,8 @@ def test_session_close_make_target_forwards_exact_squash_merge_commit(tmp_path: 
         "fixture",
         "--scope",
         "plan-234-squash-closeout",
+        "--repo-root",
+        str(tmp_path),
         "--worktree-path",
         str(tmp_path / "worktrees" / "plan-234-squash-closeout"),
         "--branch",

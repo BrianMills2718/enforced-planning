@@ -1089,37 +1089,20 @@ def test_stop_projection_failure_is_still_recorded_as_a_block(
     assert receipt["decision"] == "block"
 
 
-def test_the_repair_budget_clears_measured_interpreter_startup(monkeypatch, tmp_path: Path) -> None:
-    """The budget must exceed subprocess startup, or the repair can never finish.
+def test_the_repair_budget_covers_the_actual_worker(tmp_path: Path) -> None:
+    """Package import alone cannot establish that the bounded worker works."""
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _write_live_claim(claims_dir, scope="budget-worker")
 
-    Replaces a test asserting a tighter mid-turn budget. That looked right -- a
-    tool call should not wait as long for the global lock as a once-per-turn Stop
-    -- and measurement disproved it: the repair spawns a Python interpreter, and
-    startup plus package import is 0.40-0.45s warm and 3.35s cold here. The
-    dominant cost is startup, not lock waiting, so a 0.5s budget did not shorten
-    a wait, it turned a repairable turn back into a lost one.
+    result = coordination_hook._repair_turn_end_projection(claims_dir)
 
-    So the budget is one value, and the property worth protecting is that it
-    clears real startup with headroom rather than that it is small.
-    """
-
-    import time as _time
-
-    started = _time.monotonic()
-    completed = subprocess.run(
-        [sys.executable, "-c", "import sys; sys.path.insert(0, '.'); import enforced_planning"],
-        cwd=Path(__file__).resolve().parents[1],
-        capture_output=True,
-        check=False,
+    assert result["action"] == "rebuilt"
+    assert result["last_phase"] == "complete"
+    projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
+        prewrite_claim_fast.projection_path_for(claims_dir).read_text(encoding="utf-8")
     )
-    startup = _time.monotonic() - started
-    assert completed.returncode == 0, completed.stderr
-
-    assert coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS > startup * 2, (
-        f"repair budget {coordination_hook.TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS}s leaves no "
-        f"room above {startup:.3f}s of measured interpreter and import startup; the repair would "
-        "time out on its own overhead before reaching the lock"
-    )
+    assert [claim.scope for claim in projection.claims] == ["budget-worker"]
 
 
 def test_repair_timeout_is_an_explicit_parameter() -> None:

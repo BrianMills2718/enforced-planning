@@ -241,6 +241,41 @@ def test_workspace_file_archive_preserves_bytes_and_removes_only_exact_source(
     assert len(receipt["result"]["sha256"]) == 64
 
 
+@pytest.mark.parametrize("outcome_mode", ["off", "enforce_selected"])
+def test_goal_worktree_parallel_reservation_retains_disjoint_root_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, outcome_mode: str,
+) -> None:
+    """A real second goal claim survives reservation without widening write custody."""
+    repo, _graph, _stale, _fresh = _project_graph_fixture(tmp_path, outcome_mode=outcome_mode)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    first_scope = "fix/parallel-parent"
+    claim_bootstrap.execute_request(claim_bootstrap.parse_request_json(json.dumps(
+        _maintenance_payload(repo, scope=first_scope, branch=first_scope,
+                             write_paths=["docs/plans/CLAUDE.md"])
+    )))
+    for paths, parallel in [(["CLAUDE.md"], False), (["docs/plans/CLAUDE.md"], True)]:
+        denied = claim_bootstrap.parse_request_json(json.dumps(
+            _goal_worktree_payload(repo, write_paths=paths, allow_parallel=parallel)
+        ))
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
+            claim_bootstrap.execute_request(denied)
+    receipt = claim_bootstrap.execute_request(claim_bootstrap.parse_request_json(json.dumps(
+        _goal_worktree_payload(repo, write_paths=["CLAUDE.md"], allow_parallel=True)
+    )))
+    claims = {claim.scope: claim for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)}
+    assert set(claims) == {first_scope, "goal/owner-visible-outcome"}
+    goal = claims["goal/owner-visible-outcome"]
+    assert goal.write_paths == ["CLAUDE.md"]
+    assert goal.parallel_root_authorized is True
+    assert Path(goal.worktree_path).is_dir()
+    assert receipt["result"]["start_revision"] == goal.start_revision
+    if outcome_mode == "enforce_selected":
+        result = claim_bootstrap.session_lifecycle.outcome_admission.evaluate_selected_claim_admission(
+            goal, boundary="session_start", ordinary_allowed=True, renewal=True
+        )
+        assert result.decision.disposition == "deny"
+
+
 @pytest.mark.parametrize(
     "updates",
     [
@@ -577,6 +612,13 @@ def _configure_maintenance_runtime(
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.setattr(claim_bootstrap.coordination_claims, "CLAIMS_DIR", claims_dir)
     monkeypatch.setattr(claim_bootstrap, "SESSION_TRACKERS_DIR", trackers_dir)
+    real_start = claim_bootstrap.session_lifecycle.start_session
+
+    def isolated_start(**kwargs: object) -> dict[str, object]:
+        kwargs.setdefault("outcome_admission_receipt_path", tmp_path / "outcome-admission.jsonl")
+        return real_start(**kwargs)
+
+    monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", isolated_start)
     canonical_lock = claim_bootstrap._canonical_lock_module()
     monkeypatch.setattr(canonical_lock, "LOCK_INDEX", tmp_path / "canonical-locks.json")
     monkeypatch.setattr(claim_bootstrap, "_canonical_lock_module", lambda: canonical_lock)
@@ -958,6 +1000,7 @@ def _project_graph_fixture(
     tmp_path: Path,
     *,
     project_id: str = "agent-skills",
+    outcome_mode: str | None = None,
 ) -> tuple[Path, Path, str, str]:
     remote = tmp_path / "agent-skills.git"
     repo = tmp_path / "agent-skills"
@@ -970,6 +1013,11 @@ def _project_graph_fixture(
     )
     (repo / "CLAUDE.md").write_text("# Agent Skills instructions\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "CLAUDE.md"], check=True, capture_output=True)
+    if outcome_mode is not None:
+        (repo / "meta-process.yaml").write_text(
+            f"meta_process:\n  claims:\n    outcome_admission_mode: {outcome_mode}\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "-C", str(repo), "add", "meta-process.yaml"], check=True, capture_output=True)
     subprocess.run(
         [
             "git", "-C", str(repo), "-c", "user.name=Test User", "-c",
@@ -1434,22 +1482,36 @@ def test_maintenance_bootstrap_rejects_ambiguous_new_file_contract(
         claim_bootstrap.parse_request_json(json.dumps(_maintenance_payload(tmp_path, **updates)))
 
 
+@pytest.mark.parametrize("outcome_mode", ["off", "enforce_selected"])
+@pytest.mark.parametrize("write_paths", [["CLAUDE.md"], ["."]])
 def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    outcome_mode: str,
+    write_paths: list[str],
 ) -> None:
-    repo, _graph, stale_head, fresh_head = _project_graph_fixture(tmp_path)
+    repo, _graph, stale_head, fresh_head = _project_graph_fixture(tmp_path, outcome_mode=outcome_mode)
     authority = claim_bootstrap.RepositoryAuthority(
         "agent-skills", "Brian/agent-skills", "main", str(tmp_path / "agent-skills.git")
     )
     real_fresh = claim_bootstrap._fresh_remote_default_revision
-    _claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
     monkeypatch.setattr(claim_bootstrap, "_repository_authority", lambda _target, **_kwargs: authority)
     monkeypatch.setattr(claim_bootstrap, "_fresh_remote_default_revision", real_fresh)
 
-    receipt = claim_bootstrap.execute_request(
-        claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo)))
-    )
+    request = claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo, write_paths=write_paths)))
+    if outcome_mode == "enforce_selected" and write_paths == ["."]:
+        with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="requires bounded SESSION_WRITE_PATHS"):
+            claim_bootstrap.execute_request(request)
+        assert not list(claims_dir.glob("*.yaml"))
+        assert not list(trackers_dir.rglob("*.yaml"))
+        assert not (repo / "worktrees" / "goal" / "owner-visible-outcome").exists()
+        assert subprocess.run(
+            ["git", "-C", str(repo), "show-ref", "--verify", "refs/heads/goal/owner-visible-outcome"],
+            capture_output=True, check=False,
+        ).returncode != 0
+        return
+    receipt = claim_bootstrap.execute_request(request)
 
     worktree = repo / "worktrees" / "goal" / "owner-visible-outcome"
     lane_head = subprocess.run(
@@ -1467,12 +1529,26 @@ def test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authori
     assert receipt["result"]["start_revision"] == fresh_head
     assert claim.start_revision == fresh_head
     assert claim.plan_ref == "goal:owner-visible-outcome"
+    assert claim.claim_type == "write"
+    assert claim.write_paths == write_paths
+    assert receipt["result"]["bootstrap_requires_narrowing"] == (write_paths == ["."])
     assert claim.work_graph_path is None
     assert claim.work_unit_id is None
     assert tracker["claim"]["start_revision"] == fresh_head
     assert tracker["claim"]["plan_ref"] == "goal:owner-visible-outcome"
     assert tracker["tracker"]["current_phase"] == "first vertical"
     assert tracker["tracker"]["intended_next_phases"] == ["exercise the owner-visible boundary"]
+    if outcome_mode == "enforce_selected":
+        admission = claim_bootstrap.session_lifecycle.outcome_admission
+        [activation] = admission.load_selection_pending_activation_receipts(
+            admission.selection_pending_activation_receipt_path(tmp_path / "outcome-admission.jsonl")
+        )
+        assert activation.result.disposition == "defer"
+        # Attaching a tracker does not select an outcome or grant ordinary writes.
+        selected = admission.evaluate_selected_claim_admission(
+            claim, boundary="session_start", ordinary_allowed=True, renewal=True
+        )
+        assert selected.decision.disposition == "deny"
 
 
 @pytest.mark.parametrize(
@@ -1494,14 +1570,29 @@ def test_goal_worktree_rejects_malformed_goal_contract(
         claim_bootstrap.parse_request_json(json.dumps(_goal_worktree_payload(repo, **updates)))
 
 
+@pytest.mark.parametrize("outcome_mode", ["off", "enforce_selected"])
+@pytest.mark.parametrize("activation_started", [False, True])
 def test_goal_worktree_lifecycle_failure_rolls_back_all_lane_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    outcome_mode: str,
+    activation_started: bool,
 ) -> None:
     repo = _governed_repo(tmp_path)
+    (repo / "meta-process.yaml").write_text(
+        f"meta_process:\n  claims:\n    outcome_admission_mode: {outcome_mode}\n", encoding="utf-8"
+    )
+    subprocess.run(["git", "-C", str(repo), "add", "meta-process.yaml"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=Test User", "-c", "user.email=test@example.invalid",
+         "commit", "-m", "activation mode"], check=True, capture_output=True
+    )
     claims_dir, trackers_dir = _configure_maintenance_runtime(tmp_path, monkeypatch)
+    real_start = claim_bootstrap.session_lifecycle.start_session
 
     def fail_lifecycle(**_kwargs: object) -> dict[str, object]:
+        if activation_started:
+            real_start(**_kwargs)
         raise ValueError("simulated goal lifecycle failure")
 
     monkeypatch.setattr(claim_bootstrap.session_lifecycle, "start_session", fail_lifecycle)

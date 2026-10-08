@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.hook_receipts import (
+from scripts.hook_receipts import (  # noqa: E402
     DEFAULT_PREWRITE_EVENT_PATH,
     DEFAULT_RECEIPT_ROOT,
     DEFAULT_SETTINGS_PATHS,

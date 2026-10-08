@@ -17,7 +17,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
-import check_no_prose_string_matching as checker
+import check_no_prose_string_matching as checker  # noqa: E402
 
 
 def _write(tmp_path: Path, body: str, name: str = "module.py") -> Path:

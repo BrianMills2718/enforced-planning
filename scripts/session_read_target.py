@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from enforced_planning.read_target import (
+from enforced_planning.read_target import (  # noqa: E402
     ReadTargetError,
     clear_read_target,
     resolve_read_target,

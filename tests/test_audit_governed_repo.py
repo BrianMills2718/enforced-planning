@@ -287,7 +287,7 @@ def test_audit_governed_repo_reports_partial_for_missing_contract(tmp_path: Path
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     assert payload["classification"] == "partial"
-    assert "canonical CLAUDE.md" in payload["missing_required"]
+    assert "canonical CLAUDE.md or authored AGENTS.md" in payload["missing_required"]
     assert "meta-process.yaml" in payload["missing_required"]
     assert "scripts/relationships.yaml" in payload["missing_required"]
 

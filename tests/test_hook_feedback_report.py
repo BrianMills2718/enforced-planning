@@ -42,7 +42,7 @@ def test_cli_reports_malformed_receipts_without_aborting(tmp_path: Path, capsys:
     receipts = tmp_path / "receipts"
     _receipt(receipts, "a" * 32)
     _receipt(receipts, "b" * 32)
-    _receipt(receipts, "c" * 32, event_name=None, decision="block", exit_status=2)
+    _receipt(receipts, "c" * 32, event_name=42, decision="block", exit_status=2)
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"hooks": {}}), encoding="utf-8")
 
@@ -60,7 +60,7 @@ def test_cli_reports_malformed_receipts_without_aborting(tmp_path: Path, capsys:
 def test_cli_strict_mode_exits_nonzero_on_malformed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     receipts = tmp_path / "receipts"
     _receipt(receipts, "a" * 32)
-    _receipt(receipts, "b" * 32, event_name=None)
+    _receipt(receipts, "b" * 32, event_name=42)
     settings = tmp_path / "settings.json"
     settings.write_text(json.dumps({"hooks": {}}), encoding="utf-8")
 

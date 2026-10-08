@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -115,6 +116,31 @@ def _maintenance_request(make_output: str) -> dict[str, object]:
     assert len(lines) == 1, f"expected one typed bootstrap invocation, got {len(lines)}"
     tokens = shlex.split(lines[0])
     return json.loads(tokens[tokens.index("--request-json") + 1])
+
+
+@pytest.mark.parametrize("parallel", ["0", "1"])
+@pytest.mark.parametrize("installed", [False, True])
+def test_goal_worktree_preserves_parallel_authorization_and_paths(
+    tmp_path: Path, parallel: str, installed: bool,
+) -> None:
+    """Both public Make entrypoints retain explicit disjoint-lane authorization."""
+    args = ["make", "-n"]
+    if installed:
+        rendered = tmp_path / "Makefile"
+        rendered.write_text(TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        args.extend(["-f", str(rendered)])
+    args.extend([
+        "goal-worktree", *_COMMON_MAKE_VARS, "BRANCH=goal-parallel-probe",
+        "GOAL_REF=goal:parallel-probe", "WORKTREE_AGENT=codex",
+        "WORKTREE_PROJECT=enforced-planning", f"SESSION_ALLOW_PARALLEL={parallel}",
+        "SESSION_WRITE_PATHS=src/first.py docs/second.md",
+    ])
+    result = subprocess.run(args, cwd=PROJECT_ROOT, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    request = _maintenance_request(result.stdout)
+    assert request["operation"] == "goal_worktree"
+    assert request["allow_parallel"] is (parallel == "1")
+    assert request["write_paths"] == ["src/first.py", "docs/second.md"]
 
 
 def test_install_codex_runtime_delegates_to_canonical_updater() -> None:
@@ -467,3 +493,25 @@ def test_unplanned_session_start_without_permission_names_its_recovery() -> None
     assert "Traceback (most recent call last)" not in combined, combined
     assert "ALLOW_UNPLANNED=1" in combined, combined
     assert "--allow-unplanned" in combined, combined
+
+
+def test_consumer_close_forwards_the_explicit_target_root(tmp_path: Path) -> None:
+    """Execute the installed recipe against a recorder, with a different target root."""
+    target = tmp_path / "consumer"
+    target.mkdir()
+    recorder = tmp_path / "record_close.py"
+    recorder.write_text("import json,sys; print(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+    result = subprocess.run(
+        [
+            "make", "-f", str(TEMPLATE_PATH), "session-close",
+            "BRANCH=cross-consumer-close", "WORKTREE_AGENT=codex",
+            "WORKTREE_PROJECT=consumer", f"WORKTREE_REPO_ROOT={target}",
+            f"WORKTREE_DIR={target / 'worktrees'}",
+            f"WORKTREE_SESSION_CLOSE_SCRIPT={recorder}", f"PYTHON={sys.executable}",
+        ],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    argv = json.loads(result.stdout)
+    assert argv[argv.index("--repo-root") + 1] == str(target)
+    assert argv[argv.index("--worktree-path") + 1] == str(target / "worktrees" / "cross-consumer-close")

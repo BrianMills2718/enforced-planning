@@ -28,7 +28,7 @@ def _add_repo_root_to_path() -> Path:
 
 ROOT = _add_repo_root_to_path()
 
-from enforced_planning.outcome_admission_evaluation import (
+from enforced_planning.outcome_admission_evaluation import (  # noqa: E402
     evaluate_admission_suite,
     load_evaluation_inputs,
     resolve_candidate_source_binding,

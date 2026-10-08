@@ -2442,6 +2442,16 @@ cleanup must happen from a safe control session.
 Claim release and claimed-worktree cleanup must not be split into separate
 manual steps.
 
+Before removing a lane, closeout retains its branch's commit identity and a
+canonical lock-helper path that survives worktree removal. The helper may be
+installed beside `scripts/meta/session_close.py` or under
+`scripts/worktree-coordination/`; both layouts reconcile the lock after claim
+release. Retaining the commit identity keeps the lane's own commits out of the
+outside-writer report after its branch is deleted. Supply `--merge-commit` when
+the integration commit must also be excluded, including a squash merge. Only
+that exact integration commit is excluded; outside commits preceding the merge
+remain visible in the report.
+
 After a task branch is merged, ordinary repository writes remain denied until
 the claim is dispositioned. Two strict control paths remain available through
 the installed runtime: the absolute mailbox command printed in the hook notice,

@@ -1,0 +1,93 @@
+{
+  "active_slice": {
+    "description": "Guard resolved creation paths and recoverable closeout with ownership, history, ignored-data and runtime-dependency preservation",
+    "next_action": "Inspect and extend existing native placement and removal preflight; verify adversarial real Git and process cases before integrating B. Retain the cleanup timer hold until installed preservation proof C.",
+    "requires_external_action": false,
+    "requires_spend": false,
+    "slice_id": "B",
+    "status": "ready",
+    "target_revision": "8407d7ef2ec57d7977ea5c3caaaef56ce09391d6"
+  },
+  "authority": {
+    "external_action_authorized": false,
+    "human_decision": null,
+    "human_decision_required": false,
+    "implementation_authorized": true,
+    "spend_cap_usd": 0,
+    "spend_used_usd": 0
+  },
+  "circuit_breakers": {
+    "context_integrity_valid": true,
+    "max_same_boundary_failures": 3,
+    "runtime_integrity_valid": true
+  },
+  "completion": {
+    "evidence_revision": null,
+    "receipt_ref": null,
+    "remaining_ready_work": 3,
+    "requested": false,
+    "verifier_outcome": null
+  },
+  "cursor_id": "worktree-lifecycle",
+  "cursor_revision": 1,
+  "failure_state": {
+    "boundary": null,
+    "last_failure_ref": null,
+    "same_boundary_failures": 0
+  },
+  "goal_ref": "https://github.com/BrianMills2718/agentic-engineering-system-canonical/blob/388789fcbe21a778981c4a501784038e21604e1b/proposals/worktree-lifecycle/worktree-lifecycle.goal.md",
+  "lifecycle_state": "active",
+  "observations": [
+    {
+      "boundary": "Complete inventory, visible child errors and report-only rollout gate",
+      "evidence_ref": "https://github.com/BrianMills2718/project-meta/pull/2497",
+      "kind": "authentic_result",
+      "observation_id": "inventory-a-integrated",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "Merged source lane folder, local branch and live claim closed with verified remote recovery",
+      "evidence_ref": "/home/brian/projects/data/logs/worktree-lifecycle-verification.log:INVENTORY_INTEGRATION_NATIVE_CLOSE",
+      "kind": "authentic_result",
+      "observation_id": "inventory-a-native-closed",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "All original 72 linked members remain represented in the durable baseline",
+      "evidence_ref": "https://github.com/BrianMills2718/project-meta/blob/531a77d7510f22dfb0ce52c73704aaf07bbdf0e6/docs/ops/worktree-lifecycle/baseline.json",
+      "kind": "authentic_result",
+      "observation_id": "original-baseline-preserved",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "2026-10-09 10:38 UTC read-only membership: 223 owners, 71 linked, 58 under code, 55 present there, 3 missing there, zero operational errors",
+      "evidence_ref": "/home/brian/projects/data/logs/worktree-lifecycle-verification.log:POST_INTEGRATION_INVENTORY_REFRESH",
+      "kind": "authentic_result",
+      "observation_id": "fresh-inventory-71",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "Source tests resolved and frozen clean integration-generated gates exit0",
+      "evidence_ref": "/home/brian/projects/data/logs/worktree-lifecycle-verification.log:INTEGRATION_FINAL_LOCAL_GATES",
+      "kind": "authentic_result",
+      "observation_id": "inventory-local-gates",
+      "outcome": "pass"
+    },
+    {
+      "boundary": "Timer intentionally inactive, still enabled; restore only after installed preservation and eligibility proof C",
+      "evidence_ref": "/home/brian/projects/data/logs/worktree-lifecycle-verification.log:TIMER_CUTOVER_HOLD",
+      "kind": "authentic_result",
+      "observation_id": "cleanup-control-hold",
+      "outcome": "pass"
+    }
+  ],
+  "plan_revision": "388789fcbe21a778981c4a501784038e21604e1b:sha256:02cf7f114beb6e342da0498e467144b4bdab702238a13f2aeb11cc0fbb5e8a48",
+  "ready_alternatives": [],
+  "record_type": "plan_execution_cursor",
+  "schema_version": "1.0",
+  "target": {
+    "branch": "worktree-lifecycle-safety",
+    "repository": "enforced-planning",
+    "worktree": "/home/brian/code/enforced-planning/worktrees/worktree-lifecycle-safety"
+  }
+}

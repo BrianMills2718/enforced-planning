@@ -508,10 +508,11 @@ def _configured_adapter_issue(client: str, commands: tuple[str, ...]) -> str | N
             interpreter_is_trusted = False
             trusted_bash = None
         direct_python_adapter = (
-            len(tokens) == 4
+            len(tokens) in {4, 5}
             and interpreter_is_trusted
             and Path(tokens[1]).name == "coordination_hook.py"
-            and tokens[2:] == ["--agent", client]
+            and tokens[2:4] == ["--agent", client]
+            and (len(tokens) == 4 or tokens[4] == "--mailbox-only")
         )
         direct_shell_adapter = (
             len(tokens) == 2

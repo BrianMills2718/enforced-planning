@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,7 +16,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from enforced_planning import coordination_claims
+from enforced_planning import coordination_claims, coordination_messages
 from enforced_planning.coordination_messages import (
     AcknowledgementResult,
     AcknowledgeMessageRequest,
@@ -316,6 +317,53 @@ def test_host_delivery_rejects_composed_wrapped_or_wrong_client_commands(
     assert capability.mutation_enforcement_available is False
     assert capability.stop_enforcement_available is False
     assert "adapter_command_invalid" in capability.issues
+
+
+@pytest.mark.parametrize("client", ("codex", "claude-code"))
+@pytest.mark.parametrize("command_template, expected_issue", (
+    ("{python} {adapter} --agent {client}", None),
+    ("{python} {adapter} --agent {client} --mailbox-only", None),
+    ("{python} {adapter} --mailbox-only --agent {client}", "adapter_command_invalid"),
+    ("{python} {adapter} --agent {client} --mailbox-only --mailbox-only", "adapter_command_invalid"),
+    ("{python} {adapter} --agent {client} --unknown", "adapter_command_invalid"),
+    ("{python} {adapter} --agent {client} --mailbox-only --root /tmp/inbox", "adapter_command_invalid"),
+    ("{python} {adapter} --agent {wrong_client} --mailbox-only", "adapter_command_invalid"),
+    ("/usr/bin/env {python} {adapter} --agent {client} --mailbox-only", "adapter_command_invalid"),
+    ("exit 0; {python} {adapter} --agent {client} --mailbox-only", "adapter_command_invalid"),
+    ("/definitely/missing/python3 {adapter} --agent {client} --mailbox-only", "adapter_command_invalid"),
+))
+def test_mailbox_only_command_accepts_only_exact_optional_final_flag(
+    tmp_path: Path, client: str, command_template: str, expected_issue: str | None
+) -> None:
+    adapter = tmp_path / "coordination_hook.py"
+    shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+    command = command_template.format(
+        python=shlex.quote(sys.executable), adapter=shlex.quote(str(adapter)), client=client,
+        wrong_client="claude-code" if client == "codex" else "codex",
+    )
+    assert coordination_messages._configured_adapter_issue(client, (command,)) == expected_issue
+
+
+@pytest.mark.parametrize("client", ("codex", "claude-code"))
+@pytest.mark.parametrize("adapter_state, expected_issue", (
+    ("missing", "adapter_missing"),
+    ("digest_drift", "adapter_digest_mismatch"),
+    ("untrusted_interpreter", "adapter_command_invalid"),
+))
+def test_mailbox_only_command_retains_adapter_and_interpreter_trust(
+    tmp_path: Path, client: str, adapter_state: str, expected_issue: str
+) -> None:
+    adapter = tmp_path / "coordination_hook.py"
+    interpreter = Path(sys.executable)
+    if adapter_state == "digest_drift":
+        adapter.write_text("# drifted adapter\n", encoding="utf-8")
+    elif adapter_state == "untrusted_interpreter":
+        shutil.copy2(Path(__file__).resolve().parents[1] / "scripts" / adapter.name, adapter)
+        interpreter = tmp_path / "python3"
+        interpreter.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        interpreter.chmod(0o755)
+    command = f"{shlex.quote(str(interpreter))} {shlex.quote(str(adapter))} --agent {client} --mailbox-only"
+    assert coordination_messages._configured_adapter_issue(client, (command,)) == expected_issue
 
 
 def test_host_delivery_rejects_untrusted_executable_named_python3(tmp_path: Path) -> None:
@@ -1128,6 +1176,7 @@ def test_sender_lifecycle_hook_surfaces_acknowledgement_once_without_reply_loop(
     command = [
         "python",
         "scripts/coordination_hook.py",
+            "--mailbox-only",
         "--claims-dir",
         str(claims_dir),
         "--root",
@@ -1281,25 +1330,36 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
     assert after_ack.stdout == ""
 
 
+@pytest.mark.parametrize("mailbox_only", (False, True))
+@pytest.mark.parametrize("agent, recipient, sender", (
+    ("codex", CODEX_SESSION, CLAUDE_SESSION),
+    ("claude-code", CLAUDE_SESSION, CODEX_SESSION),
+))
 def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
+    agent: str, recipient: str, sender: str, mailbox_only: bool,
 ) -> None:
     """A displayed active message blocks mutation but never blocks its own disposition."""
 
     store, claims_dir, root = mailbox
     persisted = store.send(
-        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="mutation-gate")
+        _send_request(sender=sender, recipient=recipient, idempotency_key="mutation-gate")
     )
     command = [
         "python",
         "scripts/coordination_hook.py",
+        "--agent",
+        agent,
         "--claims-dir",
         str(claims_dir),
         "--root",
         str(root),
     ]
+    if mailbox_only:
+        command.append("--mailbox-only")
+        (claims_dir / "corrupt.yaml").write_text("invalid: [", encoding="utf-8")
     base = {
-        "session_id": "thread-123",
+        "session_id": recipient.split(":", 1)[1],
         "cwd": str(Path(__file__).resolve().parents[1]),
         "hook_event_name": "PreToolUse",
         "tool_name": "Bash",
@@ -1324,17 +1384,20 @@ def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
     assert boundary.hook_event_name == "PreToolUse"
     assert boundary.tool_name == "Bash"
 
-    request = {
-        "current_session_id": CODEX_SESSION,
-        "message_id": persisted.message.message_id,
-        "disposition": "information_only",
-        "note": "Recorded the completed sibling closeout; no follow-up action is needed.",
-    }
-    acknowledgement_command = (
-        f"/usr/bin/python3 {Path(__file__).resolve().parents[1] / 'scripts' / 'coordination_messages.py'} "
-        "acknowledge --request-json "
-        + shlex.quote(json.dumps(request, separators=(",", ":")))
+    generated_command = denial["permissionDecisionReason"].split("its command: ", 1)[1].split(
+        "; This notice ", 1
+    )[0]
+    acknowledgement_tokens = shlex.split(generated_command)
+    request = json.loads(acknowledgement_tokens[-1])
+    assert request["current_session_id"] == recipient
+    assert request["message_id"] == persisted.message.message_id
+    request.update(
+        disposition="information_only",
+        note="Recorded the completed sibling closeout; no follow-up action is needed.",
     )
+    acknowledgement_command = shlex.join([
+        *acknowledgement_tokens[:-1], json.dumps(request, separators=(",", ":"))
+    ])
     allowed_ack = subprocess.run(
         command,
         input=json.dumps(
@@ -1352,7 +1415,21 @@ def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
     assert allowed_ack.returncode == 0, allowed_ack.stderr or allowed_ack.stdout
     assert "permissionDecision" not in allowed_ack.stdout
 
-    acknowledged = store.acknowledge(AcknowledgeMessageRequest(**request))
+    composed_ack = subprocess.run(
+        command,
+        input=json.dumps({
+            **base, "tool_use_id": "composed-ack",
+            "tool_input": {"command": acknowledgement_command + " ; git status"},
+        }),
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, check=False,
+    )
+    assert composed_ack.returncode == 0, composed_ack.stderr or composed_ack.stdout
+    assert json.loads(composed_ack.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    acknowledged = store.acknowledge(
+        AcknowledgeMessageRequest(**request), require_live_claim=not mailbox_only
+    )
     assert acknowledged.acknowledgement_latency_seconds >= 0
     after_ack = subprocess.run(
         command,
@@ -1441,29 +1518,42 @@ def test_prewrite_gate_rejects_unsafe_mailbox_workdir_wrapper(
     assert classification is False
 
 
+@pytest.mark.parametrize("mailbox_only", (False, True))
+@pytest.mark.parametrize("agent, recipient, sender", (
+    ("codex", CODEX_SESSION, CLAUDE_SESSION),
+    ("claude-code", CLAUDE_SESSION, CODEX_SESSION),
+))
 def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
+    agent: str, recipient: str, sender: str, mailbox_only: bool,
 ) -> None:
     """An active message blocks once, then a re-fired Stop must be allowed."""
 
     store, claims_dir, root = mailbox
     persisted = store.send(
-        _send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="stop-gate")
+        _send_request(sender=sender, recipient=recipient, idempotency_key="stop-gate")
     )
     command = [
         "python",
         "scripts/coordination_hook.py",
+        "--agent",
+        agent,
         "--claims-dir",
         str(claims_dir),
         "--root",
         str(root),
     ]
+    if mailbox_only:
+        command.append("--mailbox-only")
+        (claims_dir / "corrupt.yaml").write_text("invalid: [", encoding="utf-8")
     hook_input = {
-        "session_id": "thread-123",
+        "session_id": recipient.split(":", 1)[1],
         "cwd": str(Path(__file__).resolve().parents[1]),
         "hook_event_name": "Stop",
         "turn_id": "turn-stop-one",
         "stop_hook_active": False,
+        "completion_attempt": mailbox_only,
+        "last_assistant_message": "complete" if mailbox_only else "status update",
     }
     first = subprocess.run(
         command,
@@ -1482,9 +1572,10 @@ def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
         check=False,
     )
 
+    assert first.returncode == 0, first.stderr or first.stdout
     assert json.loads(first.stdout)["decision"] == "block"
     repeated_payload = json.loads(repeated.stdout)
-    assert "decision" not in repeated_payload
+    assert repeated_payload == {}
     assert repeated.returncode == 0
     boundary_records = store.boundary_blocks(persisted.message.message_id)
     assert len(boundary_records) == 1
@@ -1492,12 +1583,15 @@ def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
 
     store.acknowledge(
         AcknowledgeMessageRequest(
-            current_session_id=CODEX_SESSION,
+            current_session_id=recipient,
             message_id=persisted.message.message_id,
             disposition="accepted",
             note="Handled before final response.",
-        )
+        ),
+        require_live_claim=not mailbox_only,
     )
+    if not mailbox_only:
+        coordination_claims.refresh_prewrite_authority_projection(claims_dir)
     after_ack = subprocess.run(
         command,
         input=json.dumps({**hook_input, "turn_id": "turn-stop-two"}),
@@ -1769,6 +1863,7 @@ def test_non_sessionstart_lifecycle_adapter_missing_event_identity_does_not_obse
         [
             "python",
             "scripts/coordination_hook.py",
+            "--mailbox-only",
             "--claims-dir",
             str(claims_dir),
             "--root",
@@ -1958,6 +2053,7 @@ def test_codex_lifecycle_hook_polls_after_write_claim_completion(
         [
             "python",
             "scripts/coordination_hook.py",
+            "--mailbox-only",
             "--claims-dir",
             str(claims_dir),
             "--root",
@@ -2032,7 +2128,7 @@ def _initialize_git_repository(path: Path) -> None:
     )
     (canonical / "tracked.txt").write_text("baseline\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(canonical), "add", "tracked.txt"], check=True)
-    subprocess.run(["git", "-C", str(canonical), "commit", "-qm", "baseline"], check=True)
+    subprocess.run(["git", "-C", str(canonical), "commit", "-qm", "[Trivial] Add test fixture baseline"], check=True)
     subprocess.run(
         ["git", "-C", str(canonical), "worktree", "add", "-qb", "session-worktree", str(path)],
         check=True,

@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 import yaml
 
 from enforced_planning import prewrite_claim_fast, prewrite_claim_projection
@@ -63,6 +64,112 @@ def test_stop_refire_returns_before_receipts_or_projection(monkeypatch, tmp_path
     monkeypatch.setattr(coordination_hook, "_active_claims", unexpected)
 
     assert coordination_hook.main(["--hook-receipt-dir", str(tmp_path / "receipts")]) == 0
+
+
+@pytest.mark.parametrize("agent", ("codex", "claude-code"))
+@pytest.mark.parametrize("event_name", sorted(coordination_hook.SUPPORTED_EVENTS))
+@pytest.mark.parametrize("secondary", (False, True))
+def test_mailbox_only_isolates_every_native_boundary(
+    monkeypatch, tmp_path: Path, capsys, agent: str, event_name: str, secondary: bool
+) -> None:
+    """Corrupt claims and dirty, incomplete work cannot affect mailbox delivery."""
+
+    repository = tmp_path / "repository"
+    subprocess.run(["git", "init", "-q", str(repository)], check=True)
+    (repository / "dirty.txt").write_text("unsaved work\n", encoding="utf-8")
+    (repository / "meta-process.yaml").write_text(
+        "meta_process:\n  claims:\n    outcome_completion_mode: enforce_selected\n",
+        encoding="utf-8",
+    )
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    (claims_dir / "corrupt.yaml").write_text("invalid: [", encoding="utf-8")
+    prewrite_claim_fast.projection_path_for(claims_dir).write_text("{", encoding="utf-8")
+    ledger_dir = tmp_path / "ledgers"
+    ledger_dir.mkdir()
+    (ledger_dir / "corrupt.json").write_text("{", encoding="utf-8")
+    payload = {
+        "session_id": "mailbox-only-root", "cwd": str(repository),
+        "hook_event_name": event_name, "event_id": "native-boundary",
+        "tool_name": "Bash", "tool_input": {"command": "git commit -am work"},
+        "completion_attempt": True, "last_assistant_message": "complete",
+    }
+    if secondary:
+        payload["agent_id"] = "child-agent"
+    monkeypatch.setattr(coordination_hook, "_read_hook_input", lambda **_kwargs: payload)
+
+    def unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("mailbox-only invoked an ancillary gate")
+
+    for name in (
+        "_is_completion_shaped_stop", "_outcome_stop_decisions", "_active_claims",
+        "_startup_claims", "_startup_claim_summary", "_claimed_projects",
+        "_write_closeout_baseline", "_record_touched_repositories",
+        "_repository_closeout_failure", "_repository_closeout_gate_disabled",
+        "_closeout_ledger_path",
+    ):
+        monkeypatch.setattr(coordination_hook, name, unexpected)
+    monkeypatch.setattr(coordination_hook.coordination_claims, "heartbeat_claims", unexpected)
+    monkeypatch.setattr(coordination_hook.coordination_claims, "list_claims", unexpected)
+    monkeypatch.setattr(
+        coordination_hook.outcome_completion, "evaluate_stop_for_session", unexpected
+    )
+    calls = []
+    real_poll = coordination_hook.coordination_messages.poll_session_inbox
+
+    def poll(**kwargs: object) -> SessionInboxNotice:
+        assert not secondary, "secondary execution inspected the primary inbox"
+        calls.append(kwargs)
+        return real_poll(**kwargs)
+
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", poll)
+    receipts = tmp_path / "receipts"
+    assert coordination_hook.main([
+        "--agent", agent, "--mailbox-only", "--claims-dir", str(claims_dir),
+        "--root", str(tmp_path / "messages"), "--closeout-ledger-dir", str(ledger_dir),
+        "--hook-receipt-dir", str(receipts),
+    ]) == 0
+    assert capsys.readouterr().out == ""
+    assert len(calls) == (0 if secondary else 1)
+    if calls:
+        assert calls[0]["session_id"] == f"{agent}:mailbox-only-root"
+        assert calls[0]["require_live_claim"] is False
+        assert calls[0]["observe"] is (event_name != "PostToolUse")
+        assert (calls[0]["delivery_event_id"] is None) is (event_name in {"PreToolUse", "Stop"})
+    completed = list(load_completed_receipts(receipts))
+    assert [receipt["decision"] for receipt in completed] == ["allow"]
+    assert completed[0]["reason_code"] == (
+        "secondary_execution_callback" if secondary else "no_active_boundary"
+    )
+    assert sorted(path.name for path in ledger_dir.iterdir()) == ["corrupt.json"]
+
+
+@pytest.mark.parametrize("agent", ("codex", "claude-code"))
+@pytest.mark.parametrize("completion", (
+    {"completion_attempt": True},
+    {"last_assistant_message": "complete"},
+    {"last_assistant_message": "**Recommended next** — complete"},
+))
+def test_mailbox_only_repeat_stop_returns_before_all_fallible_state(
+    monkeypatch, tmp_path: Path, capsys, agent: str, completion: dict[str, object]
+) -> None:
+    payload = {
+        "hook_event_name": "Stop", "session_id": "repeat-stop",
+        "cwd": str(tmp_path), "stop_hook_active": True, **completion,
+    }
+    monkeypatch.setattr(coordination_hook, "_read_hook_input", lambda **_kwargs: payload)
+
+    def unexpected(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("repeat Stop accessed fallible state")
+
+    for name in ("_is_completion_shaped_stop", "start_hook_invocation", "_active_claims"):
+        monkeypatch.setattr(coordination_hook, name, unexpected)
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", unexpected)
+    assert coordination_hook.main([
+        "--agent", agent, "--mailbox-only", "--hook-receipt-dir", str(tmp_path / "receipts")
+    ]) == 0
+    assert capsys.readouterr().out == "{}\n"
+    assert not (tmp_path / "receipts").exists()
 
 
 def test_posttool_is_advisory_and_secondary_agent_cannot_poll_root_inbox(

@@ -1,0 +1,15 @@
+{
+  "label": "ep629-final-self-test",
+  "pid": 168012,
+  "started_at": "2026-10-09T00:46:15.221805+00:00",
+  "command": [
+    "python3",
+    "scripts/self_test.py"
+  ],
+  "cwd": ".",
+  "code_revision": "66efa1e6d92eb840f8283057bdd6a9b638f533c7",
+  "status": "finished",
+  "exit_code": 0,
+  "elapsed_seconds": 19.253,
+  "finished_at": "2026-10-09T00:46:34.474921+00:00"
+}

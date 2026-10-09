@@ -1,0 +1,76 @@
+{
+ "situation": {
+  "schema": "writing-situation/v2",
+  "medium": "document",
+  "route": "how_to",
+  "rationale": "This record covers only the EP629 active canonical environment section and its host invocation clarification. The reader supplies recorded identifiers and digests, runs native close, and checks the retained-root receipt. Unchanged guide sections are outside this writing change.",
+  "facts": {
+   "asks_for_approval_or_resources": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "central_claim_needs_argument": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "is_chat_message": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "is_dloa": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "is_email": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "is_job_application": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "is_message_to_brian": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "reader_decides_from_this": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "reader_performs_task": {
+    "value": true,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "reports_transferable_failure": {
+    "value": false,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   },
+   "subject_is_built_artifact": {
+    "value": true,
+    "evidence": "EP629 full gate: 3273 passed, 3 skipped, exit 0; 30 focused CLI regressions; exact command trace in host-admission-source.log."
+   }
+  }
+ },
+ "items": {
+  "d-steps-ordered": {
+   "status": "pass",
+   "quote": "From the source checkout:",
+   "note": "Prerequisites and digest collection precede invocation; receipt checks follow it."
+  },
+  "d-commands-run": {
+   "status": "pass",
+   "quote": "--retain-canonical-environment",
+   "note": "Both CLI copies execute the parameterized command in the focused trace. The absolute host invocation passes the actual host gate probe; operators substitute their recorded values for the named placeholders."
+  },
+  "d-failure-named": {
+   "status": "pass",
+   "quote": "stale digests, and other close modes.",
+   "note": "Ownership, scope, branch/path, hashes and older lifecycle refusal are named beside invocation."
+  },
+  "rep-considered": {
+   "status": "not_applicable",
+   "quote": "",
+   "note": "One command, prerequisites and output checks support direct execution. A figure would duplicate these steps."
+  }
+ }
+}

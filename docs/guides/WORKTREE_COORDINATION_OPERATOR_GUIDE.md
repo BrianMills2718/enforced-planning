@@ -648,8 +648,17 @@ the canonical checkout while continuing other work. Ordinary `session-close`
 refuses a canonical root before changing coordination state. Use the explicit
 retained-root mode from the exact owning native runtime:
 
+The route requires an `active` `write` claim with exactly `write_paths: [.venv]`,
+an ignored and entirely untracked environment, an exact tracker lane identity,
+the real canonical Git main worktree, clean source and the recorded checked-out
+default branch integrated into its remote default ref. Obtain the digests with
+`sha256sum` on the exact claim and its recorded tracker; if either changes
+before close, inspect the new state and obtain fresh digests.
+
+From the source checkout:
+
 ```bash
-python scripts/session_close.py \
+python3 scripts/session_close.py \
   --agent codex --project PROJECT --scope SCOPE \
   --repo-root /absolute/canonical/repository \
   --retain-canonical-environment \
@@ -659,13 +668,11 @@ python scripts/session_close.py \
 ```
 
 In an installed consumer the entrypoint is `scripts/meta/session_close.py`.
-Obtain the digests with `sha256sum` on the exact claim and its recorded tracker;
-if either changes before close, inspect the new state and obtain fresh digests.
-The route requires an `active` `write` claim with exactly `write_paths: [.venv]`,
-an ignored and entirely untracked environment, an exact tracker lane identity,
-the real canonical Git main worktree, clean source and the recorded checked-out
-default branch integrated into its remote default ref. It rejects a different
-path/branch override, broader write scope, stale digests, and other close modes.
+Through the host admission gate, use `/usr/bin/python3` followed by the absolute
+installed runtime path to `scripts/session_close.py`; the gate checks that exact
+host entrypoint. Upgrade older consumer copies before using their local entrypoint.
+The close route rejects a different path/branch override, broader write scope,
+stale digests, and other close modes.
 It shares the ordinary mailbox and owned-document obligation checks. A wrapper
 paired with an older lifecycle refuses this option rather than dropping it.
 

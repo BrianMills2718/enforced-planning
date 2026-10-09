@@ -100,6 +100,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--closeout-ledger-dir", type=Path)
     parser.add_argument("--hook-receipt-dir", type=Path)
     parser.add_argument("--agent", choices=("codex", "claude-code"), default="codex")
+    parser.add_argument("--mailbox-only", action="store_true", help="Deliver mailbox messages without claim or completion gates.")
     parser.add_argument("--project", help="Canonical project override supplied by a repository compatibility hook.")
     parser.add_argument("--repair-projection-only", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
@@ -712,11 +713,9 @@ def _record_touched_repositories(
 # and it stayed disabled for six days: the only visible symptom was one warning
 # line when somebody sent a message, saying persistence is not delivery.
 #
-# The hook command shape is pinned -- coordination_messages validates the Stop
-# entry as exactly `<python> coordination_hook.py --agent <client>`, so a
-# `--no-closeout` flag would make the command six tokens and report delivery
-# unavailable all over again. The toggle therefore lives beside the claims
-# registry rather than on the command line.
+# Legacy combined-hook installations retain this registry-side closeout toggle.
+# Host mailbox-only installations use the exact optional fifth --mailbox-only
+# token and bypass claim, completion, and repository-closeout work altogether.
 CLOSEOUT_GATE_DISABLE_MARKER = Path(
     # Override for subprocess tests: a host whose real marker disables the gate
     # otherwise makes gate tests pass or fail by machine, not by code.
@@ -1056,16 +1055,15 @@ def main(argv: list[str] | None = None) -> int:
     telemetry_reason = "hook_unavailable"
     try:
         payload = _read_hook_input(project_supplied=args.project is not None)
-        completion_attempt = _is_completion_shaped_stop(payload)
+        completion_attempt = False if args.mailbox_only else _is_completion_shaped_stop(payload)
         if (
             payload["hook_event_name"] == "Stop"
             and payload.get("stop_hook_active")
-            and not completion_attempt
+            and (args.mailbox_only or not completion_attempt)
         ):
-            # A non-completion re-fire must be infallibly allowed. Run this
-            # before receipts, projections, mailbox access, or repository
-            # closeout so stale state cannot recreate the refusal loop. An
-            # explicit completion attempt remains criterion-bound below.
+            # Mailbox-only re-fires always allow, including completion-shaped
+            # responses. Legacy explicit completion remains criterion-bound.
+            # Return before any fallible receipt, claim, or mailbox access.
             print("{}")
             return 0
         hook_receipt_dir = args.hook_receipt_dir or (
@@ -1092,7 +1090,9 @@ def main(argv: list[str] | None = None) -> int:
         if not primary_execution:
             telemetry_reason = "secondary_execution_callback"
         projection_warning: str | None = None
-        if event_name == "SessionStart":
+        if args.mailbox_only:
+            active_claims = ()
+        elif event_name == "SessionStart":
             # Startup and the latency-sensitive pre-tool boundary are advisory.
             # Neither may synchronously scan, heartbeat, or rebuild a
             # completed-claim-heavy registry.
@@ -1107,11 +1107,11 @@ def main(argv: list[str] | None = None) -> int:
                 projection_warning = f"turn-end claim projection unavailable after bounded repair: {exc}"
         else:
             active_claims = _active_claims(args.claims_dir)
-        closeout_ledger_dir = args.closeout_ledger_dir or (
+        closeout_ledger_dir = None if args.mailbox_only else args.closeout_ledger_dir or (
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
             / "repository-closeout-ledgers"
         )
-        if primary_execution and (payload["hook_event_name"] == "SessionStart" or (
+        if not args.mailbox_only and primary_execution and (payload["hook_event_name"] == "SessionStart" or (
             payload["hook_event_name"] == "PreToolUse" and _is_mutation_boundary(payload)
         )):
             _write_closeout_baseline(
@@ -1121,7 +1121,8 @@ def main(argv: list[str] | None = None) -> int:
                 ledger_dir=closeout_ledger_dir,
             )
         if (
-            primary_execution
+            not args.mailbox_only
+            and primary_execution
             and payload["hook_event_name"] == "PreToolUse"
             and _is_mutation_boundary(payload)
         ):
@@ -1154,13 +1155,13 @@ def main(argv: list[str] | None = None) -> int:
                 project=project,
                 claims=active_claims,
             )
-            if event_name == "SessionStart"
+            if not args.mailbox_only and event_name == "SessionStart"
             else None
         )
         # PreToolUse is a latency-sensitive decision boundary. Heartbeat writes
         # take the registry lock and refresh the full projection; lifecycle
         # events keep leases fresh without putting that work before every tool.
-        heartbeat_projects = () if not primary_execution or payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
+        heartbeat_projects = () if args.mailbox_only or not primary_execution or payload["hook_event_name"] in {"SessionStart", "PreToolUse", "Stop"} else (
             (project,)
             if project is not None
             else _claimed_projects(
@@ -1206,7 +1207,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         closeout_failure = None
         if (
-            primary_execution
+            not args.mailbox_only
+            and primary_execution
             and payload["hook_event_name"] == "Stop"
             and not _repository_closeout_gate_disabled()
         ):

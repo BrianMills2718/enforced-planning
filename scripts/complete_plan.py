@@ -694,6 +694,17 @@ def complete_plan(
     current_status = get_plan_status(plan_file)
     resolved_profile = resolve_verification_profile(plan_file, verification_profile)
 
+    from enforced_planning.trace_review_provider import admit
+    session_id = (coordination_claims.resolve_session_id("codex")
+                  or coordination_claims.resolve_session_id("claude-code") or "unavailable")
+    trace_admission = admit(project_root, "completion", session_id, coordination_claims.CLAIMS_DIR,
+                            expected_review_plan=plan_file.resolve().relative_to(project_root.resolve()).as_posix())
+    if trace_admission["disposition"] == "deny":
+        print("Trace review completion refused: " + "; ".join(trace_admission["errors"]))
+        return False
+    if verbose and trace_admission["disposition"] != "allow":
+        print(f"Trace review coverage: {trace_admission['disposition']} (not enforced)")
+
     if verbose:
         print(f"\n{'='*60}")
         print(f"Completing Plan #{plan_number}")

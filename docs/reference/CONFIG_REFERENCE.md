@@ -100,6 +100,24 @@ cross-repository plan-authority contract for the complete invocation rules.
 
 ## claims
 
+### Trace review admission
+
+`meta_process.trace_review.mode` accepts `off`, `observe`, or `enforce`. If
+absent, a Company Planning active cursor selects `enforce`; otherwise coverage
+is explicitly uncovered. Enforcement requires `trace_review.command` to pin
+`/usr/bin/python3` and one canonical installed Company Planning
+`scripts/validate_trace_review.py`, whose manifest version matches its cache
+directory. No latest-version fallback is allowed.
+
+An installed native pre-write adapter invokes admission for ordinary writes
+independently of `claims.prewrite_mode`, using the actual target worktree and
+native session. Read-only diagnosis and narrowly validated retention commands
+remain available. Cross-worktree shell writes cannot borrow the selected
+worktree's review. Completion passes the exact requested plan path and refuses
+an unrelated cursor's review. Missing providers or invalid target bindings
+fail closed in enforce mode. A configuration file alone does not install a
+hook or establish project coverage; both clients must exercise the boundary.
+
 ### Host read-target state
 
 Workspace-root clients may select one session-bound repository for instruction

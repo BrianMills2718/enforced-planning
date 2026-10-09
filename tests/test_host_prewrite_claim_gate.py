@@ -48,7 +48,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     _git(repo, "config", "user.email", "test@example.com")
     (repo / "README.md").write_text("seed\n", encoding="utf-8")
     _git(repo, "add", "README.md")
-    _git(repo, "commit", "-m", "seed")
+    _git(repo, "commit", "-m", "[Trivial] seed")
     worktree = repo / "worktrees" / "host-gate-lane"
     worktree.parent.mkdir()
     _git(repo, "worktree", "add", "-b", "host-gate-lane", str(worktree))

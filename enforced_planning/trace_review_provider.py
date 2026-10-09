@@ -29,13 +29,23 @@ def configuration(root: Path) -> dict[str, Any]:
         mode = "off"
     if mode not in {"off", "observe", "enforce"}:
         raise ValueError("trace_review.mode must be off, observe or enforce")
-    return {**settings, "mode": mode}
+    result = {**settings, "mode": mode}
+    if mode != "off" and "command" not in result:
+        # Reuse AES's existing machine-owned provider pin. A local explicit
+        # command still wins; neither route selects a newest cache version.
+        shared = Path.home() / ".config/aes/trace-review.json"
+        if shared.exists():
+            pin = json.loads(shared.read_text())
+            if not isinstance(pin, dict) or "command" not in pin:
+                raise ValueError("shared trace review provider configuration must contain command")
+            result["command"] = pin["command"]
+    return result
 
 
 def trusted_command(value: Any) -> list[str]:
     if not isinstance(value, list) or len(value) != 2 or value[0] != "/usr/bin/python3" or not isinstance(value[1], str):
         raise ValueError("trace_review.command must pin /usr/bin/python3 and one installed provider")
-    script = Path(value[1])
+    script = Path(value[1]).expanduser()
     cache = (Path.home() / ".codex/plugins/cache/inside-success/company-planning").resolve()
     if not script.is_absolute() or script.resolve() != script or not script.is_file():
         raise ValueError("trace review provider must be a canonical installed file")
@@ -45,7 +55,7 @@ def trusted_command(value: Any) -> list[str]:
     manifest = json.loads((cache / relative.parts[0] / ".codex-plugin/plugin.json").read_text())
     if not isinstance(manifest, dict) or manifest.get("name") != "company-planning" or manifest.get("version") != relative.parts[0]:
         raise ValueError("trace review provider pin does not match its installed manifest")
-    return list(value)
+    return [value[0], str(script)]
 
 
 def admit(root: Path, operation: str, session_id: str, claims_dir: Path,

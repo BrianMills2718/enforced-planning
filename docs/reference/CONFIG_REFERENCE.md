@@ -108,6 +108,9 @@ is explicitly uncovered. Enforcement requires `trace_review.command` to pin
 `/usr/bin/python3` and one canonical installed Company Planning
 `scripts/validate_trace_review.py`, whose manifest version matches its cache
 directory. No latest-version fallback is allowed.
+If no local command is configured, the adapter reuses AES's existing
+machine-owned `~/.config/aes/trace-review.json` command pin. It validates the
+same installed identity; this supplies a provider, not an enrollment claim.
 
 An installed native pre-write adapter invokes admission for ordinary writes
 independently of `claims.prewrite_mode`, using the actual target worktree and

@@ -84,11 +84,26 @@ def test_missing_cursor_and_disabled_gate_are_reported_uncovered(tmp_path):
     assert result["valid"] is False
 
 
-def test_enabled_missing_provider_fails_closed(tmp_path):
+def test_enabled_missing_provider_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.setattr(provider.Path, "home", classmethod(lambda cls: tmp_path / "home"))
     (tmp_path / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
     result = provider.admit(tmp_path, "repair", "codex:fixture", tmp_path / "claims")
     assert result["disposition"] == "deny"
     assert any("must pin" in e for e in result["errors"])
+
+
+def test_enrolled_cursor_reuses_existing_shared_pin_without_claiming_coverage(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setattr(provider.Path, "home", classmethod(lambda cls: home))
+    shared = home / ".config/aes/trace-review.json"
+    shared.parent.mkdir(parents=True)
+    command = ["/usr/bin/python3", "~/explicitly-pinned-provider.py"]
+    shared.write_text(json.dumps({"command": command}))
+    cursor = tmp_path / ".company-planning/active-execution.json"
+    cursor.parent.mkdir()
+    cursor.write_text("{}")
+    assert provider.configuration(tmp_path) == {"mode": "enforce", "command": command}
+    assert provider.admit(tmp_path, "repair", "codex:fixture", tmp_path / "claims")["disposition"] == "deny"
 
 
 def test_untrusted_provider_is_refused_without_running_it(tmp_path):

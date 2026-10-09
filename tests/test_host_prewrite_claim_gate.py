@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
@@ -30,11 +32,17 @@ INSTALLED_SESSION_STATUS = Path.home() / ".codex/runtime/enforced-planning/scrip
 
 
 def _git(repo: Path, *args: str) -> str:
+    # Synthetic repositories own their local configuration/hooks. Do not import
+    # machine-wide production policy into fixture setup; native host probes
+    # retain the real global hooks independently.
+    assert repo.resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())
+    fixture_env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     completed = subprocess.run(
         ["git", "-C", str(repo), *args],
         check=True,
         capture_output=True,
         text=True,
+        env=fixture_env,
     )
     return completed.stdout.strip()
 

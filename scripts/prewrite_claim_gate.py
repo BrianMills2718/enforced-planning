@@ -1815,6 +1815,7 @@ def main(argv: list[str] | None = None) -> int:
     if decision.get("decision") in {"allow", "observe_violation"} and decision.get("reason_code") not in exempt_reasons:
         from enforced_planning.trace_review_provider import admit
         from enforced_planning.prewrite_claim_fast import adapt_native_payload, _repository_context, _bash_is_explicitly_bound
+        request = None
         try:
             request = adapt_native_payload(payload, client=args.client,
                                            claim_bootstrap_classifier=special_classifier)
@@ -1838,7 +1839,28 @@ def main(argv: list[str] | None = None) -> int:
         except (FastPreWriteError, OSError, ValueError, TypeError) as exc:
             from enforced_planning.trace_review_provider import configuration
             try:
-                fallback_mode = configuration(Path(str(payload["cwd"]))) ["mode"]
+                fallback_settings = configuration(Path(str(payload["cwd"])))
+                fallback_mode = fallback_settings["mode"]
+                if request is None:
+                    fallback_mode = "enforce"
+                else:
+                    # A launch directory cannot turn mixed or known enforced
+                    # write targets into an uncovered non-Git operation.
+                    from enforced_planning.prewrite_claim_fast import _git_identity
+                    target_roots = set()
+                    for raw in request["target_paths"]:
+                        candidate = Path(raw).expanduser()
+                        if not candidate.is_absolute():
+                            candidate = Path(request["cwd"]) / candidate
+                        try:
+                            target_root, _, _ = _git_identity(candidate)
+                        except FastPreWriteError:
+                            continue
+                        target_roots.add(target_root)
+                        if configuration(target_root)["mode"] == "enforce":
+                            fallback_mode = "enforce"
+                    if len(target_roots) > 1:
+                        fallback_mode = "enforce"
             except Exception:
                 fallback_mode = "enforce"
             admission = {"mode": fallback_mode,

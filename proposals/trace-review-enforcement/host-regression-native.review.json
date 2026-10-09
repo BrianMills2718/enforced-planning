@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0",
+  "record_type": "trace_review",
+  "review_id": "host-regression-native",
+  "reviewer": "codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e",
+  "goal_ref": "goal:trace-review-enforcement",
+  "criterion_ids": [
+    "native-boundary"
+  ],
+  "evidence_revision": "62af30024cb1c8e34a63167ddcaeb68f9abf93f3",
+  "run_id": "ep-host-regression-native-evidence",
+  "run_outcome": "fail",
+  "source": {
+    "path": "proposals/trace-review-enforcement/host-regression-native.trace.json",
+    "sha256": "19be4da02df8c8eb48334fb1d998eb7780086ee5d3f87eed5a62abd91b9645b4",
+    "format": "execution_trace"
+  },
+  "reviewed_entries": [
+    {
+      "pointer": "/events/0",
+      "sha256": "913b73ed7eb4a6f7c9080aaa6f2e4759456b502a30ada398ebde08743461ba21",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/1",
+      "sha256": "d966055c313d773ea6a79ce3015b958aa7d2eeff98540d70fa16f93ac01a0227",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/2",
+      "sha256": "c6942d42e041d3d266b2b8feac7a9cc864946afac2302f673b46cc41ab722cb1",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/3",
+      "sha256": "5c91fd4e06a034ff9ee44594c95537e43fba2f503e217eca976857d8049a1884",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/4",
+      "sha256": "189f870010611843600ce237afb6c4e04543e3abbb0d965fde860ceff2d9fc21",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/5",
+      "sha256": "fa9eb95a6aeaa4459f496503ed36693d8a0a3aeddb42d542e491b752380a6039",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/6",
+      "sha256": "dd524c17bff7a2db101d9748e1c2f75199585324c97a32ee970917b23982434b",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/7",
+      "sha256": "6af49a4db1e2c88234d93a0b1dfa57505a5701172ca0426c6cf044899c737221",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/8",
+      "sha256": "e402fd951712b5396930f2dc7bae340db225f69e9bbe5c080e4361757471d46c",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/9",
+      "sha256": "57b60c189d063aa763ccecee624e4a1e01262d43176780d222ebfcbb272a2486",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/10",
+      "sha256": "5bd3e8c386025ac57022e903fdb546a924a49231c9c8e7a7ebfefd3194a80df9",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/11",
+      "sha256": "f1ace978ca46d7bf1d6515d31aa1a11e3c38b7699f77eb0731a18808e68d0b7b",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/12",
+      "sha256": "3a920b8bac15993d00abc96061870ac9bb6d55a6cfa393071188e993ad9e067c",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/13",
+      "sha256": "ace569b964f9350c1e82d33bd01a8d02d29f4c3cc7692d59cda8b948e46ec324",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/events/14",
+      "sha256": "09c7dca38f854a848cde8a3eb8cc9b828f80972dd22cab952557c69782bc4255",
+      "observation": "Read exact command input and complete returned refusal or both host receipts."
+    },
+    {
+      "pointer": "/outcome",
+      "sha256": "34e382cfb94027bb2ebfad2bcd3affd03b843b3d285b73bc2760d19b65abd85f",
+      "observation": "Original failing regression run stays failed."
+    }
+  ],
+  "findings": [
+    {
+      "classification": "expectation_wrong",
+      "description": "Thirteen synthetic Git setups use untagged commits and the real global AES commit rule refuses them before any host guard runs. Fix fixture authority or isolation, not closeout guard behavior.",
+      "citations": [
+        {
+          "pointer": "/events/0/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/1/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/2/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/3/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/4/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/5/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/6/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/7/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/8/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/9/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/10/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/11/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        },
+        {
+          "pointer": "/events/12/output/stderr",
+          "quote": "aes commit rule: refuse [none] \u2014 no tag"
+        }
+      ]
+    },
+    {
+      "classification": "evidence_unused",
+      "description": "The new fallback asserted enforce for non-Git targets without checking whether trace enforcement was configured. Preserve off/observe behavior with explicit uncovered disposition when no trace owner is selected; configured enforcement remains fail-closed.",
+      "citations": [
+        {
+          "pointer": "/events/13/output/receipts/1/trace_review/errors/0",
+          "quote": "fatal: not a git repository"
+        },
+        {
+          "pointer": "/events/14/output/receipts/1/trace_review/errors/0",
+          "quote": "fatal: not a git repository"
+        }
+      ]
+    }
+  ]
+}

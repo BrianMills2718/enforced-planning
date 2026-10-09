@@ -52,6 +52,20 @@ def test_read_only_diagnosis_does_not_invoke_repair_guard(tmp_path, monkeypatch,
     assert decision["reason_code"] == "bash_read_only"
 
 
+@pytest.mark.parametrize("mode", ["off", "observe"])
+def test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory(tmp_path, monkeypatch, capsys, mode):
+    workspace, repo, worktree, claims_dir, _ = _fixture(tmp_path)
+    (worktree / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+    payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+        f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n"
+        f"*** Update File: {repo / 'README.md'}\n@@\n-seed\n+changed\n*** End Patch\n"})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client="codex", mode=mode)
+    assert code == 2
+    assert decision["trace_review"]["disposition"] == "deny"
+    assert decision["reason_code"] == "trace_review_required"
+
+
 def test_already_completed_plan_cannot_bypass_enabled_trace_guard(tmp_path, monkeypatch):
     plans = tmp_path / "docs/plans"
     plans.mkdir(parents=True)

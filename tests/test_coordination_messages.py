@@ -2147,6 +2147,10 @@ def _run_repository_closeout_hook(
 ) -> subprocess.CompletedProcess[str]:
     """Run one native-shaped lifecycle event through repository closeout."""
 
+    # These cases exercise repository ownership, not repair-worker startup
+    # latency. Build only their disposable registry's projection in advance;
+    # the hook's bounded repair behavior has separate regression coverage.
+    coordination_claims.refresh_prewrite_authority_projection(claims_dir)
     payload: dict[str, object] = {
         "session_id": "repository-closeout-test",
         "cwd": str(event_cwd or workspace),

@@ -1,0 +1,18 @@
+{
+  "label": "ep629-full",
+  "pid": 3421849,
+  "started_at": "2026-10-08T23:04:53.919527+00:00",
+  "command": [
+    "env",
+    "GIT_CONFIG_GLOBAL=/dev/null",
+    "GIT_CONFIG_NOSYSTEM=1",
+    "make",
+    "check"
+  ],
+  "cwd": ".",
+  "code_revision": "66efa1e6d92eb840f8283057bdd6a9b638f533c7",
+  "status": "finished",
+  "exit_code": 0,
+  "elapsed_seconds": 5267.782,
+  "finished_at": "2026-10-09T00:44:59.398367+00:00"
+}

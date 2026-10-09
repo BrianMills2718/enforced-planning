@@ -1,0 +1,21 @@
+{
+  "label": "ep629-focused",
+  "pid": 3134895,
+  "started_at": "2026-10-08T22:43:33.505575+00:00",
+  "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "tests/test_session_cli.py",
+    "-k",
+    "active_canonical_environment or ordinary_close_refuses_canonical_root",
+    "-v",
+    "-s"
+  ],
+  "cwd": ".",
+  "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176",
+  "status": "finished",
+  "exit_code": 0,
+  "elapsed_seconds": 67.415,
+  "finished_at": "2026-10-08T22:44:49.719541+00:00"
+}

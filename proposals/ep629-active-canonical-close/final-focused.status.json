@@ -1,0 +1,25 @@
+{
+  "label": "ep629-final-focused",
+  "pid": 3352651,
+  "started_at": "2026-10-08T23:00:14.868382+00:00",
+  "command": [
+    "env",
+    "GIT_CONFIG_GLOBAL=/dev/null",
+    "GIT_CONFIG_NOSYSTEM=1",
+    "python3",
+    "-m",
+    "pytest",
+    "tests/test_session_cli.py",
+    "tests/test_session_close_lock_reconcile.py",
+    "-k",
+    "active_canonical_environment or ordinary_close_refuses_canonical_root or retained_environment_option_refuses or terminalizes_merged_child_then_parent",
+    "-v",
+    "-s"
+  ],
+  "cwd": ".",
+  "code_revision": "c721988394e7a6b9f093bfa37c482b6ae543d176",
+  "status": "finished",
+  "exit_code": 0,
+  "elapsed_seconds": 170.172,
+  "finished_at": "2026-10-08T23:03:19.712944+00:00"
+}

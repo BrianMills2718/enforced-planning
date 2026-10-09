@@ -1,0 +1,15 @@
+{
+  "schema_version": "method-adoption-decision.v1",
+  "record_type": "method_adoption_decision",
+  "decision": "adopted",
+  "plan_ref": "proposals/ep629-active-canonical-close/plan.md",
+  "plan_sha256": "68d36f6c5e94d6605446775f56b6f059e762f2dc05f40ed93c0be70f1a92c97e",
+  "receipt_ref": "proposals/ep629-active-canonical-close/plan.receipt.json",
+  "receipt_sha256": "9198916f7094c30c555ffe6c0755aba6812603848891f168ff07f3386611a233",
+  "receipt_result": "pass",
+  "reason_codes": [],
+  "summary": [
+    "pass: 11 items evidenced, 0 confirmed not applicable, 0 advisory deviation(s)"
+  ],
+  "decided_at": "2026-10-08T23:00:39Z"
+}

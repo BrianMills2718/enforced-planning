@@ -282,6 +282,29 @@ def test_parse_args_accepts_explicit_repo_root(script: Path, tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
+def test_retained_environment_option_refuses_an_older_lifecycle(script, monkeypatch):
+    """An explicit preservation option may never silently become ordinary removal."""
+    module = _load(script, f"session_close_old_environment_{script.parent.name}")
+    args = module.parse_args([
+        "--agent", "codex", "--project", "consumer", "--scope", "environment",
+        "--retain-canonical-environment", "--claim-sha256", "a" * 64, "--tracker-sha256", "b" * 64,
+    ])
+
+    def old_close_session(*, agent, project, scope):
+        raise AssertionError("the older lifecycle must not be called")
+
+    monkeypatch.setattr(module.session_lifecycle, "close_session", old_close_session)
+    with pytest.raises(ValueError, match="does not support retained canonical environment close"):
+        module._supported_closeout_kwargs(args)
+    monkeypatch.setattr(module, "_materialize_shared_ref_history", lambda *a, **kw: pytest.fail("must refuse before fetch"))
+    with pytest.raises(ValueError, match="does not support retained canonical environment close"):
+        module.main([
+            "--agent", "codex", "--project", "consumer", "--scope", "environment",
+            "--retain-canonical-environment", "--claim-sha256", "a" * 64, "--tracker-sha256", "b" * 64,
+        ])
+
+
+@pytest.mark.parametrize("script", SHIPPED_COPIES, ids=lambda p: p.parent.name)
 @pytest.mark.parametrize("integration", ["merge", "squash", "merge_without_identity"])
 def test_closeout_retains_lane_history_after_deleting_its_branch(
     script: Path, integration: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

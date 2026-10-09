@@ -68,11 +68,14 @@ def _supported_closeout_kwargs(args: argparse.Namespace) -> dict[str, object]:
         "allow_discard_unique": args.allow_discard_unique,
     }
     supported = inspect.signature(session_lifecycle.close_session).parameters
+    if args.retain_canonical_environment and "retain_canonical_environment" not in supported:
+        raise ValueError("Installed lifecycle does not support retained canonical environment close; update support first.")
     for name, value in (
         ("merge_commit", args.merge_commit),
         ("reconcile_missing_worktree", args.reconcile_missing_worktree),
         ("expected_tracker_sha256", args.tracker_sha256),
         ("reconcile_canonical_root", args.reconcile_canonical_root),
+        ("retain_canonical_environment", args.retain_canonical_environment),
         ("reconcile_session_ended", args.reconcile_session_ended),
         ("expected_claim_sha256", args.claim_sha256),
         ("mailbox_disposition", args.mailbox_disposition),
@@ -128,7 +131,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--tracker-sha256",
-        help="Exact SHA-256 of the preserved session tracker required for reconciliation.",
+        help="Exact SHA-256 of the session tracker required for retained canonical close or reconciliation.",
     )
     parser.add_argument(
         "--reconcile-canonical-root",
@@ -136,6 +139,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Archive an exact session-ended legacy claim whose recorded worktree is the clean canonical "
             "repository root, retaining the filesystem and branch."
+        ),
+    )
+    parser.add_argument(
+        "--retain-canonical-environment",
+        action="store_true",
+        help=(
+            "Complete exact-owner active canonical maintenance restricted to ignored .venv; "
+            "requires a clean pushed default branch and exact claim/tracker digests. "
+            "Retains checkout, environment and branch without recording runtime termination."
         ),
     )
     parser.add_argument(
@@ -162,7 +174,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--claim-sha256",
-        help="Exact SHA-256 required for canonical-root or session-ended reconciliation.",
+        help="Exact SHA-256 required for retained canonical close or session-ended reconciliation.",
     )
     parser.add_argument(
         "--terminalize-shared-child",
@@ -396,6 +408,7 @@ def _report_shared_ref_movement(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    closeout_kwargs = _supported_closeout_kwargs(args)
     requested_repo_root = Path(args.repo_root).expanduser() if args.repo_root else REPO_ROOT
     durable_repo_root = _resolve_durable_repo_root(requested_repo_root)
     _materialize_shared_ref_history(durable_repo_root)
@@ -419,7 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         check=False,
     )
     retained_lane_ref = lane_head.stdout.strip() if lane_head.returncode == 0 else lane_ref
-    payload = session_lifecycle.close_session(**_supported_closeout_kwargs(args))
+    payload = session_lifecycle.close_session(**closeout_kwargs)
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

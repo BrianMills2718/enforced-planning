@@ -1866,13 +1866,15 @@ def main(argv: list[str] | None = None) -> int:
             admission = {"mode": fallback_mode,
                          "disposition": "deny" if fallback_mode == "enforce" else "uncovered", "valid": False,
                          "errors": [f"trace admission target unavailable: {exc}"]}
-        decision = {**decision, "trace_review": admission}
+        if admission["mode"] != "off":
+            decision = {**decision, "trace_review": admission}
         if admission["disposition"] == "deny":
             decision.update(decision="deny", reason_code="trace_review_required",
                             details=admission["errors"],
                             recovery="Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.")
         from enforced_planning.prewrite_claim_fast import _record_receipt
-        _record_receipt(args.receipt_path, decision)
+        if admission["mode"] != "off":
+            _record_receipt(args.receipt_path, decision)
 
     if args.json:
         output = decision

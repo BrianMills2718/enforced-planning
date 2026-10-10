@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/usr/bin/python3",
+    "-m",
+    "pytest",
+    "tests/test_pr_review_signoff.py",
+    "tests/test_finish_pr.py",
+    "tests/test_trace_review_guards.py",
+    "tests/test_generate_hook_wiring.py::test_installed_prewrite_runtime_projects_and_classifies_native_payloads",
+    "tests/test_outcome_prewrite_observation.py::test_cli_no_option_is_unchanged_and_both_signs_preserve_ordinary_allow",
+    "-q"
+  ],
+  "exit_status": 0,
+  "elapsed_seconds": 14.96
+}

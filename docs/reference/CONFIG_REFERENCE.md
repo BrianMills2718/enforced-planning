@@ -139,6 +139,8 @@ outcome correlation. Direct component calls still record their own receipts;
 only the enclosing host defers that component write.
 An explicit shell working directory determines trace admission even when claim
 checking is disabled. Enforced admission refuses an unprovable shell destination.
+Relative shell targets resolve against the captured native launch directory,
+which remains separate from the claimed worktree selected during admission.
 
 ### Host read-target state
 

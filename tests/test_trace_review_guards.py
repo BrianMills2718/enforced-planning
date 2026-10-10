@@ -43,7 +43,9 @@ def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_pat
 
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
-def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path, monkeypatch, capsys, client, mode):
+@pytest.mark.parametrize("relative", [False, True])
+@pytest.mark.parametrize("form", ["-C", "--chdir", "--chdir="])
+def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path, monkeypatch, capsys, client, mode, relative, form):
     _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
     claim_path.unlink()
     (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
@@ -56,8 +58,10 @@ def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path,
         calls.append(root)
         return real_admit(root, operation, session_id, registry)
     monkeypatch.setattr(provider, "admit", record_admission)
+    operand = target.relative_to(launch) if relative else target
+    binding = f"{form}{operand}" if form.endswith("=") else f"{form} {operand}"
     payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
-        f"/usr/bin/env -C {target} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
+        f"/usr/bin/env {binding} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
                              projection_path=tmp_path / "projection.json", client=client, mode=mode)
     assert code == 2 and decision["decision"] == "deny"
@@ -88,6 +92,52 @@ def test_enforced_trace_cannot_authorize_an_unprovable_shell_destination(tmp_pat
     assert decision["reason_code"] == "trace_review_required"
     assert decision["trace_review"]["disposition"] == "deny"
     assert "trace admission requires a provable shell target worktree" in decision["trace_review"]["errors"]
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("form", ["-C", "--chdir", "--chdir="])
+def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_worktree(tmp_path, monkeypatch, capsys, client, form):
+    _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text())
+    claim.update(agent=client, session_id=f"{client}:host-gate-test")
+    claim_path.write_text(yaml.safe_dump(claim))
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    calls = []
+    def admit(root, operation, session_id, registry):
+        calls.append((root, session_id))
+        return {"mode": "enforce", "disposition": "allow", "valid": True, "errors": []}
+    monkeypatch.setattr(provider, "admit", admit)
+    operand = target.relative_to(launch)
+    binding = f"{form}{operand}" if form.endswith("=") else f"{form} {operand}"
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
+        f"/usr/bin/env {binding} touch src/allowed.py"})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode="enforce")
+    assert code == 0 and decision["decision"] == "allow"
+    assert decision["worktree_path"] == str(target)
+    assert decision["trace_review"]["disposition"] == "allow"
+    assert calls == [(target, f"{client}:host-gate-test")]
+    assert (target / "src/allowed.py").read_text() == "VALUE = 1\n"
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("mode", ["off", "observe"])
+def test_compound_shell_cannot_borrow_uncovered_launch_for_an_enforced_path(tmp_path, monkeypatch, capsys, client, mode):
+    _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
+    claim_path.unlink()
+    (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
+    (target / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
+        f"cd {target} && touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode=mode)
+    assert code == 2 and decision["decision"] == "deny"
+    assert decision["reason_code"] == "trace_review_required"
+    assert decision["trace_review"]["mode"] == "enforce"
+    assert decision["trace_review"]["disposition"] == "deny"
+    assert any("another enforced trace target" in error for error in decision["trace_review"]["errors"])
+    assert not (target / "TRACE_REVIEW_SENTINEL_NOT_EXECUTED").exists()
 
 
 def test_read_only_diagnosis_does_not_invoke_repair_guard(tmp_path, monkeypatch, capsys):

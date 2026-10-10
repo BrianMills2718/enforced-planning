@@ -261,7 +261,7 @@ def _session_bound_payload(
 
         command = tool_input.get("command")
         if isinstance(command, str):
-            target_worktree = _bash_explicit_worktree(command)
+            target_worktree = _bash_explicit_worktree(command, cwd=Path(str(payload.get("cwd") or Path.cwd())))
     elif tool_name == "apply_patch":
         from enforced_planning.prewrite_claim_fast import _patch_paths
 
@@ -354,6 +354,7 @@ def _session_bound_payload(
         # is necessary.
         return payload
     rebound = dict(payload)
+    rebound["_session_launch_cwd"] = payload["cwd"]
     rebound["cwd"] = str(resolution.worktree_path)
     rebound["_session_target_worktree"] = str(resolution.worktree_path)
     return rebound
@@ -1734,17 +1735,35 @@ def main(argv: list[str] | None = None) -> int:
         from enforced_planning.trace_review_provider import admit
         from enforced_planning.prewrite_claim_fast import adapt_native_payload, _repository_context, _bash_is_explicitly_bound
         request = None
-        trace_target_cwd = Path(str(payload["cwd"]))
+        trace_target_cwd = Path(str(payload.get("cwd") or Path.cwd()))
         try:
             request = adapt_native_payload(payload, client=args.client,
                                            claim_bootstrap_classifier=special_classifier)
             if request["tool_name"] == "Bash":
                 from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
-                explicit_target = _bash_explicit_worktree(request["bash_command"])
+                explicit_target = _bash_explicit_worktree(request["bash_command"], cwd=Path(request["bash_launch_cwd"]))
                 if explicit_target is not None:
                     trace_target_cwd = explicit_target
             context = _repository_context({**request, "cwd": str(trace_target_cwd)})
             target = Path(context["worktree_path"])
+            if request["tool_name"] == "Bash":
+                from enforced_planning.prewrite_claim_fast import _git_identity
+                from enforced_planning.trace_review_provider import configuration
+                for raw in request["target_paths"]:
+                    candidate = Path(raw).expanduser()
+                    if not candidate.is_absolute():
+                        candidate = trace_target_cwd / candidate
+                    try:
+                        declared_root, _, _ = _git_identity(candidate)
+                    except FastPreWriteError:
+                        continue
+                    if declared_root != target:
+                        try:
+                            protected = configuration(declared_root)["mode"] == "enforce"
+                        except Exception as exc:
+                            raise FastPreWriteError(f"declared trace target configuration unavailable: {exc}") from exc
+                        if protected:
+                            raise FastPreWriteError("shell request includes another enforced trace target without a provable runtime binding")
             admission = admit(target, "repair", request["session_id"], args.claims_dir)
             if admission["mode"] == "enforce":
                 target_errors = []
@@ -1755,7 +1774,7 @@ def main(argv: list[str] | None = None) -> int:
                 if request.get("bash_target_unprovable") or (
                     request.get("session_target_rebound") and
                     request["tool_name"] == "Bash" and
-                    not _bash_is_explicitly_bound(request["bash_command"], target)
+                    not _bash_is_explicitly_bound(request["bash_command"], target, cwd=Path(request["bash_launch_cwd"]))
                 ):
                     target_errors.append("trace admission requires a provable shell target worktree")
                 if target_errors:

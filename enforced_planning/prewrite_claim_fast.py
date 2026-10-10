@@ -847,7 +847,7 @@ def _bash_target_is_unprovable(command: str) -> bool:
     return False
 
 
-def _bash_explicit_worktree(command: str) -> Path | None:
+def _bash_explicit_worktree(command: str, *, cwd: Path | None = None) -> Path | None:
     """Return one literal runtime cwd attested by a supported Bash form."""
 
     if _bash_target_is_unprovable(command):
@@ -856,18 +856,29 @@ def _bash_explicit_worktree(command: str) -> Path | None:
     if commands is None or len(commands) != 1:
         return None
     argv = commands[0]
-    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
-        return Path(argv[2]).expanduser().resolve()
-    executable = Path(argv[0]).name if argv else ""
-    if executable in {"git", "make"} and len(argv) >= 3 and argv[1] == "-C":
-        return Path(argv[2]).expanduser().resolve()
-    return None
+    if len(argv) >= 4 and argv[0] == "/usr/bin/env" and argv[1] in {"-C", "--chdir"}:
+        operand = argv[2]
+    elif len(argv) >= 3 and argv[0] == "/usr/bin/env" and argv[1].startswith("--chdir="):
+        operand = argv[1].split("=", 1)[1]
+        if not operand:
+            return None
+    else:
+        executable = Path(argv[0]).name if argv else ""
+        if executable not in {"git", "make"} or len(argv) < 3 or argv[1] != "-C":
+            return None
+        operand = argv[2]
+    target = Path(operand).expanduser()
+    if not target.is_absolute():
+        if cwd is None:
+            return None
+        target = cwd / target
+    return target.resolve()
 
 
-def _bash_is_explicitly_bound(command: str, worktree: Path) -> bool:
+def _bash_is_explicitly_bound(command: str, worktree: Path, *, cwd: Path | None = None) -> bool:
     """Require a literal runtime cwd when the native payload omits workdir."""
 
-    return _bash_explicit_worktree(command) == worktree
+    return _bash_explicit_worktree(command, cwd=cwd) == worktree
 
 
 def _canonical_sync_command_targets_repo(
@@ -1152,6 +1163,7 @@ def adapt_native_payload(
         "bash_declared_paths": bash_declared_paths,
         "bash_target_unprovable": _bash_target_is_unprovable(command) if tool_name == "Bash" else False,
         "bash_command": command if tool_name == "Bash" else None,
+        "bash_launch_cwd": payload.get("_session_launch_cwd") or payload.get("cwd"),
         "session_target_error_code": payload.get("_session_target_error_code"),
         "session_target_error": payload.get("_session_target_error"),
         "session_target_recovery": payload.get("_session_target_recovery"),
@@ -1641,6 +1653,7 @@ def evaluate_request_fast(
         if not isinstance(raw_command, str) or not _bash_is_explicitly_bound(
             raw_command,
             Path(context["worktree_path"]),
+            cwd=Path(request.get("bash_launch_cwd") or request["cwd"]),
         ):
             result = _decision(
                 started=started,

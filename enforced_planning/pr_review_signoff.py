@@ -183,6 +183,13 @@ class ReviewerExecution(StrictModel):
         return self
 
 
+class ReviewerBinding(StrictModel):
+    review_lane: str
+    argv: tuple[str, ...]
+    cwd: str
+    schema_sha256: str = Field(pattern=SHA256_PATTERN)
+
+
 def _execution_digest(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -205,10 +212,13 @@ def _trace_session(stdout: str) -> str:
         item = event["item"]
         kind = item.get("type")
         if kind == "command_execution":
-            if not {"command", "aggregated_output", "exit_code"} <= item.keys():
+            if (not isinstance(item.get("command"), str) or not item["command"]
+                    or not isinstance(item.get("aggregated_output"), str)
+                    or type(item.get("exit_code")) is not int):
                 raise ValueError("reviewer command trace lacks input/output")
         elif kind == "mcp_tool_call":
-            if not {"arguments", "result"} <= item.keys():
+            if (not isinstance(item.get("arguments"), (dict, list, str))
+                    or (item.get("result") is None and item.get("error") is None)):
                 raise ValueError("reviewer MCP trace lacks input/output")
         elif kind not in {"reasoning", "agent_message", "todo_list"}:
             raise ValueError(f"unsupported reviewer item type: {kind}")
@@ -227,6 +237,7 @@ class PRSignoffReceipt(StrictModel):
     rubric_revision: str = Field(min_length=1)
     reviewer_sessions: tuple[ReviewerSession, ...]
     reviewer_executions: tuple[ReviewerExecution, ...]
+    reviewer_bindings: tuple[ReviewerBinding, ...] = ()
     authority_state: Literal["evidence_receipt"] = "evidence_receipt"
     publication_requirement: Literal["none"] = "none"
     verdict: Literal["signed_off", "rejected"]
@@ -238,8 +249,11 @@ class PRSignoffReceipt(StrictModel):
     @model_validator(mode="after")
     def signed_off_requires_retained_execution(self) -> PRSignoffReceipt:
         if self.verdict == "signed_off":
-            if any(item.full_output is None or not item.capture_complete for item in self.programmatic_checks):
+            if self.reasons or any(item.exit_code != 0 or item.full_output is None or not item.capture_complete for item in self.programmatic_checks):
                 raise ValueError("signed off receipt requires complete programmatic output")
+            if any(item.verdict != "pass" or any(c.outcome != "pass" for c in item.criterion_results)
+                   or any(f.severity == "blocking" for f in item.findings) for item in self.semantic_reviews):
+                raise ValueError("signed off receipt contradicts review outcome")
             lanes = {item.review_lane for item in self.semantic_reviews}
             executions = {item.review_lane for item in self.reviewer_executions}
             if not lanes or lanes != executions or len(executions) != len(self.reviewer_executions):
@@ -248,6 +262,9 @@ class PRSignoffReceipt(StrictModel):
                 raise ValueError("signed off receipt requires complete successful reviewer capture")
             sessions = {item.review_lane: item.session_id for item in self.reviewer_sessions}
             semantics = {item.review_lane: item for item in self.semantic_reviews}
+            bindings = {item.review_lane: item for item in self.reviewer_bindings}
+            if set(bindings) != lanes or len(bindings) != len(self.reviewer_bindings):
+                raise ValueError("signed off receipt requires exact reviewer invocation bindings")
             if set(sessions) != lanes or len(sessions) != len(self.reviewer_sessions):
                 raise ValueError("signed off receipt requires exact reviewer session lanes")
             for execution in self.reviewer_executions:
@@ -256,6 +273,11 @@ class PRSignoffReceipt(StrictModel):
                 if SemanticReviewResult.model_validate_json(execution.semantic_output) != semantics[execution.review_lane]:
                     raise ValueError("reviewer captured semantic output differs from receipt")
                 captured_spec = PRReviewSpec.model_validate_json(execution.spec_json)
+                binding = bindings[execution.review_lane]
+                if (execution.argv != binding.argv or execution.cwd != binding.cwd
+                        or hashlib.sha256(execution.schema_text.encode()).hexdigest() != binding.schema_sha256
+                        or execution.prompt != build_reviewer_prompt(captured_spec, self.programmatic_checks, review_lane=execution.review_lane)):
+                    raise ValueError("reviewer captured invocation differs from required invocation")
                 if (captured_spec.head_sha != self.head_sha
                         or captured_spec.semantic_rubric.revision != self.rubric_revision
                         or set(captured_spec.review_lanes) != lanes):
@@ -314,9 +336,13 @@ def evaluate_signoff(
     checks: tuple[ProgrammaticCheckResult, ...],
     semantics: tuple[SemanticReviewResult, ...],
     executions: tuple[ReviewerExecution, ...] = (),
+    bindings: tuple[ReviewerBinding, ...] = (),
     reviewed_at: str | None = None,
 ) -> PRSignoffReceipt:
     reasons: list[str] = []
+    required_bindings = {binding.review_lane: binding for binding in bindings}
+    if set(required_bindings) != set(expected_lanes) or len(required_bindings) != len(bindings):
+        reasons.append("reviewer invocation bindings did not cover exactly the required lanes")
     if any(item.full_output is None or not item.capture_complete for item in checks):
         reasons.append("programmatic output capture is incomplete")
     execution_lanes = [item.review_lane for item in executions]
@@ -331,12 +357,16 @@ def evaluate_signoff(
             session = next(item for item in reviewer_sessions if item.review_lane == execution.review_lane)
             semantic = next(item for item in semantics if item.review_lane == execution.review_lane)
             captured_spec = PRReviewSpec.model_validate_json(execution.spec_json)
+            binding = required_bindings[execution.review_lane]
             if (_trace_session(execution.stdout) != session.session_id
                     or SemanticReviewResult.model_validate_json(execution.semantic_output) != semantic
                     or captured_spec.head_sha != expected_head
                     or captured_spec.semantic_rubric != expected_rubric
                     or captured_spec.programmatic_checks != expected_checks
-                    or captured_spec.review_lanes != expected_lanes):
+                    or captured_spec.review_lanes != expected_lanes
+                    or execution.argv != binding.argv or execution.cwd != binding.cwd
+                    or hashlib.sha256(execution.schema_text.encode()).hexdigest() != binding.schema_sha256
+                    or execution.prompt != build_reviewer_prompt(captured_spec, checks, review_lane=execution.review_lane)):
                 raise ValueError("reviewer trace differs from the required execution")
         except (ValueError, TypeError, KeyError, StopIteration) as exc:
             reasons.append(f"reviewer execution evidence invalid: {exc}")
@@ -399,6 +429,7 @@ def evaluate_signoff(
         rubric_revision=expected_rubric.revision,
         reviewer_sessions=reviewer_sessions,
         reviewer_executions=executions,
+        reviewer_bindings=bindings,
         verdict="rejected" if reasons else "signed_off",
         reasons=tuple(reasons),
         programmatic_checks=checks,
@@ -609,11 +640,13 @@ def _run_reviewer_lane(
     )
     prompt = build_reviewer_prompt(spec, checks, review_lane=review_lane)
     evidence = dict(review_lane=review_lane, argv=command, cwd=str(root), prompt=prompt,
-                    spec_json=spec.model_dump_json(), schema_text=output_schema.read_text(),
+                    spec_json=spec.model_dump_json(), schema_text="",
                     stdout="", stderr="", semantic_output=None, exit_code=None,
                     capture_complete=False, error=None)
     session = semantic = None
     try:
+        schema_path = output_schema if output_schema.is_absolute() else root / output_schema
+        evidence["schema_text"] = schema_path.read_text()
         completed = subprocess.run(list(command), input=prompt, capture_output=True,
                                    text=True, timeout=timeout_seconds, check=False)
         evidence.update(stdout=completed.stdout, stderr=completed.stderr,
@@ -631,8 +664,11 @@ def _run_reviewer_lane(
             return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
         evidence.update(stdout=decoded(exc.stdout), stderr=decoded(exc.stderr),
                         error=f"TimeoutExpired: {exc}")
-        if semantic_path.exists():
-            evidence["semantic_output"] = semantic_path.read_text(encoding="utf-8")
+        try:
+            if semantic_path.exists():
+                evidence["semantic_output"] = semantic_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as read_error:
+            evidence["error"] += f"; semantic output unavailable: {read_error}"
     except Exception as exc:
         evidence["error"] = f"{type(exc).__name__}: {exc}"
     execution = ReviewerExecution(**evidence, sha256=_execution_digest(evidence))
@@ -656,6 +692,9 @@ def run_review(
     if review_timeout_seconds < 1:
         raise ValueError("review timeout must be at least one second")
     root = repo_root.resolve()
+    output_schema = output_schema if output_schema.is_absolute() else root / output_schema
+    # Preparation must finish before any paid reviewer launches. Each lane
+    # still catches its own later read/process/parser failure.
     observed_head = _assert_frozen_worktree(root, spec.head_sha, phase="preflight")
     resolver = pr_revision_resolver or (
         lambda repository, pull_request: _resolve_github_pr_revision(
@@ -664,6 +703,7 @@ def run_review(
     )
     _assert_live_pr_revision(spec, resolver, phase="preflight")
     _git_output(root, "merge-base", "--is-ancestor", spec.base_sha, spec.head_sha)
+    schema_digest = hashlib.sha256(output_schema.read_text().encode()).hexdigest()
     checks = run_programmatic_checks(spec, repo_root=root)
     _assert_frozen_worktree(root, spec.head_sha, phase="post-check")
 
@@ -684,6 +724,10 @@ def run_review(
                 timeout_seconds=review_timeout_seconds,
             )
 
+        bindings = tuple(ReviewerBinding(review_lane=lane, cwd=str(root), schema_sha256=schema_digest,
+            argv=build_codex_command(codex_bin=codex_bin, repo_root=root, output_schema=output_schema,
+                output_path=output_directory / f"semantic-review-{hashlib.sha256(lane.encode()).hexdigest()[:12]}.json",
+                model=model, effort=effort)) for lane in spec.review_lanes)
         with ThreadPoolExecutor(max_workers=len(spec.review_lanes)) as executor:
             lane_results = tuple(executor.map(run_lane, spec.review_lanes))
 
@@ -706,6 +750,7 @@ def run_review(
         checks=checks,
         semantics=semantics,
         executions=tuple(result[2] for result in lane_results),
+        bindings=bindings,
     )
     if boundary_error:
         payload = receipt.model_dump()

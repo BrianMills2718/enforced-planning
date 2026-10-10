@@ -1,0 +1,36 @@
+{
+  "source_concern": "https://github.com/BrianMills2718/agent-skills/issues/467",
+  "initial_checkpoint": "b6d60a7",
+  "independent_review": [
+    {
+      "finding": "Retained prompt/argv/cwd/schema could differ from intended invocation",
+      "repair": "Per-lane expected invocation bindings and reconstructed exact prompt checked in evaluator and receipt validator",
+      "check": "test_rehashed_wrong_invocation_cannot_sign_off"
+    },
+    {
+      "finding": "Parsed success could contradict captured semantic failure",
+      "repair": "Signed-off receipt validator rejects failed semantic verdicts, failing criteria, blocking findings and nonzero/incomplete local checks",
+      "check": "test_parsed_success_cannot_contradict_captured_semantic_failure"
+    },
+    {
+      "finding": "Null tool inputs/outputs counted as complete",
+      "repair": "Validate native command/MCP input/output value types and result/error alternatives",
+      "check": "test_null_tool_input_and_output_is_incomplete"
+    },
+    {
+      "finding": "Schema preparation error could abort concurrent result aggregation",
+      "repair": "Preflight schema before any reviewer launches; per-lane preparation and timeout secondary reads are captured",
+      "check": "test_schema_preparation_failure_is_a_retained_lane_result"
+    }
+  ],
+  "authentic_native_event_compatibility": "not yet exercised",
+  "installation": "not deployed; vendored upgrade profile remains unresolved",
+  "broad_gate": {
+    "passed": 3341,
+    "failed": 4,
+    "skipped": 3,
+    "exit_status": 1,
+    "guard_compatibility_failures": "repaired; separate focused gate passed",
+    "coordination_timeout_failures": "unresolved; concern651; merge not permitted"
+  }
+}

@@ -1407,3 +1407,37 @@ def test_projection_snapshot_hash_binds_the_validated_bytes(monkeypatch, tmp_pat
     assert coordination_hook._current_projection_sha256(claims_dir) == hashlib.sha256(validated).hexdigest()
     assert real_read(projection_path) != validated
     assert coordination_hook._current_projection_sha256(claims_dir) is None
+
+
+@pytest.mark.parametrize("diagnostics", [False, True])
+@pytest.mark.parametrize("turn_end", [False, True])
+def test_recovered_projection_replacement_is_rejected_before_claim_consumption(monkeypatch, tmp_path, diagnostics, turn_end):
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _write_live_claim(claims_dir, scope="verified-owner")
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    original_verify = coordination_hook._current_projection_sha256
+    captured = {}
+
+    def replace_after_verification(root):
+        digest = original_verify(root)
+        assert digest is not None
+        captured["verified_sha256"] = digest
+        replacement = json.loads(projection_path.read_bytes())
+        replacement["claims"][0]["session_id"] = "codex:replacement-owner"
+        projection_path.write_text(json.dumps(replacement))
+        return digest
+
+    def timeout_after_write(*_args, **_kwargs):
+        prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+        raise subprocess.TimeoutExpired(["repair"], 1.5, stderr="projection_repair_phase=complete\n")
+
+    monkeypatch.setattr(coordination_hook.subprocess, "run", timeout_after_write)
+    monkeypatch.setattr(coordination_hook, "_current_projection_sha256", replace_after_verification)
+    retained = {} if diagnostics else None
+    error_type = coordination_hook.TurnEndProjectionError if turn_end else coordination_hook.RepositoryCloseoutError
+    with pytest.raises(error_type, match="changed after timeout verification"):
+        coordination_hook._active_claims(claims_dir, turn_end=turn_end, repair_diagnostics=retained)
+    if retained is not None:
+        assert retained["projection_sha256"] == captured["verified_sha256"]
+    assert json.loads(projection_path.read_bytes())["claims"][0]["session_id"] == "codex:replacement-owner"

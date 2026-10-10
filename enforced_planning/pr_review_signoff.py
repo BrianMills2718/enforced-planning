@@ -194,7 +194,7 @@ def _execution_digest(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _trace_session(stdout: str) -> str:
+def _trace_session(stdout: str, semantic_output: str | None = None) -> str:
     events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
     threads = [event["thread_id"] for event in events
                if event.get("type") == "thread.started" and event.get("thread_id")]
@@ -204,6 +204,8 @@ def _trace_session(stdout: str) -> str:
     ended = {event["item"]["id"] for event in events if event.get("type") == "item.completed"}
     if not started <= ended:
         raise ValueError("reviewer trace contains unfinished items")
+    inspected = False
+    terminal_messages = []
     for event in events:
         if event.get("type") in {"error", "turn.failed"}:
             raise ValueError("reviewer trace contains native failure")
@@ -212,16 +214,27 @@ def _trace_session(stdout: str) -> str:
         item = event["item"]
         kind = item.get("type")
         if kind == "command_execution":
+            inspected = True
             if (not isinstance(item.get("command"), str) or not item["command"]
                     or not isinstance(item.get("aggregated_output"), str)
                     or type(item.get("exit_code")) is not int):
                 raise ValueError("reviewer command trace lacks input/output")
         elif kind == "mcp_tool_call":
+            inspected = True
             if (not isinstance(item.get("arguments"), (dict, list, str))
                     or (item.get("result") is None and item.get("error") is None)):
                 raise ValueError("reviewer MCP trace lacks input/output")
-        elif kind not in {"reasoning", "agent_message", "todo_list"}:
+        elif kind == "agent_message":
+            terminal_messages.append(item.get("text"))
+        elif kind not in {"reasoning", "todo_list"}:
             raise ValueError(f"unsupported reviewer item type: {kind}")
+    if not inspected:
+        raise ValueError("reviewer trace lacks retained tool inspection evidence")
+    if not terminal_messages or not isinstance(terminal_messages[-1], str):
+        raise ValueError("reviewer trace lacks native terminal semantic message")
+    native_semantic = SemanticReviewResult.model_validate_json(terminal_messages[-1])
+    if semantic_output is not None and native_semantic != SemanticReviewResult.model_validate_json(semantic_output):
+        raise ValueError("native terminal semantic message differs from captured semantic output")
     return f"codex:{threads[0]}"
 
 
@@ -268,7 +281,7 @@ class PRSignoffReceipt(StrictModel):
             if set(sessions) != lanes or len(sessions) != len(self.reviewer_sessions):
                 raise ValueError("signed off receipt requires exact reviewer session lanes")
             for execution in self.reviewer_executions:
-                if _trace_session(execution.stdout) != sessions.get(execution.review_lane):
+                if _trace_session(execution.stdout, execution.semantic_output) != sessions.get(execution.review_lane):
                     raise ValueError("reviewer trace session differs from receipt")
                 if SemanticReviewResult.model_validate_json(execution.semantic_output) != semantics[execution.review_lane]:
                     raise ValueError("reviewer captured semantic output differs from receipt")
@@ -358,7 +371,7 @@ def evaluate_signoff(
             semantic = next(item for item in semantics if item.review_lane == execution.review_lane)
             captured_spec = PRReviewSpec.model_validate_json(execution.spec_json)
             binding = required_bindings[execution.review_lane]
-            if (_trace_session(execution.stdout) != session.session_id
+            if (_trace_session(execution.stdout, execution.semantic_output) != session.session_id
                     or SemanticReviewResult.model_validate_json(execution.semantic_output) != semantic
                     or captured_spec.head_sha != expected_head
                     or captured_spec.semantic_rubric != expected_rubric
@@ -658,7 +671,7 @@ def _run_reviewer_lane(
         semantic = SemanticReviewResult.model_validate_json(evidence["semantic_output"])
         if semantic.review_lane != review_lane:
             raise ValueError(f"reviewer returned different lane {semantic.review_lane}")
-        session = ReviewerSession(review_lane=review_lane, session_id=_trace_session(completed.stdout))
+        session = ReviewerSession(review_lane=review_lane, session_id=_trace_session(completed.stdout, evidence["semantic_output"]))
     except subprocess.TimeoutExpired as exc:
         def decoded(value):
             return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""

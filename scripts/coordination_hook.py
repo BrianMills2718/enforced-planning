@@ -472,10 +472,14 @@ def _active_claims(
 
     resolved = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
     projection_path = prewrite_claim_fast.projection_path_for(resolved)
+    expected_recovery_sha = None
     def load_projection() -> Any:
         try:
+            raw = projection_path.read_bytes()
+            if expected_recovery_sha is not None and hashlib.sha256(raw).hexdigest() != expected_recovery_sha:
+                raise ValueError("active-claim projection changed after timeout verification")
             projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
-                projection_path.read_text(encoding="utf-8")
+                raw
             )
         except (OSError, ValueError) as exc:
             error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
@@ -505,9 +509,12 @@ def _active_claims(
     # TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS. PreToolUse, the latency
     # boundary, does not call this function at all.
     def repair_projection() -> None:
+        nonlocal expected_recovery_sha
         result = _repair_turn_end_projection(resolved)
-        if repair_diagnostics is not None and result.get("action") == "verified_after_transport_timeout":
-            repair_diagnostics.update(result)
+        if result.get("action") == "verified_after_transport_timeout":
+            expected_recovery_sha = result["projection_sha256"]
+            if repair_diagnostics is not None:
+                repair_diagnostics.update(result)
 
     repaired = False
     if not projection_path.is_file() or _projection_has_registry_change(projection_path, resolved):

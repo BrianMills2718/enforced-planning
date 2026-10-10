@@ -131,6 +131,9 @@ worktree's review. Completion passes the exact requested plan path and refuses
 an unrelated cursor's review. Missing providers or invalid target bindings
 fail closed in enforce mode. A configuration file alone does not install a
 hook or establish project coverage; both clients must exercise the boundary.
+The final trace denial controls the exit status even when outcome admission
+allowed the request. Disabled targets retain an explicit uncovered disposition
+in both the host decision and its receipt.
 
 ### Host read-target state
 

@@ -114,3 +114,34 @@ def test_untrusted_provider_is_refused_without_running_it(tmp_path):
     result = provider.admit(tmp_path, "repair", "codex:fixture", tmp_path / "claims")
     assert result["disposition"] == "deny"
     assert result["valid"] is False
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+def test_outcome_allow_cannot_override_trace_denial(tmp_path, monkeypatch, capsys, client):
+    from scripts import prewrite_claim_gate as gate
+    workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)
+    claim = yaml.safe_load(claim_path.read_text())
+    claim.update(agent=client, session_id=f"{client}:host-gate-test")
+    claim_path.write_text(yaml.safe_dump(claim))
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    monkeypatch.setattr(gate, "_resolved_outcome_mode", lambda *_args, **_kwargs: "enforce_selected")
+    monkeypatch.setattr(gate, "_sanctioned_maintenance_exemption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(gate, "_enforce_selected_outcome", lambda *_args, **_kwargs: {"result": {"decision": {"disposition": "allow"}}})
+    monkeypatch.setattr(provider, "admit", lambda *_args, **_kwargs: {"mode": "enforce", "disposition": "deny", "valid": False, "errors": ["missing full trace review"]})
+    payload = _payload(cwd=worktree, tool="Edit", tool_input={"file_path": str(worktree / "src/allowed.py")})
+    if client == "codex":
+        payload = _payload(cwd=worktree, tool="apply_patch", tool_input={"command": f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch\n"})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir, projection_path=tmp_path / "projection.json", client=client)
+    assert decision["outcome_admission"]["result"]["decision"]["disposition"] == "allow"
+    assert decision["trace_review"]["disposition"] == "deny"
+    assert decision["decision"] == "deny" and code == 2
+
+
+def test_disabled_trace_admission_retains_uncovered_receipt(tmp_path, monkeypatch, capsys):
+    _, _, worktree, claims_dir, _ = _fixture(tmp_path)
+    monkeypatch.setattr(provider, "admit", lambda *_args, **_kwargs: {"mode": "off", "disposition": "uncovered", "valid": False, "errors": []})
+    payload = _payload(cwd=worktree, tool="Edit", tool_input={"file_path": str(worktree / "src/allowed.py")})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    assert code == 0 and decision["trace_review"]["disposition"] == "uncovered"
+    receipt = json.loads((tmp_path / "receipts.jsonl").read_text().splitlines()[-1])
+    assert receipt["trace_review"]["disposition"] == "uncovered"

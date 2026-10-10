@@ -50,6 +50,9 @@ copies available receipts before propagating errors and refuses content
 collisions; reviewer artifacts stay in the existing private review store.
 Native Codex session persistence provides secondary recovery. Historical 1.0
 receipts remain historical evidence and are not upgraded into current signoff.
+Signoff requires retained tool inspection and agreement between the native
+terminal message and the separately captured semantic output. A transcript
+without tool evidence or with a contradictory terminal verdict is rejected.
 
 ## Review specification
 

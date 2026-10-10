@@ -93,6 +93,9 @@ fresh registry digest before using it. The existing daily hook receipt retains
 `verified_after_transport_timeout`, the observed phase, unchanged timeout and
 SHA-256 of those same validated bytes. Missing, corrupt, stale or differently
 bound artifacts remain unavailable. A completed artifact does not establish a
+successful claim read if the projection is replaced before consumption: the
+loader compares the consumed bytes with the verified snapshot digest and
+rejects a mismatch before returning any claims. It also does not establish a
 successful child exit; startup timeouts and registry contention still need
 investigation through the observed phase and native command outcome.
 

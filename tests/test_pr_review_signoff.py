@@ -44,6 +44,10 @@ def _execution(lane="correctness", **overrides):
                     stderr="", semantic_output='{"verdict":"pass"}', exit_code=0,
                     capture_complete=True, error=None)
     evidence.update(overrides)
+    if "stdout" not in overrides:
+        terminal = json.dumps({"type": "item.completed", "item": {
+            "id": "final", "type": "agent_message", "text": evidence["semantic_output"]}})
+        evidence["stdout"] = evidence["stdout"].replace('{"type":"turn.completed"}', terminal + '\n{"type":"turn.completed"}')
     return ReviewerExecution(**evidence, sha256=_execution_digest(evidence))
 
 
@@ -57,7 +61,7 @@ def evaluate_signoff(**kwargs):
         for lane in kwargs["expected_lanes"]:
             semantic = next((s for s in kwargs["semantics"] if s.review_lane == lane), None)
             session = next((s for s in kwargs["reviewer_sessions"] if s.review_lane == lane), None)
-            raw = _execution(lane).stdout
+            raw = _execution(lane, semantic_output=semantic.model_dump_json() if semantic else None).stdout
             if session:
                 raw = raw.replace('"thread_id":"fresh"', '"thread_id":' + json.dumps(session.session_id.removeprefix("codex:")))
             executions.append(_execution(lane, spec_json=spec.model_dump_json(), stdout=raw,
@@ -180,6 +184,7 @@ def test_lane_retains_full_inputs_and_outputs_before_rejection(tmp_path, monkeyp
         events = [] if failure == "thread" else [{"type": "thread.started", "thread_id": "fresh"}]
         events += [{"type": "item.completed", "item": {"id": "read", "type": "command_execution",
             "command": "cat feature.txt", "aggregated_output": output, "exit_code": 0}},
+            {"type": "item.completed", "item": {"id": "final", "type": "agent_message", "text": json.dumps(semantic)}},
             {"type": "turn.completed"}]
         stdout = "\n".join(json.dumps(event) for event in events)
         if failure == "timeout":
@@ -769,6 +774,7 @@ def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) 
         "out.write_text(json.dumps(semantic), encoding='utf-8')\n"
         "print(json.dumps({'type': 'thread.started', 'thread_id': 'fresh-' + lane}))\n"
         "print(json.dumps({'type': 'item.completed', 'item': {'id': 'tool1', 'type': 'command_execution', 'command': 'cat feature.txt', 'aggregated_output': 'full-tool-output-sentinel', 'exit_code': 0}}))\n"
+        "print(json.dumps({'type': 'item.completed', 'item': {'id': 'final', 'type': 'agent_message', 'text': json.dumps(semantic)}}))\n"
         "print(json.dumps({'type': 'turn.completed'}))\n",
         encoding="utf-8",
     )
@@ -980,3 +986,31 @@ def test_programmatic_check_has_no_external_network(tmp_path: Path) -> None:
 
     assert results[0].exit_code != 0
     assert results[0].execution_boundary == "systemd-read-only-private-network"
+
+
+@pytest.mark.parametrize("case", ["no_tools", "contradictory_terminal", "missing_terminal"])
+def test_native_inspection_and_terminal_semantics_bind_signoff(case):
+    valid = _valid_receipt()
+    execution = valid.reviewer_executions[0]
+    events = [json.loads(line) for line in execution.stdout.splitlines() if line.strip()]
+    if case == "no_tools":
+        events = [event for event in events if event.get("item", {}).get("type") != "command_execution"]
+    elif case == "missing_terminal":
+        events = [event for event in events if event.get("item", {}).get("type") != "agent_message"]
+    else:
+        for event in events:
+            if event.get("item", {}).get("type") == "agent_message":
+                event["item"]["text"] = valid.semantic_reviews[0].model_copy(update={"verdict": "fail"}).model_dump_json()
+    payload = execution.model_dump(exclude={"sha256"})
+    payload["stdout"] = "\n".join(json.dumps(event) for event in events)
+    changed = ReviewerExecution(**payload, sha256=_execution_digest(payload))
+    result = _evaluate_signoff(expected_head=HEAD, observed_head=HEAD,
+        expected_rubric=RUBRIC, expected_checks=CHECK_SPECS, expected_lanes=LANES,
+        reviewer_sessions=SESSIONS, checks=PASSING_CHECKS, semantics=valid.semantic_reviews,
+        executions=(changed,), bindings=valid.reviewer_bindings)
+    assert result.verdict == "rejected"
+    assert any("reviewer execution evidence invalid" in reason for reason in result.reasons)
+    raw = valid.model_dump()
+    raw["reviewer_executions"] = [changed.model_dump()]
+    with pytest.raises(ValidationError):
+        type(valid).model_validate(raw)

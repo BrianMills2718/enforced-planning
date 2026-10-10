@@ -1866,15 +1866,13 @@ def main(argv: list[str] | None = None) -> int:
             admission = {"mode": fallback_mode,
                          "disposition": "deny" if fallback_mode == "enforce" else "uncovered", "valid": False,
                          "errors": [f"trace admission target unavailable: {exc}"]}
-        if admission["mode"] != "off":
-            decision = {**decision, "trace_review": admission}
+        decision = {**decision, "trace_review": admission}
         if admission["disposition"] == "deny":
             decision.update(decision="deny", reason_code="trace_review_required",
                             details=admission["errors"],
                             recovery="Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.")
         from enforced_planning.prewrite_claim_fast import _record_receipt
-        if admission["mode"] != "off":
-            _record_receipt(args.receipt_path, decision)
+        _record_receipt(args.receipt_path, decision)
 
     if args.json:
         output = decision
@@ -1885,6 +1883,8 @@ def main(argv: list[str] | None = None) -> int:
         if outcome_admission_exemption is not None:
             output = {**output, "outcome_admission_exemption": outcome_admission_exemption}
         print(json.dumps(output, indent=2, sort_keys=True))
+        if decision["decision"] == "deny":
+            return 2
         if outcome_admission_receipt is not None:
             admission = outcome_admission_receipt["result"]["decision"]
             return 0 if admission["disposition"] == "allow" else 2

@@ -1,0 +1,23 @@
+{
+  "scope": "observed control friction; causes not established",
+  "bootstrap": {
+    "process_id": 1910674,
+    "elapsed_seconds": 153,
+    "cpu_seconds": 143,
+    "cpu_percent": 93.2,
+    "max_rss_kib": 46832,
+    "exit_status": 0,
+    "trace": "provider-publish-disjoint-bootstrap.trace.json"
+  },
+  "registry_lock": {
+    "failed_progress_and_session_refresh": true,
+    "reported_wait_seconds": 5,
+    "no_state_change_on_refusal": true,
+    "later_holder_probe_found_no_process": true,
+    "subsequent_exact_owner_claim_refresh_exit_status": 0
+  },
+  "scope_preservation": {
+    "ep_parallel_root_authorized": false,
+    "foreign_lifecycle_lane_preserved": true
+  }
+}

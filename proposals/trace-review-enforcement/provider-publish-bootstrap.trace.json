@@ -1,0 +1,39 @@
+{
+  "request": {
+    "schema_version": "1.0",
+    "operation": "goal_worktree",
+    "agent": "codex",
+    "project": "company-planning",
+    "scope": "trace-review-provider-publish",
+    "repo_root": "/home/brian/code/inside-success/repos/company-planning",
+    "branch": "trace-review-provider-publish",
+    "claim_type": "program",
+    "allow_parallel": true,
+    "plan_ref": "goal:trace-review-enforcement",
+    "broader_goal": "Enforce trace review across all active projects: publish provider source",
+    "current_phase": "Publish the verified provider code phase without the active execution cursor",
+    "next_action": "Integrate completed phase paths from exact pinned source and run native publication checks",
+    "write_paths": [
+      "plugins/company-planning/scripts/validate_trace_review.py",
+      "plugins/company-planning/scripts/manage_plan_execution.py",
+      "plugins/company-planning/contracts/execution-loop",
+      "tests/test_trace_review_provider.py",
+      "tests/test_trace_review.py",
+      "tests/test_plan_execution_manager.py",
+      "proposals/trace-review-enforcement",
+      "wiki/index.md",
+      "docs/model/ODD.md",
+      "docs/model/VIEW_COVERAGE.md",
+      "plugins/company-planning/.claude-plugin/plugin.json",
+      "plugins/company-planning/.codex-plugin/plugin.json",
+      ".claude-plugin/marketplace.json",
+      "README.md",
+      "artifacts/trace_review/reviews"
+    ]
+  },
+  "output": {
+    "stdout": "",
+    "stderr": "{\n  \"error\": {\n    \"code\": \"claim_bootstrap_denied\",\n    \"message\": \"worktree bootstrap requires the native session to own zero existing claim roots unless SESSION_ALLOW_PARALLEL=1 and every write path is narrow and disjoint from that root's; close or transfer first: company-planning:trace-review-provider-guards\"\n  },\n  \"ok\": false,\n  \"schema_version\": \"1.0\"\n}\n",
+    "exit_status": 1
+  }
+}

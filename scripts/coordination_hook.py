@@ -13,16 +13,20 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-try:
-    from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
-except ModuleNotFoundError:  # package-style tests import scripts.coordination_hook
-    from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+# The projection-only child does not emit hook invocation receipts or scan
+# repositories. Keep those imports in the normal lifecycle process.
+if __name__ != "__main__" or "--repair-projection-only" not in sys.argv:
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+    except ModuleNotFoundError:  # package-style tests import scripts.coordination_hook
+        from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
 
 
 def _bootstrap_package() -> None:

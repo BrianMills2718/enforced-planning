@@ -109,5 +109,24 @@
     ],
     "deadline_extensions": false,
     "merge_gate_passed": false
+  },
+  "minimal_worker_imports": {
+    "unused_worker_imports_removed": [
+      "hook_receipts",
+      "concurrent.futures.ThreadPoolExecutor"
+    ],
+    "normal_lifecycle_imports_preserved": true,
+    "authentic_worker_replay_passed": 12,
+    "authentic_worker_replay_failed": 0,
+    "authentic_worker_replay_exit_status": 0,
+    "fresh_probe_elapsed_seconds": 0.465,
+    "fresh_probe_repair_ms": 5.428,
+    "timing_limitation": "Separate probes; cached pages and host scheduling may differ",
+    "final_focused_passed": 277,
+    "final_focused_failed": 0,
+    "final_focused_skipped": 0,
+    "final_pytest_seconds": 90.84,
+    "final_exit_status": 0,
+    "broad_merge_gate": "not yet rerun at this source revision"
   }
 }

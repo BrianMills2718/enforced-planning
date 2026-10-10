@@ -1,0 +1,366 @@
+{
+  "run_id": "ep-host-regression-native-evidence",
+  "outcome": "fail",
+  "events": [
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_admits_exact_na1/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "lane work"
+        ],
+        "staged_paths": "src/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_admits_exact_na1/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_admits_exact_ma1/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged lane work"
+        ],
+        "staged_paths": "Makefile\nscripts/meta/session_close.py\nsrc/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_admits_exact_ma1/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_routes_merged_c0/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged consumer lane work"
+        ],
+        "staged_paths": "src/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_routes_merged_c0/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_does_not_transl0/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged consumer lane work"
+        ],
+        "staged_paths": "src/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_does_not_transl0/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_does_not_transl1/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged consumer lane work"
+        ],
+        "staged_paths": "src/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_does_not_transl1/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_rejects_tampere0/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged lane work"
+        ],
+        "staged_paths": "Makefile\nscripts/meta/session_close.py\nsrc/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_rejects_tampere0/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_rejects_tampere1/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged lane work"
+        ],
+        "staged_paths": "Makefile\nscripts/meta/session_close.py\nsrc/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_rejects_tampere1/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_host_gate_rejects_tampere2/workspace/project/worktrees/host-gate-lane",
+          "commit",
+          "-m",
+          "merged lane work"
+        ],
+        "staged_paths": "Makefile\nscripts/meta/session_close.py\nsrc/allowed.py\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_host_gate_rejects_tampere2/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_explicit_host_mode_routes0/workspace/project-two",
+          "commit",
+          "-m",
+          "seed second repository"
+        ],
+        "staged_paths": "README.md\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_explicit_host_mode_routes0/workspace/project-two/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_append_only_write_is_exem0/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "staged_paths": "README.md\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_append_only_write_is_exem0/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_append_only_exemption_cov0/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "staged_paths": "README.md\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_append_only_exemption_cov0/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_append_only_exemption_doe0/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "staged_paths": "README.md\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_append_only_exemption_doe0/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-54/test_ordinary_path_alone_still0/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "staged_paths": "README.md\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-54/test_ordinary_path_alone_still0/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "tool": "Bash",
+        "command": "touch marker",
+        "cwd": "/tmp/pytest-of-brian/pytest-54/test_explicit_host_mode_preser0"
+      },
+      "output": {
+        "receipts": [
+          {
+            "branch": null,
+            "cache_hit": false,
+            "claim_project": null,
+            "claim_scope": null,
+            "claim_source_file": null,
+            "client": "claude-code",
+            "decision": "allow",
+            "details": [
+              "[Errno 2] No such file or directory: '/tmp/pytest-of-brian/pytest-54/test_explicit_host_mode_preser0/missing-projection.json'"
+            ],
+            "elapsed_ms": 0.03145600021525752,
+            "mode": "off",
+            "normalized_target_paths": [],
+            "reason_code": "projection_unavailable_or_stale",
+            "receipt_id": "prewrite_9fe842807ecb4c9e9596d4207f9607a9",
+            "recorded_at": "2026-10-09T23:17:04.783580+00:00",
+            "repo_root": null,
+            "schema_version": "1.0",
+            "session_id": "claude-code:host-gate-test",
+            "worktree_path": null
+          },
+          {
+            "branch": null,
+            "cache_hit": false,
+            "claim_project": null,
+            "claim_scope": null,
+            "claim_source_file": null,
+            "client": "claude-code",
+            "decision": "deny",
+            "details": [
+              "trace admission target unavailable: git rev-parse --show-toplevel --path-format=absolute --git-common-dir --abbrev-ref HEAD failed: fatal: not a git repository (or any of the parent directories): .git"
+            ],
+            "elapsed_ms": 0.03145600021525752,
+            "mode": "off",
+            "normalized_target_paths": [],
+            "reason_code": "trace_review_required",
+            "receipt_id": "prewrite_9fe842807ecb4c9e9596d4207f9607a9",
+            "recorded_at": "2026-10-09T23:17:04.835042+00:00",
+            "repo_root": null,
+            "schema_version": "1.0",
+            "session_id": "claude-code:host-gate-test",
+            "trace_review": {
+              "disposition": "deny",
+              "errors": [
+                "trace admission target unavailable: git rev-parse --show-toplevel --path-format=absolute --git-common-dir --abbrev-ref HEAD failed: fatal: not a git repository (or any of the parent directories): .git"
+              ],
+              "mode": "enforce",
+              "valid": false
+            },
+            "worktree_path": null
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "tool": "Bash",
+        "command": "touch marker",
+        "cwd": "/tmp/pytest-of-brian/pytest-54/test_explicit_host_mode_preser1"
+      },
+      "output": {
+        "receipts": [
+          {
+            "branch": null,
+            "cache_hit": false,
+            "claim_project": null,
+            "claim_scope": null,
+            "claim_source_file": null,
+            "client": "claude-code",
+            "decision": "observe_violation",
+            "details": [
+              "[Errno 2] No such file or directory: '/tmp/pytest-of-brian/pytest-54/test_explicit_host_mode_preser1/missing-projection.json'"
+            ],
+            "elapsed_ms": 0.02487500023562461,
+            "mode": "observe",
+            "normalized_target_paths": [],
+            "reason_code": "projection_unavailable_or_stale",
+            "receipt_id": "prewrite_68afeea4944d4130b67db868bff2a70c",
+            "recorded_at": "2026-10-09T23:17:05.011187+00:00",
+            "repo_root": null,
+            "schema_version": "1.0",
+            "session_id": "claude-code:host-gate-test",
+            "worktree_path": null
+          },
+          {
+            "branch": null,
+            "cache_hit": false,
+            "claim_project": null,
+            "claim_scope": null,
+            "claim_source_file": null,
+            "client": "claude-code",
+            "decision": "deny",
+            "details": [
+              "trace admission target unavailable: git rev-parse --show-toplevel --path-format=absolute --git-common-dir --abbrev-ref HEAD failed: fatal: not a git repository (or any of the parent directories): .git"
+            ],
+            "elapsed_ms": 0.02487500023562461,
+            "mode": "observe",
+            "normalized_target_paths": [],
+            "reason_code": "trace_review_required",
+            "receipt_id": "prewrite_68afeea4944d4130b67db868bff2a70c",
+            "recorded_at": "2026-10-09T23:17:05.093309+00:00",
+            "repo_root": null,
+            "schema_version": "1.0",
+            "session_id": "claude-code:host-gate-test",
+            "trace_review": {
+              "disposition": "deny",
+              "errors": [
+                "trace admission target unavailable: git rev-parse --show-toplevel --path-format=absolute --git-common-dir --abbrev-ref HEAD failed: fatal: not a git repository (or any of the parent directories): .git"
+              ],
+              "mode": "enforce",
+              "valid": false
+            },
+            "worktree_path": null
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "run_id": "ep-host-fixture-tag-failure",
+  "events": [
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-45/test_ordinary_edit_cannot_esca0/workspace/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "fixture": "def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:\n    workspace = tmp_path / \"workspace\"\n    repo = workspace / \"project\"\n    repo.mkdir(parents=True)\n    _git(repo, \"init\", \"-b\", \"main\")\n    _git(repo, \"config\", \"user.name\", \"Test User\")\n    _git(repo, \"config\", \"user.email\", \"test@example.com\")\n    (repo / \"README.md\").write_text(\"seed\\n\", encoding=\"utf-8\")\n    _git(repo, \"add\", \"README.md\")\n    _git(repo, \"commit\", \"-m\", \"seed\")\n    worktree = repo / \"worktrees\" / \"host-gate-lane\"\n    worktree.parent.mkdir()\n    _git(repo, \"worktree\", \"add\", \"-b\", \"host-gate-lane\", str(worktree))\n    (worktree / \"src\").mkdir()\n    (worktree / \"src\" / \"allowed.py\").write_text(\"VALUE = 1\\n\", encoding=\"utf-8\")\n\n    claims_dir = tmp_path / \"claims\"\n    claims_dir.mkdir()\n    now = datetime.now(timezone.utc)\n    claim_path = claims_dir / \"claude-code_host-gate-test_host-gate-lane.yaml\"\n    claim_path.write_text(\n        yaml.safe_dump(\n            {\n                \"schema_version\": 3,\n                \"agent\": \"claude-code\",\n                \"claimed_at\": now.isoformat(),\n                \"expires_at\": (now + timedelta(hours=1)).isoformat(),\n                \"projects\": [\"host-gate-test\"],\n                \"scope\": \"host-gate-lane\",\n                \"intent\": \"exercise host prewrite admission\",\n                \"claim_type\": \"write\",\n                \"plan_ref\": \"UNPLANNED\",\n                \"write_paths\": [\"src\"],\n                \"read_paths\": [],\n                \"worktree_path\": str(worktree),\n                \"repo_root\": str(repo),\n                \"branch\": \"host-gate-lane\",\n                \"session_name\": \"host-gate-test\",\n                \"broader_goal\": \"exercise host prewrite admission\",\n                \"tracker_path\": str(tmp_path / \"tracker.yaml\"),\n                \"session_id\": SESSION,\n                \"heartbeat_at\": now.isoformat(),\n                \"status\": \"active\",\n                \"updated_at\": now.isoformat(),\n            },\n            sort_keys=False,\n        ),\n        encoding=\"utf-8\",\n    )\n    projection = tmp_path / \"projection.json\"\n    write_projection(claims_dir=claims_dir, projection_path=projection)\n    return workspace, repo, worktree, claims_dir, claim_path\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-45/test_ordinary_edit_cannot_esca0/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-45/test_ordinary_edit_cannot_esca1/workspace/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "fixture": "def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:\n    workspace = tmp_path / \"workspace\"\n    repo = workspace / \"project\"\n    repo.mkdir(parents=True)\n    _git(repo, \"init\", \"-b\", \"main\")\n    _git(repo, \"config\", \"user.name\", \"Test User\")\n    _git(repo, \"config\", \"user.email\", \"test@example.com\")\n    (repo / \"README.md\").write_text(\"seed\\n\", encoding=\"utf-8\")\n    _git(repo, \"add\", \"README.md\")\n    _git(repo, \"commit\", \"-m\", \"seed\")\n    worktree = repo / \"worktrees\" / \"host-gate-lane\"\n    worktree.parent.mkdir()\n    _git(repo, \"worktree\", \"add\", \"-b\", \"host-gate-lane\", str(worktree))\n    (worktree / \"src\").mkdir()\n    (worktree / \"src\" / \"allowed.py\").write_text(\"VALUE = 1\\n\", encoding=\"utf-8\")\n\n    claims_dir = tmp_path / \"claims\"\n    claims_dir.mkdir()\n    now = datetime.now(timezone.utc)\n    claim_path = claims_dir / \"claude-code_host-gate-test_host-gate-lane.yaml\"\n    claim_path.write_text(\n        yaml.safe_dump(\n            {\n                \"schema_version\": 3,\n                \"agent\": \"claude-code\",\n                \"claimed_at\": now.isoformat(),\n                \"expires_at\": (now + timedelta(hours=1)).isoformat(),\n                \"projects\": [\"host-gate-test\"],\n                \"scope\": \"host-gate-lane\",\n                \"intent\": \"exercise host prewrite admission\",\n                \"claim_type\": \"write\",\n                \"plan_ref\": \"UNPLANNED\",\n                \"write_paths\": [\"src\"],\n                \"read_paths\": [],\n                \"worktree_path\": str(worktree),\n                \"repo_root\": str(repo),\n                \"branch\": \"host-gate-lane\",\n                \"session_name\": \"host-gate-test\",\n                \"broader_goal\": \"exercise host prewrite admission\",\n                \"tracker_path\": str(tmp_path / \"tracker.yaml\"),\n                \"session_id\": SESSION,\n                \"heartbeat_at\": now.isoformat(),\n                \"status\": \"active\",\n                \"updated_at\": now.isoformat(),\n            },\n            sort_keys=False,\n        ),\n        encoding=\"utf-8\",\n    )\n    projection = tmp_path / \"projection.json\"\n    write_projection(claims_dir=claims_dir, projection_path=projection)\n    return workspace, repo, worktree, claims_dir, claim_path\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-45/test_ordinary_edit_cannot_esca1/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    },
+    {
+      "input": {
+        "command": [
+          "git",
+          "-C",
+          "/tmp/pytest-of-brian/pytest-45/test_read_only_diagnosis_does_0/workspace/project",
+          "commit",
+          "-m",
+          "seed"
+        ],
+        "fixture": "def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:\n    workspace = tmp_path / \"workspace\"\n    repo = workspace / \"project\"\n    repo.mkdir(parents=True)\n    _git(repo, \"init\", \"-b\", \"main\")\n    _git(repo, \"config\", \"user.name\", \"Test User\")\n    _git(repo, \"config\", \"user.email\", \"test@example.com\")\n    (repo / \"README.md\").write_text(\"seed\\n\", encoding=\"utf-8\")\n    _git(repo, \"add\", \"README.md\")\n    _git(repo, \"commit\", \"-m\", \"seed\")\n    worktree = repo / \"worktrees\" / \"host-gate-lane\"\n    worktree.parent.mkdir()\n    _git(repo, \"worktree\", \"add\", \"-b\", \"host-gate-lane\", str(worktree))\n    (worktree / \"src\").mkdir()\n    (worktree / \"src\" / \"allowed.py\").write_text(\"VALUE = 1\\n\", encoding=\"utf-8\")\n\n    claims_dir = tmp_path / \"claims\"\n    claims_dir.mkdir()\n    now = datetime.now(timezone.utc)\n    claim_path = claims_dir / \"claude-code_host-gate-test_host-gate-lane.yaml\"\n    claim_path.write_text(\n        yaml.safe_dump(\n            {\n                \"schema_version\": 3,\n                \"agent\": \"claude-code\",\n                \"claimed_at\": now.isoformat(),\n                \"expires_at\": (now + timedelta(hours=1)).isoformat(),\n                \"projects\": [\"host-gate-test\"],\n                \"scope\": \"host-gate-lane\",\n                \"intent\": \"exercise host prewrite admission\",\n                \"claim_type\": \"write\",\n                \"plan_ref\": \"UNPLANNED\",\n                \"write_paths\": [\"src\"],\n                \"read_paths\": [],\n                \"worktree_path\": str(worktree),\n                \"repo_root\": str(repo),\n                \"branch\": \"host-gate-lane\",\n                \"session_name\": \"host-gate-test\",\n                \"broader_goal\": \"exercise host prewrite admission\",\n                \"tracker_path\": str(tmp_path / \"tracker.yaml\"),\n                \"session_id\": SESSION,\n                \"heartbeat_at\": now.isoformat(),\n                \"status\": \"active\",\n                \"updated_at\": now.isoformat(),\n            },\n            sort_keys=False,\n        ),\n        encoding=\"utf-8\",\n    )\n    projection = tmp_path / \"projection.json\"\n    write_projection(claims_dir=claims_dir, projection_path=projection)\n    return workspace, repo, worktree, claims_dir, claim_path\n"
+      },
+      "output": {
+        "stdout": "",
+        "stderr": "aes commit rule: refuse [none] \u2014 no tag: start the first line with [Plan #N], [Goal <id>], [Trivial], [Unplanned], [Auto] or [Shaping <id>] (logged to /tmp/pytest-of-brian/pytest-45/test_read_only_diagnosis_does_0/workspace/project/.git/aes/commit-rule-2026-10-09.jsonl)\n",
+        "exit_status": 1
+      }
+    }
+  ],
+  "outcome": "fail"
+}

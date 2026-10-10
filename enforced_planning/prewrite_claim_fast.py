@@ -8,6 +8,7 @@ digest exactly matches the current registry.
 from __future__ import annotations
 
 import fcntl
+import getopt
 import hashlib
 import json
 import os
@@ -493,17 +494,27 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             continue
         if command_start:
             command_start = False
-            env_command = token == "/usr/bin/env"
+            env_command = token in {"env", "/bin/env", "/usr/bin/env"}
             if token.startswith(("/usr/bin/", "/bin/")):
                 continue
         if env_command:
             if skip_env_cwd:
                 skip_env_cwd = False
+                if commands is None or len(commands) != 1:
+                    paths.append(token)
                 continue
             if token in {"-C", "--chdir"}:
                 skip_env_cwd = True
                 continue
-            if token.startswith("--chdir=") or (
+            if token.startswith("--chdir="):
+                if commands is None or len(commands) != 1:
+                    paths.append(token.split("=", 1)[1])
+                continue
+            if token.startswith("-C") and token != "-C":
+                if commands is None or len(commands) != 1:
+                    paths.append(token[2:])
+                continue
+            if (
                 "=" in token and not token.startswith(("/", "~", "."))
             ):
                 continue
@@ -548,11 +559,31 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(paths))
 
 
+def _env_cwd_prefix(argv: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Read env directory options without changing command arguments."""
+
+    if not argv or argv[0] not in {"env", "/bin/env", "/usr/bin/env"}:
+        return (), argv
+    try:
+        options, effective = getopt.getopt(argv[1:], "i0vu:C:S:", [
+            "ignore-environment", "null", "debug", "unset=", "chdir=",
+            "split-string=", "block-signal", "default-signal", "ignore-signal",
+            "list-signal-handling", "help", "version",
+        ])
+    except getopt.GetoptError:
+        return (), argv
+    if any(option in {"-S", "--split-string"} for option, _ in options):
+        return (), argv
+    operands = tuple(value for option, value in options if option in {"-C", "--chdir"})
+    return operands, tuple(effective) if operands else argv
+
+
 def _bash_effective_argv(argv: tuple[str, ...]) -> tuple[str, ...]:
     """Return the command executed by the supported literal env cwd wrapper."""
 
-    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
-        return argv[3:]
+    operands, effective = _env_cwd_prefix(argv)
+    if operands:
+        return effective
     return argv
 
 
@@ -847,7 +878,7 @@ def _bash_target_is_unprovable(command: str) -> bool:
     return False
 
 
-def _bash_explicit_worktree(command: str) -> Path | None:
+def _bash_explicit_worktree(command: str, *, cwd: Path | None = None) -> Path | None:
     """Return one literal runtime cwd attested by a supported Bash form."""
 
     if _bash_target_is_unprovable(command):
@@ -856,18 +887,27 @@ def _bash_explicit_worktree(command: str) -> Path | None:
     if commands is None or len(commands) != 1:
         return None
     argv = commands[0]
-    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
-        return Path(argv[2]).expanduser().resolve()
-    executable = Path(argv[0]).name if argv else ""
-    if executable in {"git", "make"} and len(argv) >= 3 and argv[1] == "-C":
-        return Path(argv[2]).expanduser().resolve()
-    return None
+    operands, effective = _env_cwd_prefix(argv)
+    if operands and effective:
+        # GNU env saves its final -C operand, then changes directory once.
+        operand = operands[-1]
+    else:
+        executable = Path(argv[0]).name if argv else ""
+        if executable not in {"git", "make"} or len(argv) < 3 or argv[1] != "-C":
+            return None
+        operand = argv[2]
+    target = Path(operand).expanduser()
+    if not target.is_absolute():
+        if cwd is None:
+            return None
+        target = cwd / target
+    return target.resolve()
 
 
-def _bash_is_explicitly_bound(command: str, worktree: Path) -> bool:
+def _bash_is_explicitly_bound(command: str, worktree: Path, *, cwd: Path | None = None) -> bool:
     """Require a literal runtime cwd when the native payload omits workdir."""
 
-    return _bash_explicit_worktree(command) == worktree
+    return _bash_explicit_worktree(command, cwd=cwd) == worktree
 
 
 def _canonical_sync_command_targets_repo(
@@ -1152,6 +1192,7 @@ def adapt_native_payload(
         "bash_declared_paths": bash_declared_paths,
         "bash_target_unprovable": _bash_target_is_unprovable(command) if tool_name == "Bash" else False,
         "bash_command": command if tool_name == "Bash" else None,
+        "bash_launch_cwd": payload.get("_session_launch_cwd") or payload.get("cwd"),
         "session_target_error_code": payload.get("_session_target_error_code"),
         "session_target_error": payload.get("_session_target_error"),
         "session_target_recovery": payload.get("_session_target_recovery"),
@@ -1458,7 +1499,9 @@ def _claim_covers_targets(claim: dict[str, Any], targets: tuple[str, ...]) -> bo
     )
 
 
-def _record_receipt(path: Path, decision: dict[str, Any]) -> None:
+def _record_receipt(path: Path | None, decision: dict[str, Any]) -> None:
+    if path is None:
+        return
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     receipt = {
         key: value
@@ -1516,11 +1559,11 @@ def evaluate_request_fast(
     mode: str,
     claims_dir: Path = DEFAULT_CLAIMS_DIR,
     projection_path: Path | None = None,
-    receipt_path: Path = DEFAULT_RECEIPT_PATH,
+    receipt_path: Path | None = DEFAULT_RECEIPT_PATH,
     cache_hit: bool = True,
     projection_recovery_command: str | None = None,
 ) -> dict[str, Any]:
-    """Evaluate one normalized request and append its durable receipt."""
+    """Evaluate a request; None defers recording to its enclosing host adapter."""
 
     if mode not in {"off", "observe", "enforce"}:
         raise FastPreWriteError("mode must be one of: off, observe, enforce")
@@ -1639,6 +1682,7 @@ def evaluate_request_fast(
         if not isinstance(raw_command, str) or not _bash_is_explicitly_bound(
             raw_command,
             Path(context["worktree_path"]),
+            cwd=Path(request.get("bash_launch_cwd") or request["cwd"]),
         ):
             result = _decision(
                 started=started,
@@ -1795,7 +1839,7 @@ def evaluate_prewrite_fast(
     mode: str,
     claims_dir: Path = DEFAULT_CLAIMS_DIR,
     projection_path: Path | None = None,
-    receipt_path: Path = DEFAULT_RECEIPT_PATH,
+    receipt_path: Path | None = DEFAULT_RECEIPT_PATH,
     claim_bootstrap_classifier: BashBootstrapClassifier | None = None,
     projection_recovery_command: str | None = None,
 ) -> dict[str, Any]:

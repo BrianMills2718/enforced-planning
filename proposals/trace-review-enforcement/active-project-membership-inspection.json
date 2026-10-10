@@ -1,0 +1,2635 @@
+{
+  "record_type": "trace_review_membership_inspection",
+  "scope": "inventory_and_configuration_only",
+  "source": "/home/brian/code/project-meta/PROJECT_GRAPH.json",
+  "source_sha256": "0f9de5c5c587ce654f84646498532341277490c0c03d99e4a1fd46c2e53a3343",
+  "active_members": [
+    {
+      "project_id": "sam_gov",
+      "registered_path": "/home/brian/code/research-workspace/OSINT",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research-workspace/OSINT",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "a202e6c0f015a217866b1bd5f880da18f9db0148b01c2ad967854c42e62badac",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-inside-success-second-brain",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "onto_canon6",
+      "registered_path": "/home/brian/projects/onto-canon6",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/onto-canon6",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "268c5b4ce0ead23d95c9f37185cb74d73a2d4ee4879901b760923753b3664d81",
+      "execution_cursor_present": true,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "process_tracing",
+      "registered_path": "/home/brian/projects/process_tracing",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/process_tracing",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "109a1b587e941773c298b26e2a313f4669c820947ae30eb2faa8f726397e90c1",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "theory-forge",
+      "registered_path": "/home/brian/projects/theory-forge",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/theory-forge",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "224e3c7b816353fa6c79fc6fa390bf084635595ae03e646e17e3fac24d666cb2",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agent_ontology",
+      "registered_path": "/home/brian/code/agent_ontology",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agent_ontology",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "2c18d1a4eef783a62f625b5e66ef26fe234c8bc29bfaf270d3236b09fee6c801",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "dodaf",
+      "registered_path": "/home/brian/projects/dodaf",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/dodaf",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "50717fcc68fecb7206934d577330f2c57652cd6e5b4dabc12ed923c44dcd6457",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "llm_client",
+      "registered_path": "/home/brian/code/llm_client",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/llm_client",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "e16ab1ff59f239b6936d79f61927874d40ca521baa47f7e98833de91fba249e5",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-llm-client",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "brians-2nd-brain-integration-work",
+      "registered_path": "/home/brian/projects/inside-success/repos/brians-2nd-brain-integration-work",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/brians-2nd-brain-integration-work",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "observe",
+      "configuration_sha256": "4d11d41d153be6df0bc6af71158d53283d7e04b6ec2cef757c9f23f2737ad985",
+      "execution_cursor_present": true,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inside-success-llm-client",
+      "registered_path": "~/projects/inside-success/repos/llm_client",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/llm_client",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "57fb388d5547a312af34976e8b80f13c08ed68356e6056b26e1587929d3376e9",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "brent-chatgpt",
+      "registered_path": "/home/brian/code/brent-chatgpt",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/brent-chatgpt",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "Digimon_for_KG_application",
+      "registered_path": "/home/brian/projects/Digimon_for_KG_application",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/Digimon_for_KG_application",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "70293a11166eceebd988ab76f4ff209bbb77f7ea499a8ddfdb19d2e486033051",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "Digimons",
+      "registered_path": "/home/brian/code/kgas1",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/kgas1",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "conspiracy_research_networks",
+      "registered_path": "/home/brian/aes-workspace/conspiracy-research-networks",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/aes-workspace/conspiracy-research-networks",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "8fab5fecd261544b568187eb0109d33eae5fa6658eb3d3097c37698f792e4134",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "orgchart",
+      "registered_path": "/home/brian/code/orgchart",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/orgchart",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "f1f021c176ed87c98924ef3e66fb9a9453851a425f6422afa3206a63f56e759e",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "goodwill",
+      "registered_path": "/home/brian/code/goodwill",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/goodwill",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "moltbot",
+      "registered_path": "/home/brian/code/openclaw",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/openclaw",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "fdbb34e1fd8b59b7f49ba175172cd29ae10961719e4f659bdd889822aef015bd",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "qualitative_coding",
+      "registered_path": "/home/brian/code/qualitative_coding",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/qualitative_coding",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "fed1e2c3ec1156e04c56fa974545c18b4b3af18bbf1f9a3fd91b063e43a05b65",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "fomc-2008-synthesis",
+      "registered_path": "/home/brian/code/fomc-2008-synthesis",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/fomc-2008-synthesis",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "mixed_methods_workbench",
+      "registered_path": "/home/brian/projects/mixed_methods_workbench",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/mixed_methods_workbench",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "greer",
+      "registered_path": "/home/brian/code/greer",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/greer",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "humour",
+      "registered_path": "/home/brian/code/humour",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/humour",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agent_ecology2",
+      "registered_path": "/home/brian/code/agent_ecology2",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agent_ecology2",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "8af9a314e2edc220759835c5f9587b4296f6f63231746db50d18a0727f8fd3c2",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "orgchart-individual",
+      "registered_path": "/home/brian/code/orgchart/individual",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/orgchart/individual",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "crest_kg",
+      "registered_path": "/home/brian/code/crest_kg",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/crest_kg",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ufotrust",
+      "registered_path": "/home/brian/code/ufotrust",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ufotrust",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "utils",
+      "registered_path": "/home/brian/code/utils",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/utils",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "prompt_eval",
+      "registered_path": "/home/brian/projects/prompt_eval",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/prompt_eval",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "4a9e60b44bd9b2e8867c8c87caa0afdbfdacd83a8ccdee60ba80e9a1a11024f4",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "wizmap",
+      "registered_path": "/home/brian/code/wizmap",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/wizmap",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "trajectory",
+      "registered_path": "/home/brian/code/trajectory",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/trajectory",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "79cada01543e4063b503d5bf02c2e411beae45de2f8ec3a5f28988e1fd92862f",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agentic_scaffolding",
+      "registered_path": "/home/brian/code/agentic_scaffolding",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agentic_scaffolding",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "88dc62b2a67e579dfa84aaf53c9dd4dabdeffcf901eee16185a68c19417d91f3",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "PROJECTS_DEFERRED",
+      "registered_path": "/home/brian/code/PROJECTS_DEFERRED",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/PROJECTS_DEFERRED",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "data",
+      "registered_path": "/home/brian/projects/data",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/projects/data",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-meta",
+      "registered_path": "/home/brian/code/project-meta",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/project-meta",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "84dee9f46e52b1c9ea736fc3028c63389dabfef99b95889fb9b632c7142f94ca",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "osint_tools",
+      "registered_path": "/home/brian/code/research-workspace/osint_tools",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research-workspace/osint_tools",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "116550f23f31294a5e1f1344730a906966e0d5d9ea1cf5ea9f50b5d9da4c80bb",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ecosystem-ops",
+      "registered_path": "/home/brian/code/ecosystem-ops",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ecosystem-ops",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "b1b6a21936042ed94b2e9466dc87803cb2bb2fd6a946a54affe673c03a6e303f",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "data-contracts",
+      "registered_path": "/home/brian/code/data-contracts",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/data-contracts",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "dceccbd24cd37feb5cd42273b51f454fd333105c106b2afa027fc22e7619996b",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "data_library",
+      "registered_path": "/home/brian/code/data_library",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/data_library",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "investigations",
+      "registered_path": "/home/brian/code/investigations",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/investigations",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agent-ecology3",
+      "registered_path": "/home/brian/code/agent_ecology3",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agent_ecology3",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "351529662672ea995c34b364b475e2b7916e6f80dcdc12dda4dc60058760fb07",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "wargame",
+      "registered_path": "/home/brian/code/wargame",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/wargame",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "grounded-research",
+      "registered_path": "/home/brian/code/grounded-research",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/grounded-research",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "enforced-planning",
+      "registered_path": "/home/brian/code/enforced-planning",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/enforced-planning",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "ee2d4d6de2fd4b744d225dbe9abfa8adec257952258a2e61b78d895a6e0e79c7",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "epistemic_contracts",
+      "registered_path": "/home/brian/code/research-workspace/epistemic-contracts",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research-workspace/epistemic-contracts",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "open_web_retrieval",
+      "registered_path": "/home/brian/code/open_web_retrieval",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/open_web_retrieval",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "enforce",
+      "configuration_sha256": "7c1fa040dae6f1f220d8039aba21e9779a4302eda2f8a8d16023b66096282a82",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inside-success-open-web-retrieval",
+      "registered_path": "/home/brian/code/open_web_retrieval-inside-success",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/open_web_retrieval-inside-success",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "c39c274a9c6593b953eaf023a6aa28ac8c5342c1517cbb6bcb9cf76e83c8c0fa",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "trace_eval",
+      "registered_path": "/home/brian/projects/trace_eval",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/trace_eval",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "ac0504f95f1c3838eb17ee48b57add847284a1ae10d2d00590f07548922f13ac",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ac17",
+      "registered_path": "/home/brian/code/ac17",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ac17",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "off",
+      "configuration_sha256": "5387ba8ca21afad93836daede4006d8e396f0b9067d1bee52a0c55245a57e008",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "hello-governed",
+      "registered_path": "/home/brian/code/hello-governed",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/hello-governed",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "research_v3",
+      "registered_path": "/home/brian/code/research-workspace/research_v3",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research-workspace/research_v3",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "5ab47a7fe4c7b1c2c3fc893453baec8d7af19bd79248b228c7f2e754bca7c3ab",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "investigation-workbench",
+      "registered_path": "/home/brian/code/research-workspace/investigation-workbench",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research-workspace/investigation-workbench",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "048db472052929f34cff953954cfe51aef5ac1e3de9f72d82500fa6340ccbbcc",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "steno_personal_investigation",
+      "registered_path": "/home/brian/code/steno_personal_investigation",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/steno_personal_investigation",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "frame_club_cc_oneshot",
+      "registered_path": "/home/brian/code/tyler/frame_club_cc_oneshot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/tyler/frame_club_cc_oneshot",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agent-loop-research",
+      "registered_path": "/home/brian/code/agent-loop-research",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agent-loop-research",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "category-ladder",
+      "registered_path": "/home/brian/code/category-ladder",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/category-ladder",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "1b5bd7613c44469abee5b4319f74e7916a751fc6db157e5f9a4aa683be2944d4",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "claude-ladder",
+      "registered_path": "/home/brian/code/claude-ladder",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/claude-ladder",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "claude-plugins",
+      "registered_path": "/home/brian/code/claude-plugins",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/claude-plugins",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "claude-team-infra",
+      "registered_path": "/home/brian/code/claude-team-infra",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/claude-team-infra",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "cosmic-clock-archive",
+      "registered_path": "/home/brian/code/cosmic-clock-archive",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/cosmic-clock-archive",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "families",
+      "registered_path": "/home/brian/code/families",
+      "record_kind": "container",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/families",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "godel",
+      "registered_path": "/home/brian/code/godel-concept-ladder",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/godel-concept-ladder",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inside-success-second-brain-plan-repo",
+      "registered_path": "~/code/2nd-brain-plan-repo",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/2nd-brain-plan-repo",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "sd-control-plane",
+      "registered_path": "~/projects/sd-control-plane",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/sd-control-plane",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "latent_space",
+      "registered_path": "/home/brian/code/latent_space",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/latent_space",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "learning-map-ladder",
+      "registered_path": "/home/brian/code/learning-map-ladder",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/learning-map-ladder",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "mcp_context_audit",
+      "registered_path": "/home/brian/code/mcp_context_audit",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/mcp_context_audit",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ontology-workbench",
+      "registered_path": "/home/brian/code/ontology-workbench",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ontology-workbench",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "personal-file-infra",
+      "registered_path": "/home/brian/code/personal-file-infra",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/personal-file-infra",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "personal-root",
+      "registered_path": "/home/brian/code/personal-root",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/personal-root",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "personal-vault",
+      "registered_path": "~/projects/personal-vault",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/personal-vault",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "personal-vps",
+      "registered_path": "/home/brian/code/personal-vps",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/personal-vps",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "second-brain-ladder",
+      "registered_path": "/home/brian/code/second-brain-ladder",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/second-brain-ladder",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "tyler",
+      "registered_path": "/home/brian/code/tyler",
+      "record_kind": "container",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/tyler",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "visualizations",
+      "registered_path": "/home/brian/code/visualizations",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/visualizations",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "shared_ui",
+      "registered_path": "/home/brian/code/shared_ui",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/shared_ui",
+      "execution_cursor_present": true,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "graph_application_toolkit",
+      "registered_path": "~/projects/graph_application_toolkit",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/graph_application_toolkit",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "70f8b11ca4f9cd3b50d3c247c20b9f9e1d0de090ae77874b20a5bb823a810342",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "twitter-prospecting",
+      "registered_path": "~/projects/inside-success/repos/twitter-prospecting",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/twitter-prospecting",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "company-planning",
+      "registered_path": "~/projects/inside-success/repos/company-planning",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/company-planning",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "initiative-roadmap-dashboard",
+      "registered_path": "~/projects/inside-success/repos/initiative-roadmap-dashboard",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/initiative-roadmap-dashboard",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "off",
+      "configuration_sha256": "5d34a287a7f12412df713d79bd54ee6cb878f5f02ff0c6931509adce5cada90c",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agent-skills",
+      "registered_path": "~/projects/.agents",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agent-skills",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "afd848491ea318f0ce73b52d7d667e836213862fce61330a11134bf9ad2fa57f",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "machine-coordination",
+      "registered_path": "~/code/machine-coordination",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/machine-coordination",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "613fabcca9a333da9cd4281fafa65f24459c3ce76492d8089a73f2ae83690ab8",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "computational-social-science",
+      "registered_path": "/home/brian/code/computational-social-science",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/computational-social-science",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "46d56c9584e5920e7355877eae4a24a3c8e02759c7861b74c5b25bc5e5a2e342",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ats_handle_prediction",
+      "registered_path": "/home/brian/code/ats_handle_prediction",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ats_handle_prediction",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "code_map_v4",
+      "registered_path": "/home/brian/code/code_map_v4",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/code_map_v4",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "cognitive-twin",
+      "registered_path": "/home/brian/projects/cognitive-twin",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/cognitive-twin",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "cybernetic_influence_v3",
+      "registered_path": "/home/brian/code/cybernetic_influence_v3",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/cybernetic_influence_v3",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "off",
+      "configuration_sha256": "d08010bacc9fdaa6761de9f539c723ea7e9166800fa8243c401ffe715c2e4ab0",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-cybernetic-influence-v3",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "learning-hub",
+      "registered_path": "/home/brian/code/learning-hub",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/learning-hub",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "parallax-research-workbench",
+      "registered_path": "/home/brian/code/research-workspace/parallax-research-workbench",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research-workspace/parallax-research-workbench",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "projects-dotclaude",
+      "registered_path": "/home/brian/projects/.claude",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/projects/.claude",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "twin",
+      "registered_path": "/home/brian/code/twin",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/twin",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "wiki_methodology",
+      "registered_path": "/home/brian/projects/wiki_methodology",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/wiki_methodology",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "gbrain",
+      "registered_path": "/home/brian/code/gbrain",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/gbrain",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "concordia",
+      "registered_path": "/home/brian/code/concordia",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/concordia",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "parallax",
+      "registered_path": "/home/brian/code/parallax",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/parallax",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inside-success-mega",
+      "registered_path": "/home/brian/code/inside-success-mega",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "second-brain-mega",
+      "registered_path": "/home/brian/code/second-brain-mega",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/second-brain-mega",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "boro-analysis-reboot",
+      "registered_path": "/home/brian/code/boro-analysis-reboot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/boro-analysis-reboot",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "static-pipeline-reboot",
+      "registered_path": "/home/brian/code/static-pipeline-reboot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/static-pipeline-reboot",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "whygame-reboot",
+      "registered_path": "/home/brian/code/whygame-reboot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/whygame-reboot",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "whygame5",
+      "registered_path": "/home/brian/code/whygame5",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/whygame5",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inside-success-org-homepage",
+      "registered_path": "/home/brian/projects/inside-success/repos/.github",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/.github",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "team-brains",
+      "registered_path": "/home/brian/projects/inside-success/repos/Team-Brains",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/Team-Brains",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ai-marketing-course-context-system",
+      "registered_path": "/home/brian/code/inside-success/repos/ai-marketing-course-context-system",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/ai-marketing-course-context-system",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ai-marketing-tool-mockup",
+      "registered_path": "/home/brian/code/inside-success/repos/ai-marketing-tool-mockup",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/ai-marketing-tool-mockup",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ai-story-tool-v1",
+      "registered_path": "/home/brian/projects/inside-success/repos/ai-story-tool-v1",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/ai-story-tool-v1",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "appointment-setting-bot",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/appointment-setting-bot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "inside-success-data-contracts",
+      "registered_path": "/home/brian/projects/inside-success/repos/data-contracts",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/data-contracts",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "52bb642d7c23ad41ebe9a8090916527f8469b15c2031fb98b44b7b358bb66a9d",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "dev-agent",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/dev-agent",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "dloa-generator",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/dloa-generator",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "dloa-grader",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/dloa-grader",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "graph-ontology-extraction",
+      "registered_path": "/home/brian/projects/inside-success/repos/graph-ontology-extraction",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/graph-ontology-extraction",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "690e7f311692790f1358e015c15bcfd7bed957f2a95c78cb8b52fffb0eabaf89",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "graph-retrieval",
+      "registered_path": "/home/brian/projects/inside-success/repos/graph-retrieval",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/graph-retrieval",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": null,
+      "configuration_sha256": "0e7c37cc938d6b8e1a023170f4919c116b3f0fe0653a4f2fb50e863c98a8f4b4",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "green-light-pdf-generator",
+      "registered_path": "/home/brian/projects/inside-success/repos/green-light-pdf-generator",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/green-light-pdf-generator",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "green-light-v2-conditional-approval",
+      "registered_path": "/home/brian/projects/inside-success/repos/green-light-v2-conditional-approval",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/green-light-v2-conditional-approval",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "hermes-agent",
+      "registered_path": "/home/brian/code/hermes-agent",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/hermes-agent",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "istv-cast-lander-reviewer",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-cast-lander-reviewer",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-closer-pipeline",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-closer-pipeline",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-closer-pipeline-code",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-closer-pipeline-code",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-reel-editor-backend",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-reel-editor-backend",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-reel-editor-desktop",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-reel-editor-desktop",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-reels-tool",
+      "registered_path": "/home/brian/projects/inside-success/repos/istv-reels-tool",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/istv-reels-tool",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "istv-reels-tool-landingpage",
+      "registered_path": "/home/brian/projects/inside-success/repos/istv-reels-tool-landingpage",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/istv-reels-tool-landingpage",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "istv-reels-tool-plugin",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-reels-tool-plugin",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-sales-recruiting-data-foundation",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/istv-sales-recruiting-data-foundation",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "istv-slack-bot",
+      "registered_path": "/home/brian/projects/inside-success/repos/istv-slack-bot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/istv-slack-bot",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "lil-tyler",
+      "registered_path": "/home/brian/projects/inside-success/repos/lil-tyler",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/lil-tyler",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "lil-tyler-agent",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/lil-tyler-agent",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "mrmonday",
+      "registered_path": "/home/brian/projects/inside-success/repos/mrmonday",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/mrmonday",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "reeljam-app",
+      "registered_path": "/home/brian/projects/inside-success/repos/reeljam-app",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/reeljam-app",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "reverse-ontology-engine",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/reverse-ontology-engine",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "sales-performance-dashboard",
+      "registered_path": "/home/brian/projects/inside-success/repos/sales-performance-dashboard",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/sales-performance-dashboard",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "sd-media-buying",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/sd-media-buying",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "sd-research-engine",
+      "registered_path": "/home/brian/projects/inside-success/repos/sd-research-engine",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/sd-research-engine",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "skills-library",
+      "registered_path": "/home/brian/projects/inside-success/repos/skills-library",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/skills-library",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "social-research-mcp-upstream",
+      "registered_path": "/home/brian/code/social-research-mcp",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/social-research-mcp",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "social-research-mcp",
+      "registered_path": "/home/brian/projects/inside-success/repos/social-research-mcp",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/social-research-mcp",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "team-skills",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/team-skills",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "dloa-x-recommender",
+      "registered_path": "/home/brian/code/inside-success-mega/repos/dloa-x-recommender",
+      "record_kind": null,
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "minecraft_economy_lab",
+      "registered_path": "/home/brian/code/minecraft-economy-lab",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/minecraft-economy-lab",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "slack-mirror",
+      "registered_path": "/home/brian/code/slack-mirror",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/slack-mirror",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "collective-competence",
+      "registered_path": "/home/brian/code/collective-competence",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/collective-competence",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-collective-competence",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-whygame-reboot",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ac17",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-orgchart",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-research-v3",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-qualitative-coding",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-theory-forge",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-process-tracing",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-agentic-engineering-system",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-initiative-roadmap-dashboard",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-original-and-sinister-deeds",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-agent-skills",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-company-planning",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-skills-library",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-conspiracy-research-networks",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-minecraft-economy-lab",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-computational-social-science",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-crest-research-workbench",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-wargame",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-agent-ecology-2",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-agent-ecology-3",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-digimon",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-kgas",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-istv-reels-tool",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-istv-slack-bot",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-lil-tyler",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-mrmonday",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-reeljam",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-category-ladder",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-claude-ladder",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-godel-concept-ladder",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-learning-map-ladder",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-second-brain-ladder",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-agent-ontology",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-graph-application-toolkit",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ontology-workbench",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-cosmic-clock-archive",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-frame-club",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-green-light-pdf-generator",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-wizmap",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-agent-loop-research",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ats-handle-prediction",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-boro-analysis-reboot",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-claude-team-infra",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-latent-space",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-openclaw",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-sigint-platform",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-static-pipeline-reboot",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-steno-personal-investigation",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-twitter-prospecting",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ufotrust",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-visualizations",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-code-map-v4",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-dodaf",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-twin",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "world-substrate",
+      "registered_path": "/home/brian/code/world-substrate",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/world-substrate",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "dna",
+      "registered_path": "/home/brian/code/dna",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/dna",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "intellectual-history-mapper",
+      "registered_path": "/home/brian/code/intellectual-history-mapper",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/intellectual-history-mapper",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "levin-wiki",
+      "registered_path": "/home/brian/code/levin-wiki",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/levin-wiki",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "na-module-kit",
+      "registered_path": "/home/brian/code/na-module-kit",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/na-module-kit",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "namebase_recovery",
+      "registered_path": "/home/brian/code/namebase_recovery",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/namebase_recovery",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "never-absolute",
+      "registered_path": "/home/brian/code/never-absolute",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/never-absolute",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "osd-corpus",
+      "registered_path": "/home/brian/code/osd-corpus",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/osd-corpus",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "platonic-atlas-math",
+      "registered_path": "/home/brian/code/platonic-atlas-math",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/platonic-atlas-math",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "platonic-semantics",
+      "registered_path": "/home/brian/code/platonic-semantics",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/platonic-semantics",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "research_texts",
+      "registered_path": "/home/brian/code/research_texts",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/research_texts",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ui-atlas",
+      "registered_path": "/home/brian/code/ui-atlas",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ui-atlas",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "weekly-plans",
+      "registered_path": "/home/brian/code/weekly-plans",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/weekly-plans",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "ecosystem-mega",
+      "registered_path": "/home/brian/code/ecosystem-mega",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/ecosystem-mega",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "factgraph",
+      "registered_path": "/home/brian/code/factgraph",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/factgraph",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "semantic-foundry",
+      "registered_path": "/home/brian/code/semantic-foundry",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/semantic-foundry",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agentic-capability-architecture-canonical",
+      "registered_path": "/home/brian/code/agentic-capability-architecture-canonical",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agentic-capability-architecture-canonical",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "compositional-viable-systems",
+      "registered_path": "/home/brian/code/compositional-viable-systems",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/compositional-viable-systems",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "linguistic-core",
+      "registered_path": "/home/brian/code/linguistic-core",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/linguistic-core",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "requirement-to-runtime-semantic-compiler",
+      "registered_path": "/home/brian/code/requirement-to-runtime-semantic-compiler",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/requirement-to-runtime-semantic-compiler",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "shared-semantic-space",
+      "registered_path": "/home/brian/code/shared-semantic-space",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/shared-semantic-space",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "portfolio",
+      "registered_path": "/home/brian/code/portfolio",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/portfolio",
+      "execution_cursor_present": true,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "representation-router",
+      "registered_path": "/home/brian/code/representation-router",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/representation-router",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "remote-mcp",
+      "registered_path": "/home/brian/code/remote-mcp",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/remote-mcp",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "vision",
+      "registered_path": "/home/brian/code/vision",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/vision",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-mock-call-agent",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-faq-chatbot",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-dc-debate-tournament",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-sales-performance-dashboard",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ai-marketing-tool",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-istv-script-writer",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-sales-recruiting-data-agent",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ari-dloa-agent",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "dc-debate-tournament",
+      "registered_path": "/home/brian/code/inside-success/repos/dc-debate-tournament",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/dc-debate-tournament",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "repo-mock-call-agent",
+      "registered_path": "/home/brian/code/inside-success/repos/Mock-Call-Agent",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/Mock-Call-Agent",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "repo-faq-chatbot",
+      "registered_path": "/home/brian/code/inside-success/repos/faq-chatbot",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/faq-chatbot",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "repo-istv-script-writer",
+      "registered_path": "/home/brian/code/inside-success/repos/istv-script-writer",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/istv-script-writer",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "repo-sales-recruiting-data-agent",
+      "registered_path": "/home/brian/code/inside-success/repos/Sales-Recruiting-Data-Agent",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/Sales-Recruiting-Data-Agent",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "repo-ai-marketing-tool-backend",
+      "registered_path": "/home/brian/code/inside-success/repos/ai-marketing-tool-backend",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/ai-marketing-tool-backend",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "repo-ari-dloa-agent",
+      "registered_path": "/home/brian/code/inside-success/repos/Ari--Abdulrafiu-s-personal-DLOA-agent",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success/repos/Ari--Abdulrafiu-s-personal-DLOA-agent",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "observation-to-action-metamodel",
+      "registered_path": "/home/brian/code/observation-to-action-metamodel",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/observation-to-action-metamodel",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "webvowl",
+      "registered_path": "/home/brian/code/webvowl",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/webvowl",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "agentic-engineering-system-canonical",
+      "registered_path": "/home/brian/code/agentic-engineering-system-canonical",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/agentic-engineering-system-canonical",
+      "configured_trace_mode": null,
+      "configured_prewrite_mode": "off",
+      "configuration_sha256": "8b920392973d6983931b05a59a9c77966083858cb00a7dcb129d921fff065167",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "phenomenal-meaning",
+      "registered_path": "/home/brian/code/phenomenal-meaning",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/phenomenal-meaning",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inquiry-graph",
+      "registered_path": "/home/brian/code/inquiry-graph",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inquiry-graph",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "epistemic-warrant",
+      "registered_path": "/home/brian/code/epistemic-warrant",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/epistemic-warrant",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "project-team-brains",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-ai-story-tool-v1",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-appointment-setting-bot",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-dloa-generator",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "project-istv-sales-recruiting-data-foundation",
+      "registered_path": null,
+      "record_kind": "project",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "inspection": "registered path unavailable"
+    },
+    {
+      "project_id": "capability-services",
+      "registered_path": "/home/brian/code/capability-services",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/capability-services",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "chatgpt-bug-audit",
+      "registered_path": "/home/brian/code/chatgpt-bug-audit",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/chatgpt-bug-audit",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "forecast-league-mvp",
+      "registered_path": "/home/brian/code/forecast-league-mvp",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/forecast-league-mvp",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "fol-operational-metamodel",
+      "registered_path": "/home/brian/code/fol-operational-metamodel-real",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/fol-operational-metamodel-real",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "mobile_coding",
+      "registered_path": "/home/brian/code/mobile_coding",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/mobile_coding",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "numogram",
+      "registered_path": "/home/brian/code/numogram",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/numogram",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "scientific-hypergraph",
+      "registered_path": "/home/brian/code/scientific-hypergraph",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/scientific-hypergraph",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "visual-language",
+      "registered_path": "/home/brian/code/visual-language",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/visual-language",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "graph-engineering-playbook",
+      "registered_path": "/home/brian/code/graph-engineering-playbook",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/graph-engineering-playbook",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "portfolio-redesign",
+      "registered_path": "/home/brian/code/portfolio-redesign",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/portfolio-redesign",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "inside-success-wiki-projection",
+      "registered_path": "/home/brian/code/inside-success-wiki-projection",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/inside-success-wiki-projection",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "paperclip",
+      "registered_path": "/home/brian/code/paperclip",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/paperclip",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "codex-hook-control",
+      "registered_path": "/home/brian/code/codex-hook-control",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/codex-hook-control",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "progressive-air-blueprint-poc",
+      "registered_path": "/home/brian/code/progressive-air-blueprint-poc-work",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/progressive-air-blueprint-poc-work",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "plan-code-wiki",
+      "registered_path": "/home/brian/code/plan-code-wiki",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/plan-code-wiki",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "attention-manager",
+      "registered_path": "/home/brian/code/attention-manager",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/attention-manager",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    },
+    {
+      "project_id": "never-absolute-brain",
+      "registered_path": "/home/brian/code/never-absolute-brain",
+      "record_kind": "repository",
+      "disposition": "unverified",
+      "boundary_exercised": false,
+      "resolved_path": "/home/brian/code/never-absolute-brain",
+      "execution_cursor_present": false,
+      "inspection": "configuration inspected; native execution not verified"
+    }
+  ],
+  "enforced_claims": [],
+  "limitation": "Configuration and cursor presence do not prove installed or exercised trace review enforcement."
+}

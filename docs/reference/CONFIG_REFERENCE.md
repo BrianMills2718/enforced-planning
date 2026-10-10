@@ -100,6 +100,48 @@ cross-repository plan-authority contract for the complete invocation rules.
 
 ## claims
 
+### Registry read implementation
+
+Claim YAML uses the provisioned compiled safe parser with a safe Python
+fallback; malformed input preserves the original diagnostic text. This is an
+implementation choice and adds no configuration key. The registry writer's
+five-second contention limit and the hook repair's 1.5-second limit remain.
+A completed repair artifact may be used after a transport timeout only when
+its typed snapshot is current and bound to the exact registry. Recovery is
+recorded separately in the existing daily hook receipt, including that same
+snapshot's digest; it cannot imply a successful child exit.
+
+### Trace review admission
+
+`meta_process.trace_review.mode` accepts `off`, `observe`, or `enforce`. If
+absent, a Company Planning active cursor selects `enforce`; otherwise coverage
+is explicitly uncovered. Enforcement requires `trace_review.command` to pin
+`/usr/bin/python3` and one canonical installed Company Planning
+`scripts/validate_trace_review.py`, whose manifest version matches its cache
+directory. No latest-version fallback is allowed.
+If no local command is configured, the adapter reuses AES's existing
+machine-owned `~/.config/aes/trace-review.json` command pin. It validates the
+same installed identity; this supplies a provider, not an enrollment claim.
+
+An installed native pre-write adapter invokes admission for ordinary writes
+independently of `claims.prewrite_mode`, using the actual target worktree and
+native session. Read-only diagnosis and narrowly validated retention commands
+remain available. Cross-worktree shell writes cannot borrow the selected
+worktree's review. Completion passes the exact requested plan path and refuses
+an unrelated cursor's review. Missing providers or invalid target bindings
+fail closed in enforce mode. A configuration file alone does not install a
+hook or establish project coverage; both clients must exercise the boundary.
+The final trace denial controls the exit status even when outcome admission
+allowed the request. Disabled targets retain an explicit uncovered disposition
+in both the host decision and its receipt.
+The host records its combined claim and trace decision once, before optional
+outcome correlation. Direct component calls still record their own receipts;
+only the enclosing host defers that component write.
+An explicit shell working directory determines trace admission even when claim
+checking is disabled. Enforced admission refuses an unprovable shell destination.
+Relative shell targets resolve against the captured native launch directory,
+which remains separate from the claimed worktree selected during admission.
+
 ### Host read-target state
 
 Workspace-root clients may select one session-bound repository for instruction
@@ -189,6 +231,12 @@ claim. A session may own claims in multiple repositories; an absolute file
 target or one supported literal Bash `-C <worktree>` target selects the matching
 healthy claim. Relative mutation with multiple possible claims remains denied
 as ambiguous.
+For the literal `env`, `/bin/env`, or `/usr/bin/env` wrapper, only the final `-C` or `--chdir`
+directory selects claim and trace-review authority. A relative final directory
+resolves from the command's launch directory; earlier directory options do not
+change that base.
+An early payload or projection error cannot waive independently enforced
+trace review, even when ordinary claim enforcement is `off` or `observe`.
 
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the

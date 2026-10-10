@@ -1,0 +1,15 @@
+{
+  "schema_version": "method-adoption-decision.v1",
+  "record_type": "method_adoption_decision",
+  "decision": "adopted",
+  "plan_ref": "proposals/trace-review-enforcement/plan.md",
+  "plan_sha256": "41e3207b8d1d55f99db8c57d10c3d4fbe7d3dd5826987035b02bd0514ecb6e0b",
+  "receipt_ref": "proposals/trace-review-enforcement/plan.receipt.json",
+  "receipt_sha256": "4f01ae969d45b3722c404e5b7e952765c3e66322a24d19104a8aefd39834c81a",
+  "receipt_result": "pass",
+  "reason_codes": [],
+  "summary": [
+    "pass: 15 items evidenced, 0 confirmed not applicable, 0 advisory deviation(s)"
+  ],
+  "decided_at": "2026-10-09T20:45:18Z"
+}

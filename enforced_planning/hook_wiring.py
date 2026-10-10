@@ -106,6 +106,7 @@ PREWRITE_SUPPORT_FILES: dict[str, str] = {
     "enforced_planning/blocker_policy.py": "enforced_planning/blocker_policy.py",
     "enforced_planning/claim_bootstrap.py": "enforced_planning/claim_bootstrap.py",
     "enforced_planning/prewrite_claim_fast.py": "enforced_planning/prewrite_claim_fast.py",
+    "enforced_planning/trace_review_provider.py": "enforced_planning/trace_review_provider.py",
     "enforced_planning/prewrite_claim_projection.py": "enforced_planning/prewrite_claim_projection.py",
     "enforced_planning/coordination_claims.py": "enforced_planning/coordination_claims.py",
     "enforced_planning/coordination_messages.py": "enforced_planning/coordination_messages.py",
@@ -805,6 +806,10 @@ def plan_generation(
         after_command="bash .claude/hooks/gate-edit.sh",
     ):
         changed = True
+    if prewrite_enabled:
+        shell_hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Bash")
+        if _ensure_hook_command(shell_hooks, PREWRITE_HOOK):
+            changed = True
     if artifact_creation_enabled and _ensure_hook_command(
         edit_hooks,
         ARTIFACT_CREATION_HOOK,
@@ -961,6 +966,8 @@ def plan_prewrite_claim_generation(
     settings = _read_json_file(target.settings_file)
     edit_hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Edit|Write")
     changed = _ensure_hook_command(edit_hooks, PREWRITE_HOOK)
+    shell_hooks = _ensure_matcher_block(settings, event_name="PreToolUse", matcher="Bash")
+    changed = _ensure_hook_command(shell_hooks, PREWRITE_HOOK) or changed
     rendered_settings = _render_settings(settings)
     current_settings = target.settings_file.read_text(encoding="utf-8") if target.settings_file.exists() else None
     if current_settings != rendered_settings or changed:

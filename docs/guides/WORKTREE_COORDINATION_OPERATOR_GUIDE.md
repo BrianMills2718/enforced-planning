@@ -80,6 +80,22 @@ sanctioned CLI write paths (`create_claim`, `session_lifecycle`,
 this class of file; it only happens when a claim is hand-written outside the
 CLI.
 
+### Safe parsing and completed repair evidence
+
+Registry reads use the provisioned compiled safe YAML parser when available,
+with the original safe parser as a fallback. Malformed input also uses the
+original parser's diagnostics, preserving the attributed warning above.
+
+A projection repair can persist its result before its child process terminates.
+If the bounded worker times out after its `complete` phase, the hook verifies
+one captured projection snapshot's typed schema, exact registry binding and
+fresh registry digest before using it. The existing daily hook receipt retains
+`verified_after_transport_timeout`, the observed phase, unchanged timeout and
+SHA-256 of those same validated bytes. Missing, corrupt, stale or differently
+bound artifacts remain unavailable. A completed artifact does not establish a
+successful child exit; startup timeouts and registry contention still need
+investigation through the observed phase and native command outcome.
+
 ## Core Model
 
 A **claim** is the canonical ownership record; a **lane** is the bounded work

@@ -179,7 +179,8 @@ recover this state, but cannot reuse an assertion created by the predecessor.
   the write and the check fails.
 - Programmatic code attempts external network access: the private network
   namespace blocks it; GitHub and SSH credential variables are also cleared.
-- The reviewer changes HEAD or worktree bytes: fail without a receipt.
+- The reviewer changes HEAD or worktree bytes: retain the completed reviewer
+  execution in a rejected receipt; the changed boundary cannot authorize merge.
 - Base is not an ancestor of head: stop before model use.
 - Programmatic check fails: retain its output digest and reject signoff.
 - Codex fails or emits invalid JSON: fail loud; emit no success payload.

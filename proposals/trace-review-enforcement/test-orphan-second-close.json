@@ -1,0 +1,29 @@
+{
+  "command": [
+    "python3",
+    "scripts/session_close.py",
+    "--agent",
+    "codex",
+    "--project",
+    "enforced-planning",
+    "--scope",
+    "test-e2e-sanctioned-3fd1e4b4e5",
+    "--branch",
+    "test-e2e-sanctioned-3fd1e4b4e5",
+    "--repo-root",
+    "/home/brian/code/enforced-planning",
+    "--session-id",
+    "codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e",
+    "--reconcile-session-ended",
+    "--claim-sha256",
+    "d04844660f8c783c90475901996ce976dd6bd27515c27b41461026392bc264a1",
+    "--tracker-sha256",
+    "7541255db0dc9f2961caeb0ccee4d6388b375d553b4f6228ebd042d9bbcfa854",
+    "--disposition",
+    "merged",
+    "--json"
+  ],
+  "stdout": "{\n  \"action\": \"closed\",\n  \"branch_action\": \"deleted\",\n  \"branch_exists\": true,\n  \"canonical_root_reconciliation\": null,\n  \"claim_archive_id\": \"797a3d96141d4f7af82df4d83df702fec395fc5bc7291d387259267a8e27b40b\",\n  \"default_branch\": \"main\",\n  \"default_branch_pushed\": true,\n  \"default_remote_ref\": \"refs/remotes/origin/main\",\n  \"disposition\": \"merged\",\n  \"force_delete_branch\": true,\n  \"lane_state_capture\": null,\n  \"mailbox_disposition\": null,\n  \"mailbox_message_ids\": [],\n  \"merge_commit\": null,\n  \"merge_evidence\": \"branch_ancestor\",\n  \"merged_to_default\": true,\n  \"missing_worktree_reconciliation\": null,\n  \"recovery_ref\": null,\n  \"released\": true,\n  \"retained_parent_scope\": null,\n  \"tracker_path\": \"/home/brian/.claude/coordination/sessions/enforced-planning/codex__enforced-planning__codex-pytest-e2e-cd702023af__unplanned-maintenance-test-e2e-sanctioned-3fd1e4b4e5.yaml\",\n  \"worktree_action\": \"removed\"\n}\n",
+  "stderr": "{\n  \"actions\": [\n    {\n      \"action\": \"justifications_refreshed\",\n      \"justifying_claims\": [\n        \"trace-review-guards\"\n      ],\n      \"ok\": true,\n      \"reason\": \"live lane claim set changed\",\n      \"repo_root\": \"/home/brian/code/enforced-planning\"\n    }\n  ],\n  \"dry_run\": false,\n  \"ok\": true,\n  \"repos_considered\": 8\n}\norigin/main: unchanged from outside this lane while it was open.\n",
+  "exit_status": 0
+}

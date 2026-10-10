@@ -100,6 +100,17 @@ cross-repository plan-authority contract for the complete invocation rules.
 
 ## claims
 
+### Registry read implementation
+
+Claim YAML uses the provisioned compiled safe parser with a safe Python
+fallback; malformed input preserves the original diagnostic text. This is an
+implementation choice and adds no configuration key. The registry writer's
+five-second contention limit and the hook repair's 1.5-second limit remain.
+A completed repair artifact may be used after a transport timeout only when
+its typed snapshot is current and bound to the exact registry. Recovery is
+recorded separately in the existing daily hook receipt, including that same
+snapshot's digest; it cannot imply a successful child exit.
+
 ### Trace review admission
 
 `meta_process.trace_review.mode` accepts `off`, `observe`, or `enforce`. If

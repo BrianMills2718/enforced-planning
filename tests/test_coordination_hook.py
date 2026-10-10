@@ -1272,3 +1272,138 @@ def test_closeout_gate_fails_safe_when_the_marker_cannot_be_read(monkeypatch) ->
     monkeypatch.setattr(coordination_hook, "CLOSEOUT_GATE_DISABLE_MARKER", Unreadable())
 
     assert coordination_hook._repository_closeout_gate_disabled() is False
+
+
+@pytest.mark.parametrize("last_phase", ["complete"])
+def test_repair_transport_timeout_uses_only_verified_current_artifact(
+    monkeypatch, tmp_path: Path, capsys, last_phase: str
+) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _write_live_claim(claims_dir, scope="completed-repair")
+
+    def timeout_after_write(*_args, **_kwargs):
+        prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+        raise subprocess.TimeoutExpired(
+            cmd=["repair"], timeout=1.5,
+            stderr=f"projection_repair_phase={last_phase}\n",
+        )
+
+    monkeypatch.setattr(coordination_hook.subprocess, "run", timeout_after_write)
+    diagnostics = {}
+    claims = coordination_hook._active_claims(claims_dir, repair_diagnostics=diagnostics)
+    result = diagnostics
+    assert [claim.scope for claim in claims] == ["completed-repair"]
+    assert result["action"] == "verified_after_transport_timeout"
+    assert result["projection_verified"] is True
+    assert [claim.scope for claim in coordination_hook._active_claims(claims_dir)] == ["completed-repair"]
+    assert "verified_after_transport_timeout" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("invalid", ["missing", "corrupt", "wrong_registry", "stale"])
+def test_repair_transport_timeout_rejects_unverified_artifact(
+    monkeypatch, tmp_path: Path, invalid: str
+) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _write_live_claim(claims_dir, scope="must-not-borrow")
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    if invalid == "corrupt":
+        projection_path.parent.mkdir(parents=True, exist_ok=True)
+        projection_path.write_text("not JSON")
+    elif invalid in {"wrong_registry", "stale"}:
+        prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+        if invalid == "wrong_registry":
+            payload = json.loads(projection_path.read_text())
+            payload["claims_dir"] = str(tmp_path / "another-registry")
+            projection_path.write_text(json.dumps(payload))
+        else:
+            _write_live_claim(claims_dir, scope="later-writer")
+
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=["repair"], timeout=1.5,
+            stderr="projection_repair_phase=complete\n",
+        )
+
+    monkeypatch.setattr(coordination_hook.subprocess, "run", timeout)
+    with pytest.raises(coordination_hook.TurnEndProjectionError, match="last_phase=complete"):
+        coordination_hook._repair_turn_end_projection(claims_dir)
+
+def test_repair_timeout_without_completion_marker_still_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["repair"], timeout=1.5)
+
+    monkeypatch.setattr(coordination_hook.subprocess, "run", timeout)
+    with pytest.raises(coordination_hook.TurnEndProjectionError, match="last_phase=startup"):
+        coordination_hook._repair_turn_end_projection(claims_dir)
+
+
+def test_transport_timeout_recovery_reaches_daily_completed_receipt(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    import hashlib
+    import io
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    _write_live_claim(claims_dir, scope="retained-repair")
+    receipts = tmp_path / "receipts"
+
+    def timeout_after_write(*_args, **_kwargs):
+        prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+        raise subprocess.TimeoutExpired(
+            cmd=["repair"], timeout=1.5,
+            stderr="projection_repair_phase=complete\n",
+        )
+
+    monkeypatch.setattr(coordination_hook.subprocess, "run", timeout_after_write)
+    monkeypatch.setattr(coordination_hook, "_canonical_project", lambda _cwd: "demo")
+    monkeypatch.setattr(coordination_hook, "_repository_closeout_failure", lambda **_kwargs: None)
+    monkeypatch.setattr(coordination_hook, "_is_completion_shaped_stop", lambda _payload: False)
+    monkeypatch.setattr(coordination_hook.coordination_messages, "poll_session_inbox", lambda **_kwargs: type(
+        "Notice", (), {"active_count": 0, "acknowledgement_count": 0, "summary": "", "message_ids": ()}
+    )())
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({
+        "session_id": "unrelated-repair-reader", "cwd": str(tmp_path), "hook_event_name": "Stop",
+        "event_id": "verified-repair-stop",
+    })))
+    assert coordination_hook.main([
+        "--claims-dir", str(claims_dir), "--hook-receipt-dir", str(receipts),
+    ]) == 0
+    receipt = load_completed_receipts(receipts)[0]
+    assert receipt["decision"] == "allow"
+    assert receipt["details"] == {
+        "action": "verified_after_transport_timeout", "last_phase": "complete",
+        "projection_verified": True, "transport_timeout_seconds": 1.5,
+        "projection_sha256": hashlib.sha256(prewrite_claim_fast.projection_path_for(claims_dir).read_bytes()).hexdigest(),
+    }
+    assert "verified_after_transport_timeout" in capsys.readouterr().err
+
+
+def test_projection_snapshot_hash_binds_the_validated_bytes(monkeypatch, tmp_path: Path) -> None:
+    import hashlib
+
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    prewrite_claim_projection.write_projection(claims_dir=claims_dir)
+    projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
+    validated = projection_path.read_bytes()
+    real_read = Path.read_bytes
+
+    def replacement_after_read(path):
+        raw = real_read(path)
+        if path == projection_path:
+            path.write_text("concurrent corrupt replacement")
+        return raw
+
+    monkeypatch.setattr(Path, "read_bytes", replacement_after_read)
+    assert coordination_hook._current_projection_sha256(claims_dir) == hashlib.sha256(validated).hexdigest()
+    assert real_read(projection_path) != validated
+    assert coordination_hook._current_projection_sha256(claims_dir) is None

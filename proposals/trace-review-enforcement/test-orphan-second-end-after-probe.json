@@ -1,0 +1,6 @@
+{
+  "registry_available_probe": true,
+  "stdout": "{\n  \"action\": \"session_ended\",\n  \"claims\": [\n    \"enforced-planning:test-e2e-sanctioned-3fd1e4b4e5\"\n  ],\n  \"ended_count\": 1,\n  \"reason\": \"Ended test runtime; retained clean scope after earlier native cleanup lock refusal\",\n  \"session_ended_at\": \"2026-10-10T02:16:53.300029+00:00\",\n  \"session_id\": \"codex:pytest-e2e-cd702023af\"\n}\n",
+  "stderr": "",
+  "exit_status": 0
+}

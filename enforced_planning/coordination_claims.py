@@ -31,7 +31,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, get_args
@@ -53,6 +53,20 @@ from enforced_planning.claim_mutation_receipts import (
 )
 
 _LOADED_WRITER_IDENTITY = claim_mutation_receipts.writer_identity(Path(__file__))
+
+
+def load_claim_yaml(raw: str | bytes) -> Any:
+    """Parse claim YAML safely, using the provisioned compiled parser when available."""
+    loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+    try:
+        return yaml.load(raw, Loader=loader)
+    except yaml.YAMLError:
+        # Existing callers expose SafeLoader diagnostics. The compiled parser
+        # phrases some errors differently; malformed input keeps that contract.
+        if loader is yaml.SafeLoader:
+            raise
+        return yaml.safe_load(raw)
+
 
 CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
 DEFAULT_TTL_HOURS = 24  # Sprints run 24h; 2h caused false-expiry conflicts mid-sprint
@@ -613,7 +627,7 @@ def reserve_session_takeover(
         claim_bytes = resolved_claim_file.read_bytes()
         if claim_bytes != pre_reservation_claim_bytes:
             raise ValueError("claim changed before exact custody takeover reservation")
-        payload = yaml.safe_load(claim_bytes)
+        payload = load_claim_yaml(claim_bytes)
         if not isinstance(payload, dict):
             raise TypeError("session takeover claim must be a YAML mapping")
         claim = normalize_claim(payload, source_file=str(resolved_claim_file))
@@ -690,7 +704,7 @@ def abort_unfenced_session_takeover_reservation(
     expected_worktree = str(Path(worktree_path).expanduser().resolve())
     with claim_registry_lock(resolved_claims_dir):
         raw_bytes = resolved_claim_file.read_bytes()
-        payload = yaml.safe_load(raw_bytes)
+        payload = load_claim_yaml(raw_bytes)
         if not isinstance(payload, dict):
             raise TypeError("session takeover claim must be a YAML mapping")
         claim = normalize_claim(payload, source_file=str(resolved_claim_file))
@@ -875,7 +889,7 @@ def method_conformance_mode(plan_root: Path, revision: str) -> Literal["required
     content = _method_git_show(plan_root, revision, "meta-process.yaml")
     if content is None:
         return "off"
-    payload = yaml.safe_load(content) or {}
+    payload = load_claim_yaml(content) or {}
     meta = payload.get("meta_process", payload) if isinstance(payload, dict) else {}
     plans = meta.get("plans", {}) if isinstance(meta, dict) else {}
     setting = plans.get("method_conformance") if isinstance(plans, dict) else None
@@ -896,7 +910,7 @@ def _method_front_matter(content: str) -> dict[str, Any]:
     end = content.find("\n---", 4)
     if end < 0:
         return {}
-    loaded = yaml.safe_load(content[4:end])
+    loaded = load_claim_yaml(content[4:end])
     return loaded if isinstance(loaded, dict) else {}
 
 
@@ -1851,7 +1865,7 @@ def list_abandoned_claims(
     abandoned: list[tuple[ClaimRecord, dict[str, Any]]] = []
     for claim_file in sorted(resolved_claims_dir.glob("*.yaml")):
         try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
         except Exception:
             continue
         if not isinstance(data, dict):
@@ -3289,7 +3303,7 @@ def _load_claims(claims_dir: Path | None = None) -> list[ClaimRecord]:
     now = datetime.now(timezone.utc)
     for claim_file in resolved_claims_dir.glob("*.yaml"):
         try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
         except Exception as exc:
             claim_path_str = str(claim_file)
             if claim_path_str not in _WARNED_MALFORMED_CLAIM_FILES:
@@ -3348,7 +3362,7 @@ def malformed_claim_files(claims_dir: Path | None = None) -> list[dict[str, str]
     malformed: list[dict[str, str]] = []
     for claim_file in sorted(resolved_claims_dir.glob("*.yaml")):
         try:
-            data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
         except Exception as exc:
             malformed.append({"path": str(claim_file), "error": str(exc)})
             continue
@@ -3675,7 +3689,7 @@ def _refresh_exact_owner_claim(
     if not claim_path.is_file():
         return None
     with claim_registry_lock(CLAIMS_DIR):
-        raw = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        raw = load_claim_yaml(claim_path.read_text(encoding="utf-8"))
         existing = normalize_claim(raw, source_file=str(claim_path)) if isinstance(raw, dict) else None
         if existing is None or not existing.is_live():
             return None
@@ -3767,7 +3781,7 @@ def _tracker_path_yaml_error(tracker_path: str | None) -> str | None:
     if not path.exists() or not path.is_file():
         return None
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        load_claim_yaml(path.read_text(encoding="utf-8"))
     except OSError:
         return None
     except yaml.YAMLError as exc:
@@ -4050,7 +4064,7 @@ def create_claim(
                 raise ValueError(
                     f"Claim slot {project}:{scope} already exists; new-lane creation will not overwrite it"
                 )
-            raw_existing = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+            raw_existing = load_claim_yaml(claim_path.read_text(encoding="utf-8"))
             existing = (
                 normalize_claim(raw_existing, source_file=str(claim_path)) if isinstance(raw_existing, dict) else None
             )
@@ -4196,7 +4210,7 @@ def narrow_claim(
     with claim_registry_lock(resolved_claims):
         if not claim_path.is_file():
             raise ValueError(f"live claim {project}:{scope} does not exist")
-        raw = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+        raw = load_claim_yaml(claim_path.read_text(encoding="utf-8"))
         claim = normalize_claim(raw, source_file=str(claim_path)) if isinstance(raw, dict) else None
         if claim is None or not claim.is_live():
             raise ValueError(f"claim {project}:{scope} is not one valid live claim")
@@ -4331,7 +4345,7 @@ def hydrate_missing_session_ids(
             return 0, [], resolved_session_id
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
             if not isinstance(data, dict):
@@ -4410,7 +4424,7 @@ def heartbeat_claims(
             return 0, [], resolved_session_id, heartbeat_at
         for claim_file in resolved_claims_dir.glob("*.yaml"):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
             if not isinstance(data, dict):
@@ -4527,7 +4541,7 @@ def record_progress_claims(
         if resolved_claims_dir.exists():
             for claim_file in sorted(resolved_claims_dir.glob("*.yaml")):
                 try:
-                    data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                    data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
                 except Exception:
                     continue
                 if not isinstance(data, dict):
@@ -4615,7 +4629,7 @@ def end_session_claims(
             return 0, [], resolved_session_id, ended_at
         for claim_file in resolved_claims_dir.glob("*.yaml"):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
             except (OSError, yaml.YAMLError):
                 continue
             if not isinstance(data, dict):
@@ -4672,7 +4686,7 @@ def release_claim(
     with claim_registry_lock(CLAIMS_DIR):
         if path.exists():
             registry_digest_before = _registry_digest(CLAIMS_DIR)
-            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+            raw = load_claim_yaml(path.read_text(encoding="utf-8"))
             claim = normalize_claim(raw, source_file=str(path)) if isinstance(raw, dict) else None
             if expected_session_id is not None and (claim is None or claim.session_id != expected_session_id):
                 raise ValueError(f"Refusing to release {project}:{scope}: session custody changed")
@@ -4755,7 +4769,7 @@ def _archive_completed_claim_locked(
 
     source_bytes = claim_file.read_bytes()
     try:
-        data = yaml.safe_load(source_bytes.decode("utf-8"))
+        data = load_claim_yaml(source_bytes.decode("utf-8"))
     except (UnicodeDecodeError, yaml.YAMLError) as exc:
         raise CompletedClaimArchiveError(
             error_code="invalid_completed_claim_source",
@@ -4833,7 +4847,7 @@ def complete_claims_for_plan(
             return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
             if not isinstance(data, dict):
@@ -4909,7 +4923,7 @@ def prune_expired(
             return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
             if not isinstance(data, dict):
@@ -4958,7 +4972,7 @@ def prune_stale(
             return 0, []
         for claim_file in CLAIMS_DIR.glob("*.yaml"):
             try:
-                data = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+                data = load_claim_yaml(claim_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
             if not isinstance(data, dict):
@@ -5025,7 +5039,7 @@ def prune_completed(
         for claim_file in sorted(CLAIMS_DIR.glob("*.yaml")):
             try:
                 source_bytes = claim_file.read_bytes()
-                data = yaml.safe_load(source_bytes.decode("utf-8"))
+                data = load_claim_yaml(source_bytes.decode("utf-8"))
             except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
                 raise CompletedClaimArchiveError(
                     error_code="invalid_completed_claim_source",

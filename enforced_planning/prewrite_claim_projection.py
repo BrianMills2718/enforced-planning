@@ -77,7 +77,7 @@ def _load_projection_claims(claims_dir: Path) -> list[coordination_claims.ClaimR
     now = datetime.now(timezone.utc)
     for claim_file in sorted(claims_dir.glob("*.yaml")):
         try:
-            payload = yaml.safe_load(claim_file.read_text(encoding="utf-8"))
+            payload = coordination_claims.load_claim_yaml(claim_file.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError) as exc:
             raise ProjectionBuildError(f"Cannot parse claim {claim_file}: {exc}") from exc
         if not isinstance(payload, dict):

@@ -1,5 +1,7 @@
 """Host wiring checks; real provider semantics are verified by CP probes."""
 import json
+import shlex
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -148,7 +150,11 @@ def test_repeated_env_directories_admit_the_actual_final_target(tmp_path, monkey
         return f"{form}{operand}" if form.endswith("=") else f"{form} {operand}"
     final = target.relative_to(launch) if relative else target
     command = f"/usr/bin/env {binding(forms[0], launch)} {binding(forms[1], final)} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"
-    assert _bash_explicit_worktree(command, cwd=tmp_path) == target
+    native = subprocess.run([*shlex.split(command)[:-2], "/bin/pwd"], cwd=launch,
+                            capture_output=True, text=True, check=False)
+    assert native.returncode == 0, native.stderr
+    assert Path(native.stdout.strip()) == target
+    assert _bash_explicit_worktree(command, cwd=launch) == Path(native.stdout.strip())
     payload = _payload(cwd=launch, tool="Bash", tool_input={"command": command})
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
                              projection_path=tmp_path / "projection.json", client=client, mode=mode)
@@ -157,6 +163,34 @@ def test_repeated_env_directories_admit_the_actual_final_target(tmp_path, monkey
         assert calls == [target]
         assert decision["reason_code"] == "trace_review_required"
     assert not (target / "TRACE_REVIEW_SENTINEL_NOT_EXECUTED").exists()
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("mode", ["off", "observe"])
+@pytest.mark.parametrize("first_exists", [True, False])
+def test_final_relative_env_directory_uses_native_launch_cwd(tmp_path, monkeypatch, capsys, client, mode, first_exists):
+    from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
+    _, other, launch, claims_dir, claim_path = _fixture(tmp_path)
+    claim_path.unlink()
+    (other / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
+    (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+    monkeypatch.setattr(provider.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    first = other if first_exists else tmp_path / "missing-first-directory"
+    argv = ["/usr/bin/env", "-C", str(first), "--chdir=."]
+    native = subprocess.run([*argv, "/bin/pwd"], cwd=launch,
+                            capture_output=True, text=True, check=False)
+    assert native.returncode == 0, native.stderr
+    assert Path(native.stdout.strip()) == launch
+    command = shlex.join([*argv, "touch", "TRACE_REVIEW_SENTINEL_NOT_EXECUTED"])
+    assert _bash_explicit_worktree(command, cwd=launch) == Path(native.stdout.strip())
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command": command})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode=mode)
+    assert code == 2 and decision["decision"] == "deny"
+    assert decision["reason_code"] == "trace_review_required"
+    assert decision["trace_review"]["mode"] == "enforce"
+    assert not (launch / "TRACE_REVIEW_SENTINEL_NOT_EXECUTED").exists()
 
 
 @pytest.mark.parametrize("client", ["codex", "claude-code"])

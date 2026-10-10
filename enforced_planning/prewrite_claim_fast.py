@@ -560,7 +560,7 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
 
 
 def _env_cwd_prefix(argv: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Read literal env cwd options in their actual execution order."""
+    """Read env directory options without changing command arguments."""
 
     if not argv or argv[0] != "/usr/bin/env":
         return (), argv
@@ -889,15 +889,8 @@ def _bash_explicit_worktree(command: str, *, cwd: Path | None = None) -> Path | 
     argv = commands[0]
     operands, effective = _env_cwd_prefix(argv)
     if operands and effective:
-        target = cwd
-        for operand in operands:
-            directory = Path(operand).expanduser()
-            if not directory.is_absolute():
-                if target is None:
-                    return None
-                directory = target / directory
-            target = directory.resolve()
-        return target
+        # GNU env saves its final -C operand, then changes directory once.
+        operand = operands[-1]
     else:
         executable = Path(argv[0]).name if argv else ""
         if executable not in {"git", "make"} or len(argv) < 3 or argv[1] != "-C":

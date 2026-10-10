@@ -1458,7 +1458,9 @@ def _claim_covers_targets(claim: dict[str, Any], targets: tuple[str, ...]) -> bo
     )
 
 
-def _record_receipt(path: Path, decision: dict[str, Any]) -> None:
+def _record_receipt(path: Path | None, decision: dict[str, Any]) -> None:
+    if path is None:
+        return
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     receipt = {
         key: value
@@ -1516,11 +1518,11 @@ def evaluate_request_fast(
     mode: str,
     claims_dir: Path = DEFAULT_CLAIMS_DIR,
     projection_path: Path | None = None,
-    receipt_path: Path = DEFAULT_RECEIPT_PATH,
+    receipt_path: Path | None = DEFAULT_RECEIPT_PATH,
     cache_hit: bool = True,
     projection_recovery_command: str | None = None,
 ) -> dict[str, Any]:
-    """Evaluate one normalized request and append its durable receipt."""
+    """Evaluate a request; None defers recording to its enclosing host adapter."""
 
     if mode not in {"off", "observe", "enforce"}:
         raise FastPreWriteError("mode must be one of: off, observe, enforce")
@@ -1795,7 +1797,7 @@ def evaluate_prewrite_fast(
     mode: str,
     claims_dir: Path = DEFAULT_CLAIMS_DIR,
     projection_path: Path | None = None,
-    receipt_path: Path = DEFAULT_RECEIPT_PATH,
+    receipt_path: Path | None = DEFAULT_RECEIPT_PATH,
     claim_bootstrap_classifier: BashBootstrapClassifier | None = None,
     projection_recovery_command: str | None = None,
 ) -> dict[str, Any]:

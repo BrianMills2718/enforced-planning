@@ -134,6 +134,9 @@ hook or establish project coverage; both clients must exercise the boundary.
 The final trace denial controls the exit status even when outcome admission
 allowed the request. Disabled targets retain an explicit uncovered disposition
 in both the host decision and its receipt.
+The host records its combined claim and trace decision once, before optional
+outcome correlation. Direct component calls still record their own receipts;
+only the enclosing host defers that component write.
 
 ### Host read-target state
 

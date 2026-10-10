@@ -36,6 +36,7 @@ def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_pat
     assert decision["reason_code"] == "trace_review_required"
     assert calls == [(worktree, "repair", f"{client}:host-gate-test", claims_dir)]
     receipts = [json.loads(line) for line in (tmp_path / "receipts.jsonl").read_text().splitlines()]
+    assert len(receipts) == 1
     assert receipts[-1]["decision"] == "deny"
     assert receipts[-1]["trace_review"]["valid"] is False
 

@@ -1665,7 +1665,7 @@ def main(argv: list[str] | None = None) -> int:
             mode=mode,
             claims_dir=args.claims_dir,
             projection_path=projection_path,
-            receipt_path=args.receipt_path,
+            receipt_path=None,
             claim_bootstrap_classifier=special_classifier,
             projection_recovery_command=recovery_command,
         )
@@ -1723,6 +1723,78 @@ def main(argv: list[str] | None = None) -> int:
         elif mode == "enforce":
             print(message, file=sys.stderr)
         return 2 if mode == "enforce" or outcome_config_invalid else 0
+
+    # Exact typed investigation/retention commands have already validated their
+    # narrow host scope. Ordinary mutations must pass the shared diagnosis gate.
+    exempt_reasons = {"bash_read_only", "claim_bootstrap_command", "native_mailbox_command",
+                      "native_closeout_command", "native_session_narrow_command",
+                      "hook_feedback_report_command", "read_target_selection_command",
+                      "projection_recovery_command"}
+    if decision.get("decision") in {"allow", "observe_violation"} and decision.get("reason_code") not in exempt_reasons:
+        from enforced_planning.trace_review_provider import admit
+        from enforced_planning.prewrite_claim_fast import adapt_native_payload, _repository_context, _bash_is_explicitly_bound
+        request = None
+        try:
+            request = adapt_native_payload(payload, client=args.client,
+                                           claim_bootstrap_classifier=special_classifier)
+            context = _repository_context(request)
+            target = Path(context["worktree_path"])
+            admission = admit(target, "repair", request["session_id"], args.claims_dir)
+            if admission["mode"] == "enforce":
+                target_errors = []
+                if request.get("session_target_error_code"):
+                    target_errors.append(str(request.get("session_target_error") or request["session_target_error_code"]))
+                if context.get("bash_paths_outside_worktree"):
+                    target_errors.append("trace admission cannot authorize shell paths outside its target worktree")
+                if request.get("session_target_rebound") and (
+                    request.get("bash_target_unprovable") or
+                    (request["tool_name"] == "Bash" and not _bash_is_explicitly_bound(request["bash_command"], target))
+                ):
+                    target_errors.append("trace admission requires a provable shell target worktree")
+                if target_errors:
+                    admission = {**admission, "disposition": "deny", "valid": False,
+                                 "errors": [*admission["errors"], *target_errors]}
+        except (FastPreWriteError, OSError, ValueError, TypeError) as exc:
+            from enforced_planning.trace_review_provider import configuration
+            try:
+                fallback_settings = configuration(Path(str(payload["cwd"])))
+                fallback_mode = fallback_settings["mode"]
+                if request is None:
+                    fallback_mode = "enforce"
+                else:
+                    # A launch directory cannot turn mixed or known enforced
+                    # write targets into an uncovered non-Git operation.
+                    from enforced_planning.prewrite_claim_fast import _git_identity
+                    target_roots = set()
+                    for raw in request["target_paths"]:
+                        candidate = Path(raw).expanduser()
+                        if not candidate.is_absolute():
+                            candidate = Path(request["cwd"]) / candidate
+                        try:
+                            target_root, _, _ = _git_identity(candidate)
+                        except FastPreWriteError:
+                            continue
+                        target_roots.add(target_root)
+                        if configuration(target_root)["mode"] == "enforce":
+                            fallback_mode = "enforce"
+                    if len(target_roots) > 1:
+                        fallback_mode = "enforce"
+            except Exception:
+                fallback_mode = "enforce"
+            admission = {"mode": fallback_mode,
+                         "disposition": "deny" if fallback_mode == "enforce" else "uncovered", "valid": False,
+                         "errors": [f"trace admission target unavailable: {exc}"]}
+        decision["trace_review"] = admission
+        if admission["disposition"] == "deny":
+            decision.update(decision="deny", reason_code="trace_review_required",
+                            details=admission["errors"],
+                            recovery="Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.")
+
+    # The host owns the final claim/trace decision. Its component evaluator
+    # defers recording so an initial allow cannot duplicate the final receipt.
+    from enforced_planning.prewrite_claim_fast import _record_receipt
+    _record_receipt(args.receipt_path, decision)
+
 
     outcome_observation = None
     if args.outcome_scenario is not None:
@@ -1806,73 +1878,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(message, file=sys.stderr)
             return 2
 
-    # Exact typed investigation/retention commands have already validated their
-    # narrow host scope. Ordinary mutations must pass the shared diagnosis gate.
-    exempt_reasons = {"bash_read_only", "claim_bootstrap_command", "native_mailbox_command",
-                      "native_closeout_command", "native_session_narrow_command",
-                      "hook_feedback_report_command", "read_target_selection_command",
-                      "projection_recovery_command"}
-    if decision.get("decision") in {"allow", "observe_violation"} and decision.get("reason_code") not in exempt_reasons:
-        from enforced_planning.trace_review_provider import admit
-        from enforced_planning.prewrite_claim_fast import adapt_native_payload, _repository_context, _bash_is_explicitly_bound
-        request = None
-        try:
-            request = adapt_native_payload(payload, client=args.client,
-                                           claim_bootstrap_classifier=special_classifier)
-            context = _repository_context(request)
-            target = Path(context["worktree_path"])
-            admission = admit(target, "repair", request["session_id"], args.claims_dir)
-            if admission["mode"] == "enforce":
-                target_errors = []
-                if request.get("session_target_error_code"):
-                    target_errors.append(str(request.get("session_target_error") or request["session_target_error_code"]))
-                if context.get("bash_paths_outside_worktree"):
-                    target_errors.append("trace admission cannot authorize shell paths outside its target worktree")
-                if request.get("session_target_rebound") and (
-                    request.get("bash_target_unprovable") or
-                    (request["tool_name"] == "Bash" and not _bash_is_explicitly_bound(request["bash_command"], target))
-                ):
-                    target_errors.append("trace admission requires a provable shell target worktree")
-                if target_errors:
-                    admission = {**admission, "disposition": "deny", "valid": False,
-                                 "errors": [*admission["errors"], *target_errors]}
-        except (FastPreWriteError, OSError, ValueError, TypeError) as exc:
-            from enforced_planning.trace_review_provider import configuration
-            try:
-                fallback_settings = configuration(Path(str(payload["cwd"])))
-                fallback_mode = fallback_settings["mode"]
-                if request is None:
-                    fallback_mode = "enforce"
-                else:
-                    # A launch directory cannot turn mixed or known enforced
-                    # write targets into an uncovered non-Git operation.
-                    from enforced_planning.prewrite_claim_fast import _git_identity
-                    target_roots = set()
-                    for raw in request["target_paths"]:
-                        candidate = Path(raw).expanduser()
-                        if not candidate.is_absolute():
-                            candidate = Path(request["cwd"]) / candidate
-                        try:
-                            target_root, _, _ = _git_identity(candidate)
-                        except FastPreWriteError:
-                            continue
-                        target_roots.add(target_root)
-                        if configuration(target_root)["mode"] == "enforce":
-                            fallback_mode = "enforce"
-                    if len(target_roots) > 1:
-                        fallback_mode = "enforce"
-            except Exception:
-                fallback_mode = "enforce"
-            admission = {"mode": fallback_mode,
-                         "disposition": "deny" if fallback_mode == "enforce" else "uncovered", "valid": False,
-                         "errors": [f"trace admission target unavailable: {exc}"]}
-        decision = {**decision, "trace_review": admission}
-        if admission["disposition"] == "deny":
-            decision.update(decision="deny", reason_code="trace_review_required",
-                            details=admission["errors"],
-                            recovery="Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.")
-        from enforced_planning.prewrite_claim_fast import _record_receipt
-        _record_receipt(args.receipt_path, decision)
 
     if args.json:
         output = decision

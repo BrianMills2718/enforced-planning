@@ -122,14 +122,20 @@ def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_wor
 
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("mode", ["off", "observe"])
-def test_compound_shell_cannot_borrow_uncovered_launch_for_an_enforced_path(tmp_path, monkeypatch, capsys, client, mode):
+@pytest.mark.parametrize("form", ["cd", "-C", "--chdir", "--chdir="])
+@pytest.mark.parametrize("suffix", ["&& true", "; true", "|| true"])
+def test_compound_shell_cannot_borrow_uncovered_launch_for_an_enforced_path(tmp_path, monkeypatch, capsys, client, mode, form, suffix):
     _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
     claim_path.unlink()
     (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
     (target / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
     write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
-    payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
-        f"cd {target} && touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
+    if form == "cd":
+        command = f"cd {target} && touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED {suffix}"
+    else:
+        binding = f"{form}{target}" if form.endswith("=") else f"{form} {target}"
+        command = f"/usr/bin/env {binding} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED {suffix}"
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command": command})
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
                              projection_path=tmp_path / "projection.json", client=client, mode=mode)
     assert code == 2 and decision["decision"] == "deny"

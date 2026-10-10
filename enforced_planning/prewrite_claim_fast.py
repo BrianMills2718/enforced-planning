@@ -499,11 +499,17 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
         if env_command:
             if skip_env_cwd:
                 skip_env_cwd = False
+                if commands is None or len(commands) != 1:
+                    paths.append(token)
                 continue
             if token in {"-C", "--chdir"}:
                 skip_env_cwd = True
                 continue
-            if token.startswith("--chdir=") or (
+            if token.startswith("--chdir="):
+                if commands is None or len(commands) != 1:
+                    paths.append(token.split("=", 1)[1])
+                continue
+            if (
                 "=" in token and not token.startswith(("/", "~", "."))
             ):
                 continue

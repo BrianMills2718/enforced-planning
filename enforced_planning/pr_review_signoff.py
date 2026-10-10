@@ -271,6 +271,8 @@ class PRSignoffReceipt(StrictModel):
             executions = {item.review_lane for item in self.reviewer_executions}
             if not lanes or lanes != executions or len(executions) != len(self.reviewer_executions):
                 raise ValueError("signed off receipt requires exact retained reviewer lanes")
+            if len(lanes) != len(self.semantic_reviews):
+                raise ValueError("signed off receipt requires unique semantic reviewer lanes")
             if any(not item.capture_complete or item.error or item.exit_code != 0 for item in self.reviewer_executions):
                 raise ValueError("signed off receipt requires complete successful reviewer capture")
             sessions = {item.review_lane: item.session_id for item in self.reviewer_sessions}
@@ -286,6 +288,18 @@ class PRSignoffReceipt(StrictModel):
                 if SemanticReviewResult.model_validate_json(execution.semantic_output) != semantics[execution.review_lane]:
                     raise ValueError("reviewer captured semantic output differs from receipt")
                 captured_spec = PRReviewSpec.model_validate_json(execution.spec_json)
+                semantic = semantics[execution.review_lane]
+                criteria = [item.criterion_id for item in semantic.criterion_results]
+                required_criteria = {item.criterion_id for item in captured_spec.semantic_rubric.criteria}
+                checks = [item.check_id for item in self.programmatic_checks]
+                required_checks = {item.check_id: item.argv for item in captured_spec.programmatic_checks}
+                if semantic.head_sha != self.head_sha:
+                    raise ValueError("semantic review is bound to a different head")
+                if len(criteria) != len(set(criteria)) or set(criteria) != required_criteria:
+                    raise ValueError("semantic review differs from required rubric membership")
+                if (len(checks) != len(set(checks)) or set(checks) != set(required_checks)
+                        or any(item.argv != required_checks[item.check_id] for item in self.programmatic_checks)):
+                    raise ValueError("programmatic results differ from required check membership")
                 binding = bindings[execution.review_lane]
                 if (execution.argv != binding.argv or execution.cwd != binding.cwd
                         or hashlib.sha256(execution.schema_text.encode()).hexdigest() != binding.schema_sha256

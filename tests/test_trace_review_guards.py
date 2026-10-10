@@ -14,6 +14,32 @@ from tests.test_host_prewrite_claim_gate import _fixture, _payload, _run_cli
 
 
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("mode", ["off", "observe"])
+@pytest.mark.parametrize("failure", ["projection", "identity"])
+def test_early_claim_error_cannot_waive_trace_enforcement(tmp_path, monkeypatch, capsys, client, mode, failure):
+    from scripts import prewrite_claim_gate as gate
+    _, _, target, claims_dir, _ = _fixture(tmp_path)
+    monkeypatch.setattr(provider, "configuration", lambda _root: {"mode": "enforce"})
+    if failure == "projection":
+        def broken_refresh(*_args, **_kwargs):
+            raise OSError("fixture: projection unavailable")
+        monkeypatch.setattr(gate, "_refresh_projection_for_claimed_command", broken_refresh)
+    else:
+        monkeypatch.setattr(gate, "_refresh_projection_for_claimed_command", lambda *_a, **_kw: None)
+    other = "claude-code" if client == "codex" else "codex"
+    payload = _payload(cwd=target, tool="Edit", tool_input={"file_path": str(target / "src/allowed.py")},
+                       session=f"{other}:wrong-client" if failure == "identity" else "host-gate-test")
+    if client == "codex":
+        payload.update(tool_name="apply_patch", tool_input={"command":
+            f"*** Begin Patch\n*** Update File: {target / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch\n"})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode=mode)
+    assert code == 2
+    assert decision["reason_code"] == "invalid_hook_payload"
+    assert (target / "src/allowed.py").read_text() == "VALUE = 1\n"
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
 def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_path, monkeypatch, capsys, client, mode):
     workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)
@@ -46,8 +72,9 @@ def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_pat
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
 @pytest.mark.parametrize("relative", [False, True])
+@pytest.mark.parametrize("binary", ["env", "/bin/env", "/usr/bin/env"])
 @pytest.mark.parametrize("form", ["-C", "--chdir", "--chdir=", "-iCjoined", "--ignore-environment --chdir="])
-def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path, monkeypatch, capsys, client, mode, relative, form):
+def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path, monkeypatch, capsys, client, mode, relative, binary, form):
     _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
     claim_path.unlink()
     (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
@@ -63,8 +90,12 @@ def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path,
     operand = target.relative_to(launch) if relative else target
     binding = f"-iC{operand}" if form == "-iCjoined" else (
         f"{form}{operand}" if form.endswith("=") else f"{form} {operand}")
+    native = subprocess.run([binary, *shlex.split(binding), "/bin/pwd"],
+                            cwd=launch, capture_output=True, text=True)
+    assert native.returncode == 0, native.stderr
+    assert Path(native.stdout.strip()) == target
     payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
-        f"/usr/bin/env {binding} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
+        f"{binary} {binding} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
                              projection_path=tmp_path / "projection.json", client=client, mode=mode)
     assert code == 2 and decision["decision"] == "deny"

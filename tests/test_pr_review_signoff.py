@@ -132,6 +132,31 @@ def test_rehashed_wrong_invocation_cannot_sign_off(change):
     assert rejected.verdict == "rejected"
 
 
+@pytest.mark.parametrize("change", ["head", "criterion", "duplicate-criterion", "check-command"])
+def test_rehashed_receipt_cannot_substitute_head_or_required_membership(change):
+    from enforced_planning.pr_review_signoff import PRSignoffReceipt
+    payload = _valid_receipt().model_dump()
+    semantic = payload["semantic_reviews"][0]
+    if change == "head":
+        semantic["head_sha"] = "d" * 40
+    elif change == "criterion":
+        semantic["criterion_results"][0]["criterion_id"] = "NOT-AC-1"
+    elif change == "duplicate-criterion":
+        semantic["criterion_results"] = (*semantic["criterion_results"], semantic["criterion_results"][0])
+    else:
+        payload["programmatic_checks"][0]["argv"] = ("echo", "substituted")
+    execution = payload["reviewer_executions"][0]
+    execution["semantic_output"] = json.dumps(semantic)
+    events = [json.loads(line) for line in execution["stdout"].splitlines()]
+    for event in events:
+        if event.get("item", {}).get("type") == "agent_message":
+            event["item"]["text"] = execution["semantic_output"]
+    execution["stdout"] = "\n".join(json.dumps(event) for event in events)
+    execution["sha256"] = _execution_digest({k: v for k, v in execution.items() if k != "sha256"})
+    with pytest.raises(ValidationError):
+        PRSignoffReceipt.model_validate(payload)
+
+
 def test_parsed_success_cannot_contradict_captured_semantic_failure():
     from enforced_planning.pr_review_signoff import PRSignoffReceipt
     payload = _valid_receipt().model_dump()

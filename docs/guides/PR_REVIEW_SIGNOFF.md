@@ -53,6 +53,9 @@ receipts remain historical evidence and are not upgraded into current signoff.
 Signoff requires retained tool inspection and agreement between the native
 terminal message and the separately captured semantic output. A transcript
 without tool evidence or with a contradictory terminal verdict is rejected.
+Revalidating a signed receipt also checks the semantic head and exact rubric
+and programmatic-check membership against its retained review specification.
+Rehashing altered semantic output does not authorize substituted evidence.
 
 ## Review specification
 

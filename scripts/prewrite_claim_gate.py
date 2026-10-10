@@ -1582,6 +1582,49 @@ def _enforce_selected_outcome(
     return receipt.model_dump(mode="json")
 
 
+def _trace_error_requires_refusal(payload: object) -> bool:
+    """Claim-mode errors cannot waive an independent protected trace boundary."""
+    from enforced_planning.trace_review_provider import configuration
+    from enforced_planning.prewrite_claim_fast import (
+        _bash_declared_paths, _bash_explicit_worktree, _git_identity,
+    )
+    try:
+        if not isinstance(payload, dict) or not payload.get("cwd"):
+            return True
+        launch = Path(payload["cwd"]).expanduser().resolve()
+        targets = {launch}
+        tool_input = payload.get("tool_input", {})
+        if not isinstance(tool_input, dict):
+            return True
+        paths = []
+        command = tool_input.get("command", tool_input.get("cmd", ""))
+        if payload.get("tool_name") in {"Bash", "exec_command"} and isinstance(command, str):
+            explicit = _bash_explicit_worktree(command, cwd=launch)
+            if explicit is not None:
+                targets.add(explicit)
+            paths.extend(_bash_declared_paths(command))
+        for field in ("file_path", "path"):
+            if tool_input.get(field):
+                paths.append(tool_input[field])
+        if payload.get("tool_name") == "apply_patch" and isinstance(command, str):
+            for line in command.splitlines():
+                for prefix in ("*** Update File: ", "*** Add File: ", "*** Delete File: "):
+                    if line.startswith(prefix):
+                        paths.append(line[len(prefix):])
+        for raw in paths:
+            path = Path(raw).expanduser()
+            if not path.is_absolute():
+                path = launch / path
+            try:
+                root, _, _ = _git_identity(path)
+            except FastPreWriteError:
+                continue
+            targets.add(root)
+        return any(configuration(target)["mode"] == "enforce" for target in targets)
+    except Exception:
+        return True
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     payload: object = {}
@@ -1723,7 +1766,7 @@ def main(argv: list[str] | None = None) -> int:
             print(_native_notice(f"OBSERVE ONLY: {message}"))
         elif mode == "enforce":
             print(message, file=sys.stderr)
-        return 2 if mode == "enforce" or outcome_config_invalid else 0
+        return 2 if mode == "enforce" or outcome_config_invalid or _trace_error_requires_refusal(payload) else 0
 
     # Exact typed investigation/retention commands have already validated their
     # narrow host scope. Ordinary mutations must pass the shared diagnosis gate.

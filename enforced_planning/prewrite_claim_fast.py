@@ -494,7 +494,7 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
             continue
         if command_start:
             command_start = False
-            env_command = token == "/usr/bin/env"
+            env_command = token in {"env", "/bin/env", "/usr/bin/env"}
             if token.startswith(("/usr/bin/", "/bin/")):
                 continue
         if env_command:
@@ -562,7 +562,7 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
 def _env_cwd_prefix(argv: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Read env directory options without changing command arguments."""
 
-    if not argv or argv[0] != "/usr/bin/env":
+    if not argv or argv[0] not in {"env", "/bin/env", "/usr/bin/env"}:
         return (), argv
     try:
         options, effective = getopt.getopt(argv[1:], "i0vu:C:S:", [

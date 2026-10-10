@@ -231,10 +231,12 @@ claim. A session may own claims in multiple repositories; an absolute file
 target or one supported literal Bash `-C <worktree>` target selects the matching
 healthy claim. Relative mutation with multiple possible claims remains denied
 as ambiguous.
-For the literal `/usr/bin/env` wrapper, only the final `-C` or `--chdir`
+For the literal `env`, `/bin/env`, or `/usr/bin/env` wrapper, only the final `-C` or `--chdir`
 directory selects claim and trace-review authority. A relative final directory
 resolves from the command's launch directory; earlier directory options do not
 change that base.
+An early payload or projection error cannot waive independently enforced
+trace review, even when ordinary claim enforcement is `off` or `observe`.
 
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the

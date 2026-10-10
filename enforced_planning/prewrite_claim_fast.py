@@ -509,6 +509,10 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
                 if commands is None or len(commands) != 1:
                     paths.append(token.split("=", 1)[1])
                 continue
+            if token.startswith("-C") and token != "-C":
+                if commands is None or len(commands) != 1:
+                    paths.append(token[2:])
+                continue
             if (
                 "=" in token and not token.startswith(("/", "~", "."))
             ):
@@ -554,11 +558,35 @@ def _bash_declared_paths(command: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(paths))
 
 
+def _env_cwd_prefix(argv: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Read literal env cwd options in their actual execution order."""
+
+    if not argv or argv[0] != "/usr/bin/env":
+        return (), argv
+    operands: list[str] = []
+    index = 1
+    while index < len(argv):
+        token = argv[index]
+        if token in {"-C", "--chdir"} and index + 1 < len(argv):
+            operands.append(argv[index + 1])
+            index += 2
+        elif token.startswith("--chdir=") and token != "--chdir=":
+            operands.append(token.split("=", 1)[1])
+            index += 1
+        elif token.startswith("-C") and token != "-C":
+            operands.append(token[2:])
+            index += 1
+        else:
+            break
+    return tuple(operands), argv[index:] if operands else argv
+
+
 def _bash_effective_argv(argv: tuple[str, ...]) -> tuple[str, ...]:
     """Return the command executed by the supported literal env cwd wrapper."""
 
-    if len(argv) >= 4 and argv[:2] == ("/usr/bin/env", "-C"):
-        return argv[3:]
+    operands, effective = _env_cwd_prefix(argv)
+    if operands:
+        return effective
     return argv
 
 
@@ -862,12 +890,17 @@ def _bash_explicit_worktree(command: str, *, cwd: Path | None = None) -> Path | 
     if commands is None or len(commands) != 1:
         return None
     argv = commands[0]
-    if len(argv) >= 4 and argv[0] == "/usr/bin/env" and argv[1] in {"-C", "--chdir"}:
-        operand = argv[2]
-    elif len(argv) >= 3 and argv[0] == "/usr/bin/env" and argv[1].startswith("--chdir="):
-        operand = argv[1].split("=", 1)[1]
-        if not operand:
-            return None
+    operands, effective = _env_cwd_prefix(argv)
+    if operands and effective:
+        target = cwd
+        for operand in operands:
+            directory = Path(operand).expanduser()
+            if not directory.is_absolute():
+                if target is None:
+                    return None
+                directory = target / directory
+            target = directory.resolve()
+        return target
     else:
         executable = Path(argv[0]).name if argv else ""
         if executable not in {"git", "make"} or len(argv) < 3 or argv[1] != "-C":

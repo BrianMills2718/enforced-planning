@@ -231,6 +231,9 @@ claim. A session may own claims in multiple repositories; an absolute file
 target or one supported literal Bash `-C <worktree>` target selects the matching
 healthy claim. Relative mutation with multiple possible claims remains denied
 as ambiguous.
+For the literal `/usr/bin/env` wrapper, `-C` and `--chdir` options apply in
+execution order: each relative directory resolves from the preceding one,
+and the final directory selects claim and trace-review authority.
 
 `outcome_admission_mode: enforce_selected` is a separate, stricter source
 continuation gate. It requires ordinary `prewrite_mode: enforce`, derives the

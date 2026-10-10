@@ -96,7 +96,8 @@ def test_enforced_trace_cannot_authorize_an_unprovable_shell_destination(tmp_pat
 
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("form", ["-C", "--chdir", "--chdir="])
-def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_worktree(tmp_path, monkeypatch, capsys, client, form):
+@pytest.mark.parametrize("repeated", [False, True])
+def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_worktree(tmp_path, monkeypatch, capsys, client, form, repeated):
     _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
     claim = yaml.safe_load(claim_path.read_text())
     claim.update(agent=client, session_id=f"{client}:host-gate-test")
@@ -109,6 +110,8 @@ def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_wor
     monkeypatch.setattr(provider, "admit", admit)
     operand = target.relative_to(launch)
     binding = f"{form}{operand}" if form.endswith("=") else f"{form} {operand}"
+    if repeated:
+        binding = f"-C {launch} {binding}"
     payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
         f"/usr/bin/env {binding} touch src/allowed.py"})
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
@@ -118,6 +121,41 @@ def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_wor
     assert decision["trace_review"]["disposition"] == "allow"
     assert calls == [(target, f"{client}:host-gate-test")]
     assert (target / "src/allowed.py").read_text() == "VALUE = 1\n"
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
+@pytest.mark.parametrize("relative", [False, True])
+@pytest.mark.parametrize("forms", [("-C", "-C"), ("-C", "--chdir"), ("--chdir=", "-C"), ("-C", "--chdir="), ("-C", "-Cjoined")])
+def test_repeated_env_directories_admit_the_actual_final_target(tmp_path, monkeypatch, capsys, client, mode, relative, forms):
+    from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
+    _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
+    claim_path.unlink()
+    (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
+    (target / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+    monkeypatch.setattr(provider.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    calls = []
+    real_admit = provider.admit
+    def admit(root, *args):
+        calls.append(root)
+        return real_admit(root, *args)
+    monkeypatch.setattr(provider, "admit", admit)
+    def binding(form, operand):
+        if form == "-Cjoined":
+            return f"-C{operand}"
+        return f"{form}{operand}" if form.endswith("=") else f"{form} {operand}"
+    final = target.relative_to(launch) if relative else target
+    command = f"/usr/bin/env {binding(forms[0], launch)} {binding(forms[1], final)} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"
+    assert _bash_explicit_worktree(command, cwd=tmp_path) == target
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command": command})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode=mode)
+    assert code == 2 and decision["decision"] == "deny"
+    if mode != "enforce":
+        assert calls == [target]
+        assert decision["reason_code"] == "trace_review_required"
+    assert not (target / "TRACE_REVIEW_SENTINEL_NOT_EXECUTED").exists()
 
 
 @pytest.mark.parametrize("client", ["codex", "claude-code"])

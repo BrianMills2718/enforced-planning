@@ -7,7 +7,9 @@
     "one or more rubric criteria did not pass for continuation-safety-and-integration",
     "semantic review for continuation-safety-and-integration reported blocking findings"
   ],
-  "receipt_sha256": "109b4c677795a778d60868146826d7535367fefa61cbec3caf23931f93960daa",
+  "receipt_sha256": "ee00dc7eceb04548bce4733e682cdba334c397c8b0d84b0f73c716020bd6a1d3",
+  "receipt_file_sha256": "109b4c677795a778d60868146826d7535367fefa61cbec3caf23931f93960daa",
+  "private_review_store_member": "receipt-ee00dc7eceb04548bce4733e682cdba334c397c8b0d84b0f73c716020bd6a1d3.json",
   "reviewer_session": "codex:01a1237d-cbab-74b1-a4ba-a80836f28d12",
   "capture_complete": true,
   "process_exit_status": 0,
@@ -18,6 +20,6 @@
     "item_27",
     "item_33"
   ],
-  "full_trace_review": "owning consumer session still inspecting remaining items",
+  "full_trace_review": "Cited failure items inspected; native terminal semantics validated against retained output. The original failed receipt is available in the source PR private review store without changing its verdict.",
   "public_raw_trace": false
 }

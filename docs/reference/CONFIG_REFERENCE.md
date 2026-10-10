@@ -137,6 +137,8 @@ in both the host decision and its receipt.
 The host records its combined claim and trace decision once, before optional
 outcome correlation. Direct component calls still record their own receipts;
 only the enclosing host defers that component write.
+An explicit shell working directory determines trace admission even when claim
+checking is disabled. Enforced admission refuses an unprovable shell destination.
 
 ### Host read-target state
 

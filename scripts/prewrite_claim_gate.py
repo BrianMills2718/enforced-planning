@@ -1734,10 +1734,16 @@ def main(argv: list[str] | None = None) -> int:
         from enforced_planning.trace_review_provider import admit
         from enforced_planning.prewrite_claim_fast import adapt_native_payload, _repository_context, _bash_is_explicitly_bound
         request = None
+        trace_target_cwd = Path(str(payload["cwd"]))
         try:
             request = adapt_native_payload(payload, client=args.client,
                                            claim_bootstrap_classifier=special_classifier)
-            context = _repository_context(request)
+            if request["tool_name"] == "Bash":
+                from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
+                explicit_target = _bash_explicit_worktree(request["bash_command"])
+                if explicit_target is not None:
+                    trace_target_cwd = explicit_target
+            context = _repository_context({**request, "cwd": str(trace_target_cwd)})
             target = Path(context["worktree_path"])
             admission = admit(target, "repair", request["session_id"], args.claims_dir)
             if admission["mode"] == "enforce":
@@ -1746,9 +1752,10 @@ def main(argv: list[str] | None = None) -> int:
                     target_errors.append(str(request.get("session_target_error") or request["session_target_error_code"]))
                 if context.get("bash_paths_outside_worktree"):
                     target_errors.append("trace admission cannot authorize shell paths outside its target worktree")
-                if request.get("session_target_rebound") and (
-                    request.get("bash_target_unprovable") or
-                    (request["tool_name"] == "Bash" and not _bash_is_explicitly_bound(request["bash_command"], target))
+                if request.get("bash_target_unprovable") or (
+                    request.get("session_target_rebound") and
+                    request["tool_name"] == "Bash" and
+                    not _bash_is_explicitly_bound(request["bash_command"], target)
                 ):
                     target_errors.append("trace admission requires a provable shell target worktree")
                 if target_errors:
@@ -1757,7 +1764,7 @@ def main(argv: list[str] | None = None) -> int:
         except (FastPreWriteError, OSError, ValueError, TypeError) as exc:
             from enforced_planning.trace_review_provider import configuration
             try:
-                fallback_settings = configuration(Path(str(payload["cwd"])))
+                fallback_settings = configuration(trace_target_cwd)
                 fallback_mode = fallback_settings["mode"]
                 if request is None:
                     fallback_mode = "enforce"

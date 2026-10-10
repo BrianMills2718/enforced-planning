@@ -41,6 +41,55 @@ def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_pat
     assert receipts[-1]["trace_review"]["valid"] is False
 
 
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
+def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path, monkeypatch, capsys, client, mode):
+    _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
+    claim_path.unlink()
+    (launch / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: off\n")
+    (target / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+    monkeypatch.setattr(provider.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    calls = []
+    real_admit = provider.admit
+    def record_admission(root, operation, session_id, registry):
+        calls.append(root)
+        return real_admit(root, operation, session_id, registry)
+    monkeypatch.setattr(provider, "admit", record_admission)
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
+        f"/usr/bin/env -C {target} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode=mode)
+    assert code == 2 and decision["decision"] == "deny"
+    if mode == "enforce":
+        assert decision["reason_code"] == "target_worktree_not_claimed"
+        assert calls == []
+    else:
+        assert calls == [target]
+        assert decision["reason_code"] == "trace_review_required"
+        assert decision["trace_review"]["mode"] == "enforce"
+        assert decision["trace_review"]["disposition"] == "deny"
+    assert not (target / "TRACE_REVIEW_SENTINEL_NOT_EXECUTED").exists()
+
+
+@pytest.mark.parametrize("client", ["codex", "claude-code"])
+@pytest.mark.parametrize("mode", ["off", "observe"])
+def test_enforced_trace_cannot_authorize_an_unprovable_shell_destination(tmp_path, monkeypatch, capsys, client, mode):
+    _, launch, _, claims_dir, claim_path = _fixture(tmp_path)
+    claim_path.unlink()
+    write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+    monkeypatch.setattr(provider, "admit", lambda *_args, **_kwargs: {
+        "mode": "enforce", "disposition": "allow", "valid": True, "errors": []})
+    payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
+        'printf repaired > "$REPAIR_DESTINATION"'})
+    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                             projection_path=tmp_path / "projection.json", client=client, mode=mode)
+    assert code == 2 and decision["decision"] == "deny"
+    assert decision["reason_code"] == "trace_review_required"
+    assert decision["trace_review"]["disposition"] == "deny"
+    assert "trace admission requires a provable shell target worktree" in decision["trace_review"]["errors"]
+
+
 def test_read_only_diagnosis_does_not_invoke_repair_guard(tmp_path, monkeypatch, capsys):
     workspace, _, worktree, claims_dir, _ = _fixture(tmp_path)
     def forbidden(*args):

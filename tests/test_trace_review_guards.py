@@ -44,7 +44,7 @@ def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_pat
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
 @pytest.mark.parametrize("relative", [False, True])
-@pytest.mark.parametrize("form", ["-C", "--chdir", "--chdir="])
+@pytest.mark.parametrize("form", ["-C", "--chdir", "--chdir=", "-iCjoined", "--ignore-environment --chdir="])
 def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path, monkeypatch, capsys, client, mode, relative, form):
     _, launch, target, claims_dir, claim_path = _fixture(tmp_path)
     claim_path.unlink()
@@ -59,7 +59,8 @@ def test_unclaimed_explicit_shell_target_cannot_borrow_launch_coverage(tmp_path,
         return real_admit(root, operation, session_id, registry)
     monkeypatch.setattr(provider, "admit", record_admission)
     operand = target.relative_to(launch) if relative else target
-    binding = f"{form}{operand}" if form.endswith("=") else f"{form} {operand}"
+    binding = f"-iC{operand}" if form == "-iCjoined" else (
+        f"{form}{operand}" if form.endswith("=") else f"{form} {operand}")
     payload = _payload(cwd=launch, tool="Bash", tool_input={"command":
         f"/usr/bin/env {binding} touch TRACE_REVIEW_SENTINEL_NOT_EXECUTED"})
     code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
@@ -126,7 +127,7 @@ def test_claimed_relative_shell_target_preserves_launch_and_admits_the_right_wor
 @pytest.mark.parametrize("client", ["codex", "claude-code"])
 @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
 @pytest.mark.parametrize("relative", [False, True])
-@pytest.mark.parametrize("forms", [("-C", "-C"), ("-C", "--chdir"), ("--chdir=", "-C"), ("-C", "--chdir="), ("-C", "-Cjoined")])
+@pytest.mark.parametrize("forms", [("-C", "-C"), ("-C", "--chdir"), ("--chdir=", "-C"), ("-C", "--chdir="), ("-C", "-Cjoined"), ("-iC", "-Cjoined"), ("--ignore-environment --chdir=", "--chdir=")])
 def test_repeated_env_directories_admit_the_actual_final_target(tmp_path, monkeypatch, capsys, client, mode, relative, forms):
     from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
     _, launch, target, claims_dir, claim_path = _fixture(tmp_path)

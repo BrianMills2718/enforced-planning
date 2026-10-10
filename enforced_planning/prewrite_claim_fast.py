@@ -8,6 +8,7 @@ digest exactly matches the current registry.
 from __future__ import annotations
 
 import fcntl
+import getopt
 import hashlib
 import json
 import os
@@ -563,22 +564,18 @@ def _env_cwd_prefix(argv: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, 
 
     if not argv or argv[0] != "/usr/bin/env":
         return (), argv
-    operands: list[str] = []
-    index = 1
-    while index < len(argv):
-        token = argv[index]
-        if token in {"-C", "--chdir"} and index + 1 < len(argv):
-            operands.append(argv[index + 1])
-            index += 2
-        elif token.startswith("--chdir=") and token != "--chdir=":
-            operands.append(token.split("=", 1)[1])
-            index += 1
-        elif token.startswith("-C") and token != "-C":
-            operands.append(token[2:])
-            index += 1
-        else:
-            break
-    return tuple(operands), argv[index:] if operands else argv
+    try:
+        options, effective = getopt.getopt(argv[1:], "i0vu:C:S:", [
+            "ignore-environment", "null", "debug", "unset=", "chdir=",
+            "split-string=", "block-signal", "default-signal", "ignore-signal",
+            "list-signal-handling", "help", "version",
+        ])
+    except getopt.GetoptError:
+        return (), argv
+    if any(option in {"-S", "--split-string"} for option, _ in options):
+        return (), argv
+    operands = tuple(value for option, value in options if option in {"-C", "--chdir"})
+    return operands, tuple(effective) if operands else argv
 
 
 def _bash_effective_argv(argv: tuple[str, ...]) -> tuple[str, ...]:

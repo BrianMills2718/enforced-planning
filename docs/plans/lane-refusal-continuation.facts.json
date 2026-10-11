@@ -1,0 +1,21 @@
+{
+  "schema_version": "method-activation-facts.v1",
+  "record_type": "method_activation_facts",
+  "plan_ref": "docs/plans/lane-refusal-continuation.md",
+  "plan_sha256": "8455a4858b2ba6042feb2e6118c7e1bfbdc47d8c4bb30c073fb333aae9e2f860",
+  "path_decision_ref": "docs/plans/lane-refusal-continuation.path-decision.json",
+  "path_decision_sha256": "b0e01390c2b9c97c7280e8b27546b2c23ec4017c4fd7d8897c582df50b7dc64a",
+  "facts": {
+    "shared_mechanism": false,
+    "empirical_comparison_proposed": false,
+    "llm_central": false,
+    "irreversible_or_spend_action": false
+  },
+  "fact_sources": {
+    "shared_mechanism": "derived_current_boundary",
+    "empirical_comparison_proposed": "derived_current_boundary",
+    "llm_central": "derived_current_boundary",
+    "irreversible_or_spend_action": "derived_current_boundary"
+  },
+  "recorded_at": "2026-10-11T23:26:08Z"
+}

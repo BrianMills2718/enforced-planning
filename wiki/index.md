@@ -19,6 +19,8 @@ Portable governed-repo framework for AI-assisted development: installs planning 
 - [Project overview](../README.md)
 - [Roadmap](../roadmap/README.md)
 - [Active plan queue](../docs/plans/AGENTS.md)
+- [System model](../docs/model/ODD.md)
+- Quick plans: [lane-refusal-continuation](../docs/plans/lane-refusal-continuation.md) ([goal](../docs/plans/lane-refusal-continuation.goal.md))
 
 ## Coverage and unknowns
 

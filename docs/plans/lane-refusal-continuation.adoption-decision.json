@@ -1,0 +1,16 @@
+{
+  "schema_version": "method-adoption-decision.v1",
+  "record_type": "method_adoption_decision",
+  "decision": "adopted",
+  "plan_ref": "docs/plans/lane-refusal-continuation.md",
+  "plan_sha256": "8455a4858b2ba6042feb2e6118c7e1bfbdc47d8c4bb30c073fb333aae9e2f860",
+  "receipt_ref": "docs/plans/lane-refusal-continuation.receipt.json",
+  "receipt_sha256": "d103e6376d2c80913d3325d177a4ae64241a01ee0cf1e7823f7587eaefb2667b",
+  "receipt_result": "pass",
+  "reason_codes": [],
+  "summary": [
+    "pass: 11 items evidenced, 1 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "decided_at": "2026-10-11T23:26:28Z"
+}

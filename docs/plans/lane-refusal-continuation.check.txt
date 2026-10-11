@@ -1,0 +1,164 @@
+=== BEFORE (source at b4599f14205d52824082d64b41f2d1096442760c, new tests present) ===
+$ python3 -m pytest tests/test_claim_bootstrap.py -k "continuation_commands" -p no:cacheprovider -rA
+FAILED tests/test_claim_bootstrap.py::test_root_lane_refusal_names_exact_continuation_commands
+FAILED tests/test_claim_bootstrap.py::test_existing_tracker_refusal_names_exact_continuation_commands
+====================== 2 failed, 133 deselected in 5.60s =======================
+exit=1
+
+=== AFTER (working tree change on b4599f14205d52824082d64b41f2d1096442760c) ===
+$ python3 -m pytest tests/test_claim_bootstrap.py tests/test_tracker_lane_identity.py -p no:cacheprovider -rA
+PASSED tests/test_claim_bootstrap.py::test_configured_workspace_root_comes_from_hash_pinned_provider
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_preserves_bytes_and_removes_only_exact_source
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_parallel_reservation_retains_disjoint_root_authority[off]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_parallel_reservation_retains_disjoint_root_authority[enforce_selected]
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_rejects_ambiguous_or_nonarchive_paths[updates0]
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_rejects_ambiguous_or_nonarchive_paths[updates1]
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_rejects_ambiguous_or_nonarchive_paths[updates2]
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_rejects_ambiguous_or_nonarchive_paths[updates3]
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_rejects_ambiguous_or_nonarchive_paths[updates4]
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_never_overwrites_destination
+PASSED tests/test_claim_bootstrap.py::test_workspace_file_archive_rejects_symlink_source
+PASSED tests/test_claim_bootstrap.py::test_workspace_image_canary_stages_image_png_and_preserves_archive
+PASSED tests/test_claim_bootstrap.py::test_workspace_image_canary_never_overwrites_existing_image
+PASSED tests/test_claim_bootstrap.py::test_workspace_image_canary_requires_canonical_archived_png[screenshot.png]
+PASSED tests/test_claim_bootstrap.py::test_workspace_image_canary_requires_canonical_archived_png[archive/../screenshot.png]
+PASSED tests/test_claim_bootstrap.py::test_workspace_image_canary_requires_canonical_archived_png[archive/workspace-cleanup/file.txt]
+PASSED tests/test_claim_bootstrap.py::test_workspace_operations_reject_request_selected_absolute_cwd[archive]
+PASSED tests/test_claim_bootstrap.py::test_workspace_operations_reject_request_selected_absolute_cwd[canary]
+PASSED tests/test_claim_bootstrap.py::test_unclaimed_native_session_can_start_its_own_claim
+PASSED tests/test_claim_bootstrap.py::test_session_start_rejects_missing_worktree_before_claim_creation
+PASSED tests/test_claim_bootstrap.py::test_request_for_wrong_agent_is_denied
+PASSED tests/test_claim_bootstrap.py::test_request_cannot_supply_session_id
+PASSED tests/test_claim_bootstrap.py::test_cross_session_scope_update_is_denied
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_accepts_only_canonical_single_command
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_accepts_typed_local_integration
+PASSED tests/test_claim_bootstrap.py::test_typed_local_repository_bootstrap_creates_local_repo_claim_and_worktree
+PASSED tests/test_claim_bootstrap.py::test_local_integration_relocks_after_git_failure
+PASSED tests/test_claim_bootstrap.py::test_already_integrated_local_repository_requires_a_healthy_lock
+PASSED tests/test_claim_bootstrap.py::test_local_integration_recovers_a_partial_relock_failure
+PASSED tests/test_claim_bootstrap.py::test_typed_local_repository_bootstrap_rejects_every_existing_target[directory]
+PASSED tests/test_claim_bootstrap.py::test_typed_local_repository_bootstrap_rejects_every_existing_target[file]
+PASSED tests/test_claim_bootstrap.py::test_typed_local_repository_bootstrap_rejects_every_existing_target[symlink]
+PASSED tests/test_claim_bootstrap.py::test_typed_local_repository_bootstrap_rejects_nested_or_non_child_target
+PASSED tests/test_claim_bootstrap.py::test_typed_local_repository_bootstrap_rolls_back_unclaimed_failure
+PASSED tests/test_claim_bootstrap.py::test_default_branch_target_is_rejected_before_fetch
+PASSED tests/test_claim_bootstrap.py::test_project_graph_rejects_non_github_origin_even_when_owner_repo_matches[https://evil.example/Brian/agent-skills.git]
+PASSED tests/test_claim_bootstrap.py::test_project_graph_rejects_non_github_origin_even_when_owner_repo_matches[git@evil.example:Brian/agent-skills.git]
+PASSED tests/test_claim_bootstrap.py::test_project_graph_rejects_non_github_origin_even_when_owner_repo_matches[/tmp/Brian/agent-skills.git]
+PASSED tests/test_claim_bootstrap.py::test_project_graph_rejects_non_github_origin_even_when_owner_repo_matches[file:///tmp/Brian/agent-skills.git]
+PASSED tests/test_claim_bootstrap.py::test_project_graph_accepts_ssh_alias_only_when_it_resolves_to_github
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_bootstraps_from_fresh_remote_not_stale_primary
+PASSED tests/test_claim_bootstrap.py::test_remote_fetch_failure_leaves_no_lane_artifacts
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projection[None]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_worktree_transaction_creates_claim_tracker_and_projection[write_paths1]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_bootstrap_creates_declared_new_root_file_with_exact_scope
+PASSED tests/test_claim_bootstrap.py::test_new_root_file_bootstrap_keeps_exact_scope_beside_healthy_disjoint_writer
+PASSED tests/test_claim_bootstrap.py::test_existing_root_file_at_fresh_start_revision_is_exact_when_canonical_is_stale
+PASSED tests/test_claim_bootstrap.py::test_maintenance_bootstrap_rejects_ambiguous_new_file_contract[updates0]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_bootstrap_rejects_ambiguous_new_file_contract[updates1]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_bootstrap_rejects_ambiguous_new_file_contract[updates2]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_bootstrap_rejects_ambiguous_new_file_contract[updates3]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority[write_paths0-off]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority[write_paths0-enforce_selected]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority[write_paths1-off]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_transaction_pins_fresh_default_and_preserves_goal_authority[write_paths1-enforce_selected]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_rejects_malformed_goal_contract[updates0-plan_ref]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_rejects_malformed_goal_contract[updates1-plan_ref]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_rejects_malformed_goal_contract[updates2-surrounding whitespace]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_rejects_malformed_goal_contract[updates3-surrounding whitespace]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_lifecycle_failure_rolls_back_all_lane_artifacts[False-off]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_lifecycle_failure_rolls_back_all_lane_artifacts[False-enforce_selected]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_lifecycle_failure_rolls_back_all_lane_artifacts[True-off]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_lifecycle_failure_rolls_back_all_lane_artifacts[True-enforce_selected]
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_preserves_entire_lane_when_persisted_identity_changes
+PASSED tests/test_claim_bootstrap.py::test_goal_worktree_preserves_complete_lane_when_post_claim_reconciliation_fails
+PASSED tests/test_claim_bootstrap.py::test_parent_delegates_one_narrow_child_owned_maintenance_lane
+PASSED tests/test_claim_bootstrap.py::test_delegated_maintenance_rejects_unsafe_authority_shapes[updates0-narrow write_paths]
+PASSED tests/test_claim_bootstrap.py::test_delegated_maintenance_rejects_unsafe_authority_shapes[updates1-must differ]
+PASSED tests/test_claim_bootstrap.py::test_delegated_maintenance_rejects_unsafe_authority_shapes[updates2-does not belong]
+PASSED tests/test_claim_bootstrap.py::test_delegated_maintenance_rejects_unsafe_authority_shapes[updates3-cannot name itself]
+PASSED tests/test_claim_bootstrap.py::test_delegated_maintenance_requires_exact_healthy_parent_before_artifacts
+PASSED tests/test_claim_bootstrap.py::test_delegated_maintenance_rejects_sibling_overlap_with_healthy_owner
+PASSED tests/test_claim_bootstrap.py::test_delegated_post_claim_failure_revokes_before_git_artifacts_disappear
+PASSED tests/test_claim_bootstrap.py::test_delegated_post_claim_revoke_failure_preserves_intact_lane_for_retry
+PASSED tests/test_claim_bootstrap.py::test_delegated_pre_claim_failure_rolls_back_git_artifacts
+PASSED tests/test_claim_bootstrap.py::test_public_delegated_revoke_reports_completed_when_lock_reconcile_fails
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_extra_fields_and_native_client_mismatch[extra0]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_extra_fields_and_native_client_mismatch[extra1]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_traversal_and_shell_branches[../escape]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_traversal_and_shell_branches[fix/../escape]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_traversal_and_shell_branches[foo$(id)]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_traversal_and_shell_branches[foo;id]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_traversal_and_shell_branches[foo|id]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_existing_branch_or_worktree[branch]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_existing_branch_or_worktree[worktree]
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_reports_worktree_add_failure_without_residue
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rolls_back_its_atomic_branch_after_failed_git_add
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_preserves_foreign_branch_that_wins_atomic_ref_race
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_symlinked_worktree_parent
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_suppresses_unclaimed_git_hooks
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rejects_session_with_existing_root_without_residue
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_rolls_back_partial_session_start_before_git_artifacts
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_preserves_claim_when_partial_tracker_identity_changes
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_preserves_detached_same_head_worktree_on_rollback
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_preserves_untracked_content_on_rollback
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_preserves_branch_when_worktree_cleanup_fails
+PASSED tests/test_claim_bootstrap.py::test_projection_recovery_parser_accepts_only_exact_paths
+PASSED tests/test_claim_bootstrap.py::test_shell_operators_inside_single_quoted_json_are_inert_data
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands[python scripts/claim_bootstrap.py --request-json '{}']
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands[/usr/bin/python3 /tmp/session_start.py --request-json '{}']
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands[/usr/bin/python3 /tmp/claim_bootstrap.py --request-json '{}' && touch /tmp/pwned]
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands[/usr/bin/python3 /tmp/claim_bootstrap.py --request-json '{}' > /tmp/result]
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands[/usr/bin/python3 /tmp/claim_bootstrap.py --request-json '{}'\nwhoami]
+PASSED tests/test_claim_bootstrap.py::test_raw_bash_grammar_rejects_compound_or_raw_lifecycle_commands[python scripts/session_start.py --agent codex --project demo]
+PASSED tests/test_claim_bootstrap.py::test_release_self_is_rejected_by_the_bootstrap_surface
+PASSED tests/test_claim_bootstrap.py::test_remaining_self_service_operations_are_accepted[payload0-session_start_or_update]
+PASSED tests/test_claim_bootstrap.py::test_remaining_self_service_operations_are_accepted[payload1-heartbeat]
+PASSED tests/test_claim_bootstrap.py::test_remaining_self_service_operations_are_accepted[payload2-progress]
+PASSED tests/test_claim_bootstrap.py::test_ownerless_existing_slot_cannot_be_bootstrapped_as_self
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths0]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths1]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths2]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths3]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths4]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths5]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths6]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths7]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths8]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_rejects_ambiguous_write_paths[paths9]
+PASSED tests/test_claim_bootstrap.py::test_narrow_bootstrap_preserves_other_writers[unrelated.txt]
+PASSED tests/test_claim_bootstrap.py::test_narrow_bootstrap_preserves_other_writers[src/adapter.py]
+PASSED tests/test_claim_bootstrap.py::test_narrow_bootstrap_preserves_other_writers[.]
+PASSED tests/test_claim_bootstrap.py::test_whole_repository_claim_overlaps_in_both_directions[.-src/adapter.py]
+PASSED tests/test_claim_bootstrap.py::test_whole_repository_claim_overlaps_in_both_directions[src/adapter.py-.]
+PASSED tests/test_claim_bootstrap.py::test_whole_repository_claim_overlaps_in_both_directions[./-tests]
+PASSED tests/test_claim_bootstrap.py::test_bootstrap_dispatches_to_scoped_resolver_with_exact_branch
+PASSED tests/test_claim_bootstrap.py::test_unknown_operation_and_extra_fields_fail_closed
+PASSED tests/test_claim_bootstrap.py::test_duplicate_json_object_keys_fail_closed_at_every_depth[{"schema_version":"1.0","operation":"heartbeat","project":"a","project":"b","scope":"x"}]
+PASSED tests/test_claim_bootstrap.py::test_duplicate_json_object_keys_fail_closed_at_every_depth[{"schema_version":"1.0","operation":"heartbeat","project":"a","scope":"x","nested":{"a":1,"a":2}}]
+PASSED tests/test_claim_bootstrap.py::test_maintenance_creation_reconciles_canonical_checkout_lock
+PASSED tests/test_claim_bootstrap.py::test_maintenance_lock_failure_rolls_back_lane_and_reconciles_canonical_checkout
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths
+PASSED tests/test_claim_bootstrap.py::test_typed_maintenance_parallel_root_ignores_same_relative_path_in_another_project
+PASSED tests/test_claim_bootstrap.py::test_root_lane_refusal_names_exact_continuation_commands
+PASSED tests/test_claim_bootstrap.py::test_existing_tracker_refusal_names_exact_continuation_commands
+PASSED tests/test_tracker_lane_identity.py::test_native_successor_bootstrap_refresh_and_close_preserve_predecessor
+PASSED tests/test_tracker_lane_identity.py::test_active_predecessor_keeps_occupied_path
+PASSED tests/test_tracker_lane_identity.py::test_closed_same_lane_keeps_history_path
+PASSED tests/test_tracker_lane_identity.py::test_conflicting_successor_identity_is_refused[scope]
+PASSED tests/test_tracker_lane_identity.py::test_conflicting_successor_identity_is_refused[branch]
+PASSED tests/test_tracker_lane_identity.py::test_conflicting_successor_identity_is_refused[session_id]
+PASSED tests/test_tracker_lane_identity.py::test_closed_tracker_missing_identity_is_refused
+PASSED tests/test_tracker_lane_identity.py::test_successor_key_survives_long_goal_and_native_rewrite
+======================= 143 passed in 635.60s (0:10:35) ========================
+exit=0
+
+=== LIVE refusal from patched bootstrap (session holds enforced-planning:lane-refusal-continuation) ===
+$ make maintenance-worktree BRANCH=probe-refusal-continuation MAINTENANCE_BOOTSTRAP_WRITE_PATHS=README.md
+  },
+  "ok": false,
+  "schema_version": "1.0"
+}
+make: *** [Makefile:445: maintenance-worktree] Error 1
+exit=2
+    "message": "worktree bootstrap requires the native session to own zero existing claim roots unless SESSION_ALLOW_PARALLEL=1 and every write path is narrow and disjoint from that root's; close or transfer first: enforced-planning:lane-refusal-continuation. Continue: if that lane's work is merged, close it: make -C /home/brian/code/enforced-planning session-close BRANCH=lane-refusal-continuation. Or to keep it open, rerun with SESSION_ALLOW_PARALLEL=1 and narrow write paths (MAINTENANCE_BOOTSTRAP_WRITE_PATHS or GOAL_BOOTSTRAP_WRITE_PATHS, never '.'); a root in another repository never overlaps."

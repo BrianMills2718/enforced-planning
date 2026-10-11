@@ -1,0 +1,627 @@
+{
+  "schema_version": "planning-method-conformance-receipt.v1",
+  "record_type": "planning_method_conformance_receipt",
+  "receipt_id": "RECEIPT-markdown-description-summary-bf0e13625ae9",
+  "plan": {
+    "plan_ref": "docs/plans/markdown-description-summary.md",
+    "plan_sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+  },
+  "path_decision": {
+    "ref": "docs/plans/markdown-description-summary.path-decision.json",
+    "sha256": "fa3a6f7be9bebf3e40e8f28afb595e21e35b5a0b87e29372319717b281e6002e",
+    "selected_path": "prototype",
+    "classified_path": "prototype",
+    "errors": []
+  },
+  "route": "inline_prototype",
+  "profile": {
+    "profile_id": "bounded-design",
+    "revision": "bounded-design@11",
+    "path": "contracts/method-conformance/profiles/bounded-design.v1.json",
+    "sha256": "0261c51b94b32a629bf6255b3c032c18cdbef4e8df6d5bed9db1f72d267c89cb"
+  },
+  "compiler": {
+    "path": "scripts/method_conformance/compiler.py",
+    "sha256": "e08f1a326de035b56e4e20bd6224439145f2373926a66672502c4b78a524105d"
+  },
+  "activation": {
+    "facts_ref": "docs/plans/markdown-description-summary.facts.json",
+    "facts_sha256": "6b3b7a40cc743fee482253e13f6cd7a19889dd70dbec19985829fe9cd355a5dd",
+    "facts": {
+      "shared_mechanism": true,
+      "empirical_comparison_proposed": false,
+      "llm_central": false,
+      "irreversible_or_spend_action": true,
+      "claims_external_standard": true,
+      "aes_governed_target": false,
+      "crosses_system_boundary": false,
+      "deploys": false,
+      "multiple_writers": false,
+      "consequential_boundary": false,
+      "inline_prototype": true
+    },
+    "fact_origins": {
+      "shared_mechanism": "declared:derived_current_boundary",
+      "empirical_comparison_proposed": "declared:derived_current_boundary",
+      "llm_central": "declared:derived_current_boundary",
+      "irreversible_or_spend_action": "declared:derived_current_boundary",
+      "claims_external_standard": "declared:derived_current_boundary",
+      "aes_governed_target": "declared:derived_current_boundary",
+      "crosses_system_boundary": "default:not_declared",
+      "deploys": "default:not_declared",
+      "multiple_writers": "derived:path_decision.concurrent_writers",
+      "consequential_boundary": "derived:path_decision.persistent_migration|consequential_external_mutation",
+      "inline_prototype": "derived:classified_path==prototype"
+    },
+    "overlays": [
+      {
+        "overlay_id": "OV-PRIOR-ART",
+        "activation_fact": "shared_mechanism",
+        "active": true,
+        "reason": "shared_mechanism=true (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-EMPIRICAL-COMPARISON",
+        "activation_fact": "empirical_comparison_proposed",
+        "active": false,
+        "reason": "empirical_comparison_proposed=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-LLM-CENTRAL",
+        "activation_fact": "llm_central",
+        "active": false,
+        "reason": "llm_central=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-MULTIPLE-WRITERS",
+        "activation_fact": "multiple_writers",
+        "active": false,
+        "reason": "multiple_writers=false (derived:path_decision.concurrent_writers)"
+      },
+      {
+        "overlay_id": "OV-CONSEQUENTIAL-BOUNDARY",
+        "activation_fact": "consequential_boundary",
+        "active": false,
+        "reason": "consequential_boundary=false (derived:path_decision.persistent_migration|consequential_external_mutation)"
+      },
+      {
+        "overlay_id": "OV-INLINE-PROTOTYPE",
+        "activation_fact": "inline_prototype",
+        "active": true,
+        "reason": "inline_prototype=true (derived:classified_path==prototype)"
+      },
+      {
+        "overlay_id": "OV-SYSTEM-BOUNDARY",
+        "activation_fact": "crosses_system_boundary",
+        "active": false,
+        "reason": "crosses_system_boundary=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DEPLOYMENT",
+        "activation_fact": "deploys",
+        "active": false,
+        "reason": "deploys=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-STANDARD-CONFORMANCE",
+        "activation_fact": "claims_external_standard",
+        "active": true,
+        "reason": "claims_external_standard=true (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-AES",
+        "activation_fact": "aes_governed_target",
+        "active": false,
+        "reason": "aes_governed_target=false (declared:derived_current_boundary)"
+      }
+    ]
+  },
+  "checklist": {
+    "checklist_id": "method-conformance.bounded-design",
+    "revision": "sha256:75a20c22750eb967edd4d3b1b224d685132e47498e20b6606c84fcd28334bfe7",
+    "definition_sha256": "30ba1447a9e97e2eb319cc9a2f66c083864d31bea64b0685d7f98a1bd4362090",
+    "bundle_ref": "docs/plans/markdown-description-summary.bundle.json",
+    "bundle_sha256": "071b477bb89aef6da5f683aee64b0cce4720400cffee3063aa4b4cc1c2c6a476",
+    "coverage": "complete",
+    "definition_matches_recompilation": true
+  },
+  "items": [
+    {
+      "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#actor-and-result",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-ACTOR-RESULT-EXAMPLE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the actor as an agent or Brian reading and editing repository documents, states the result as the document’s `description` front-matter line serving as its summary, and gives concrete generated-wiki examples for `docs/described.md` and `docs/typed.md`.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ROUTE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "structural",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.path-decision.json",
+          "sha256": "fa3a6f7be9bebf3e40e8f28afb595e21e35b5a0b87e29372319717b281e6002e"
+        }
+      ],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-REQUIREMENTS-TRACED",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#requirements",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/f250b9512121/CORE-REQUIREMENTS-TRACED",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence provides a requirements list covering the explicit user asks and the implied claims, including conformance to AES-CTX-004 and the maintained docstring-wiki output. Every listed requirement names a check and gives an explicit status, including R5’s generated-wiki check as planned and not yet run.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SUCCESS-DISPROOF",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#success-and-disproof",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-SUCCESS-DISPROOF",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence specifies direct success checks: a new test asserts the exact summary text and source label for R1–R3, and mutation against the old implementation demonstrates the test exercises the change; the existing tests must also pass. It also gives concrete disproof conditions: the generated listing has an incorrect description or any test fails.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-REVIEW",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#success-and-disproof",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-TRACE-REVIEW",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names the runs, specifies where their complete traces live (the pull request body), and requires evidence beyond final outcomes, including test IDs, assertions, counts, exit statuses, and skipped-test checks. It covers both the branch-versus-HEAD test comparison and the pre-merge `make check` run.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-DEBUGGING",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#when-a-run-fails-or-surprises-us",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-TRACE-DEBUGGING",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly provides a separate procedure distinct from anticipated failure modes. It covers preserving the failed run and trace id, reading all specified inputs and stages, quoting the divergence, classifying the diagnosis across all required categories, linking a targeted repair to a new traced verification run while retaining the original failure, restricting unresolved diagnoses to investigation, and separating review completeness from the run verdict.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SYSTEM-MODEL",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#system-model",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/f250b9512121/CORE-SYSTEM-MODEL",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence links the system model, cites its documentation entry point and repository scope, names each relevant element, and specifies what the examined run must show for each. It also identifies the sole source-linked view, explains the omitted diagram, gives concrete freshness/drift checks, and states how the model, view coverage, and verification evidence will be reconciled in the same change.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-CAPABILITY-REUSE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#capability-reuse",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-CAPABILITY-REUSE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states, “No catalogue entry fits, because” and explains that the work needs a document-summary or repository-wiki generator that neither catalogue file provides. It also states that no new capability is added, so no first consumer is required.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-AUTHORITY-NONGOALS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#authority-and-non-goals",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-AUTHORITY-NONGOALS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies Brian as the authority, describes the implementing agent’s decision scope, and lists concrete non-goals, including no new generator or catalog files, no diagnostic code, no Python docstring changes, no other-repository edits, and no rewriting of existing documents.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-IRREVERSIBLE-SPEND",
+      "effect": "blocking",
+      "applicability_mode": "conditional",
+      "condition_fact": "irreversible_or_spend_action",
+      "condition_value": true,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#irreversible-actions-and-spend",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-IRREVERSIBLE-SPEND",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence identifies the only spend as adoption-verifier model calls, bounded to “a few cents” through Brian’s OpenRouter route, authorized under Brian’s standing planning-verification authority, and contained by a single pass per item. It also states that all other changes are revertible git commits, so no other irreversible action is proposed.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-UNCERTAINTIES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#uncertainties",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/CORE-UNCERTAINTIES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly lists two uncertainties and, for each, provides resolving evidence and names the implementing agent as owner. The generated-wiki diff is identified as the evidence resolving both uncertainties.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ACTIVATION-FACTS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#activation-facts",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/27bc3d51babb/CORE-ACTIVATION-FACTS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "All triggered activation facts are not declared false. The plan correctly declares shared_mechanism, irreversible_or_spend_action, and claims_external_standard true, while the false declarations are supported: it proposes no alternative-comparison experiment, makes no central LLM-dependent behavior, and states that enforced-planning has no `.aes/target.yaml`.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-DISPOSITION",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#prior-art-and-ownership",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/27bc3d51babb/OV-PRIOR-ART-DISPOSITION",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies searches of existing ownership, internal lineage, internal artifacts, and external prior art. Every listed candidate has an explicit disposition using the permitted categories: extend, reuse, compose, or bounded alternatives are not required when no candidate receives them.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+      "effect": "advisory",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#prior-art-and-ownership",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/27bc3d51babb/OV-PRIOR-ART-PARALLEL-CHECK",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names a concrete structural check: `rg -n \"front.?matter|safe_load\" enforced_planning/ scripts/docstring_wiki.py`, requiring the description to be read only in `_split_front_matter`. It also names a consumer-path observation requiring `aes-durable-docs` CATALOG-STALE to call `docstring_wiki --check` rather than use its own renderer.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PROTO-VERTICAL-RESET",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#vertical-and-reset",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/11ca643c62fa/OV-PROTO-VERTICAL-RESET",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the minimal vertical result, the reset boundary and rollback action, and the non-goals. It also explicitly states that no coordinated-work ceremony is added, while describing the existing single-writer workflow and repository checks.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-STANDARD-CONFORMANCE-RULES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#standard-conformance",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/ccb61ae4779a/OV-STANDARD-CONFORMANCE-RULES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names the external standard and decision, provides their repository paths and commit, states that no machine-readable rules exist, and identifies the written rules encoded by the check. It explicitly specifies that `ArtifactRecord.summary` and the generated wiki line must satisfy those rules.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-STANDARD-CONFORMANCE-GATE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/markdown-description-summary.md#standard-conformance",
+          "sha256": "bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/markdown-description-summary/ccb61ae4779a/OV-STANDARD-CONFORMANCE-GATE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names the conformance check, its pytest command, and the `make check` merge-gate step that runs it on every change. It also gives a concrete disproof involving a conforming-labelled artifact violating the summary rule, and explicitly labels the fallback order and `summary_source` labels as repository extensions in the artifact, the plan, and the model documentation.",
+        "reused": true
+      },
+      "suggested_action": null
+    }
+  ],
+  "item_counts": {
+    "pass": 17,
+    "unresolved": 0,
+    "not_applicable": 0,
+    "unavailable": 0,
+    "missing": 0
+  },
+  "semantic_verifier": {
+    "kind": "llm_client",
+    "available": true,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "task": "company_planning.method_conformance.semantic_item_review"
+  },
+  "conformance_report": {
+    "schema_version": "1.0",
+    "record_type": "planning_conformance_report",
+    "report_id": "REPORT-markdown-description-summary-bf0e13625ae9",
+    "snapshot_ref": "SNAPSHOT-markdown-description-summary",
+    "snapshot_revision": "sha256:071b477bb89aef6da5f683aee64b0cce4720400cffee3063aa4b4cc1c2c6a476",
+    "packet_ref": "docs/plans/markdown-description-summary.md",
+    "packet_revision": "sha256:bf0e13625ae995d9079677224ddd543149587c8bbceb18910b5836f475f01a0f",
+    "structural_status": "pass",
+    "semantic_review_status": "complete",
+    "diagnostics": [],
+    "route": "inline_prototype",
+    "adoption_readiness": "ready_for_contributor",
+    "limitations": [
+      "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+    ]
+  },
+  "advisory_deviations": [],
+  "result": "pass",
+  "reason_codes": [],
+  "actionable_summary": [
+    "pass: 17 items evidenced, 0 confirmed not applicable, 0 advisory deviation(s)"
+  ],
+  "limitations": [
+    "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+  ],
+  "caller": {
+    "client": "claude-code",
+    "session": "d0b956fa-10a5-45fc-8185-72585351ab8c"
+  },
+  "started_at": "2026-10-11T00:26:07Z",
+  "completed_at": "2026-10-11T00:26:07Z",
+  "duration_ms": 241
+}

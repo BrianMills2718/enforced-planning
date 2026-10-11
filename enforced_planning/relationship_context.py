@@ -16,6 +16,8 @@ from pathlib import Path, PurePosixPath
 import subprocess
 from typing import Literal, TypeAlias
 
+import yaml
+
 
 ArtifactFormat: TypeAlias = Literal["python", "markdown", "text", "data", "binary", "other"]
 ArtifactClassification: TypeAlias = Literal[
@@ -407,6 +409,31 @@ def _markdown_sections(text: str) -> tuple[str | None, list[tuple[str, str, int]
     return title, sections
 
 
+def _split_front_matter(text: str) -> tuple[str | None, str]:
+    """Return the document's own ``description`` front-matter value and the body after the block.
+
+    The description is authored where the document is edited (AES-CTX-004), so it
+    outranks any summary inferred from the body. Malformed front matter yields no
+    description and leaves the text unchanged.
+    """
+
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return None, text
+    for index in range(1, len(lines)):
+        if lines[index].strip() in {"---", "..."}:
+            try:
+                data = yaml.safe_load("".join(lines[1:index]))
+            except yaml.YAMLError:
+                return None, text
+            body = "".join(lines[index + 1 :])
+            value = data.get("description") if isinstance(data, dict) else None
+            if isinstance(value, str) and " ".join(value.split()):
+                return " ".join(value.split()), body
+            return None, body
+    return None, text
+
+
 def _markdown_first_paragraph(text: str) -> str | None:
     """Find initial prose while skipping headings, comments, and metadata lines."""
 
@@ -434,7 +461,13 @@ def _markdown_first_paragraph(text: str) -> str | None:
 
 
 def _markdown_record(repo_root: Path, path: str, classification: ArtifactClassification) -> ArtifactRecord:
-    """Build a Markdown record from actual title and semantic section prose."""
+    """Build a Markdown record from actual title and semantic section prose.
+
+    AES-CTX-004 (AES canonical Decision 0013): the document's own front-matter
+    ``description`` is its summary. Extension, not part of AES-CTX-004: when no
+    description exists, fall back to a semantic section, then the first body
+    paragraph; the ``summary_source`` labels are enforced-planning's own.
+    """
 
     source_path = repo_root / path
     try:
@@ -443,10 +476,11 @@ def _markdown_record(repo_root: Path, path: str, classification: ArtifactClassif
         diagnostic = Diagnostic("markdown-decode-error", str(exc))
         return ArtifactRecord(path, "markdown", classification, "present", None, None, (), (diagnostic,))
 
+    description, text = _split_front_matter(text)
     title, sections = _markdown_sections(text)
-    summary: str | None = None
-    summary_source: str | None = None
-    for desired in SEMANTIC_MARKDOWN_HEADINGS:
+    summary: str | None = description
+    summary_source: str | None = "markdown:front-matter:description" if description else None
+    for desired in SEMANTIC_MARKDOWN_HEADINGS if summary is None else ():
         for heading, body, _line in sections:
             if heading.casefold() == desired:
                 summary = _first_paragraph(body)

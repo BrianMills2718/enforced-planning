@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import os
 from pathlib import Path
 import sys
+from urllib.parse import quote
 
 from enforced_planning.relationship_context import ArtifactRecord
 from enforced_planning.relationship_context import ArtifactClassification
@@ -48,10 +50,21 @@ def _inline_code(value: str) -> str:
     return f"{fence}{value}{fence}"
 
 
-def _artifact_lines(artifact: ArtifactRecord, *, self_path: str | None) -> list[str]:
+def _heading(artifact_path: str, *, link_from: str | None) -> str:
+    """Name one artifact, as a link relative to the output file when asked."""
+
+    if link_from is None:
+        return f"### {_inline_code(artifact_path)}"
+    target = os.path.relpath(artifact_path, os.path.dirname(link_from) or ".")
+    return f"### [{artifact_path}]({quote(Path(target).as_posix())})"  # '#', spaces and brackets in names stay part of the link
+
+
+def _artifact_lines(
+    artifact: ArtifactRecord, *, self_path: str | None, link_from: str | None = None
+) -> list[str]:
     """Render one tracked artifact and its documented Python symbols."""
 
-    lines = [f"### {_inline_code(artifact.path)}", ""]
+    lines = [_heading(artifact.path, link_from=link_from), ""]
     if artifact.path == self_path:
         lines.extend(["_Generated wiki projection; self-content intentionally omitted._", ""])
         return lines
@@ -76,8 +89,20 @@ def _artifact_lines(artifact: ArtifactRecord, *, self_path: str | None) -> list[
     return lines
 
 
-def render_docstring_wiki(repo_root: Path, *, output_path: Path = DEFAULT_OUTPUT) -> str:
-    """Render every tracked artifact into a deterministic Markdown projection."""
+def render_docstring_wiki(
+    repo_root: Path,
+    *,
+    output_path: Path = DEFAULT_OUTPUT,
+    classifications: tuple[ArtifactClassification, ...] = (),
+    links: bool = False,
+) -> str:
+    """Render tracked artifacts into a deterministic Markdown projection.
+
+    ``classifications`` limits the projection to those artifact kinds (all when
+    empty), so a repository can publish a documentation-only catalog. ``links``
+    turns each artifact heading into a link relative to the output file, which
+    makes every listed document reachable from wherever the catalog is linked.
+    """
 
     root = repo_root.resolve()
     report = inventory_repository(root)
@@ -86,8 +111,12 @@ def render_docstring_wiki(repo_root: Path, *, output_path: Path = DEFAULT_OUTPUT
         self_path = resolved_output.resolve().relative_to(root).as_posix()
     except ValueError:
         self_path = None
-    classifications = Counter(artifact.classification for artifact in report.artifacts)
-    diagnostic_codes = Counter(item.code for artifact in report.artifacts for item in artifact.diagnostics)
+    selected = [
+        artifact for artifact in report.artifacts if not classifications or artifact.classification in classifications
+    ]
+    counts = Counter(artifact.classification for artifact in selected)
+    diagnostic_codes = Counter(item.code for artifact in selected for item in artifact.diagnostics)
+    link_from = self_path if links and self_path is not None else None
     lines = [
         "# Docstring Wiki",
         "",
@@ -101,28 +130,40 @@ def render_docstring_wiki(repo_root: Path, *, output_path: Path = DEFAULT_OUTPUT
         "## Coverage",
         "",
         f"- Tracked artifacts: {report.tracked_count}",
-        f"- Artifacts with source summaries: {report.summarized_count}",
-        f"- Coverage findings: {report.diagnostic_count}",
     ]
+    if classifications:
+        lines.append(f"- Listed here ({', '.join(classifications)}): {len(selected)}")
+    lines.extend(
+        [
+            f"- Artifacts with source summaries: {sum(1 for artifact in selected if artifact.summary)}",
+            f"- Coverage findings: {sum(len(artifact.diagnostics) for artifact in selected)}",
+        ]
+    )
     if diagnostic_codes:
         lines.append("- Finding types: " + ", ".join(f"{code}={count}" for code, count in sorted(diagnostic_codes.items())))
     lines.append("")
     for classification in CLASSIFICATION_ORDER:
-        artifacts = [artifact for artifact in report.artifacts if artifact.classification == classification]
+        artifacts = [artifact for artifact in selected if artifact.classification == classification]
         if not artifacts:
             continue
-        lines.extend([f"## {classification.replace('_', ' ').title()} ({classifications[classification]})", ""])
+        lines.extend([f"## {classification.replace('_', ' ').title()} ({counts[classification]})", ""])
         for artifact in artifacts:
-            lines.extend(_artifact_lines(artifact, self_path=self_path))
+            lines.extend(_artifact_lines(artifact, self_path=self_path, link_from=link_from))
     return "\n".join(lines).rstrip() + "\n"
 
 
-def check_docstring_wiki(repo_root: Path, *, output_path: Path = DEFAULT_OUTPUT) -> tuple[bool, str]:
+def check_docstring_wiki(
+    repo_root: Path,
+    *,
+    output_path: Path = DEFAULT_OUTPUT,
+    classifications: tuple[ArtifactClassification, ...] = (),
+    links: bool = False,
+) -> tuple[bool, str]:
     """Compare generated output byte-for-byte without rewriting the worktree."""
 
     root = repo_root.resolve()
     path = output_path if output_path.is_absolute() else root / output_path
-    expected = render_docstring_wiki(root, output_path=output_path)
+    expected = render_docstring_wiki(root, output_path=output_path, classifications=classifications, links=links)
     if not path.exists():
         return False, f"docstring wiki missing: {path}"
     actual = path.read_text(encoding="utf-8")
@@ -137,15 +178,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate a searchable wiki from actual source docstrings")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--classification",
+        action="append",
+        choices=CLASSIFICATION_ORDER,
+        default=[],
+        help="List only this artifact kind (repeatable; default: every kind)",
+    )
+    parser.add_argument("--links", action="store_true", help="Render artifact headings as links relative to the output")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="Write the generated wiki")
     mode.add_argument("--check", action="store_true", help="Fail if the generated wiki is missing or stale")
     args = parser.parse_args(argv)
+    options = {"classifications": tuple(args.classification), "links": args.links}
     if args.check:
-        ok, message = check_docstring_wiki(args.repo_root, output_path=args.output)
+        ok, message = check_docstring_wiki(args.repo_root, output_path=args.output, **options)
         print(message, file=sys.stdout if ok else sys.stderr)
         return 0 if ok else 1
-    rendered = render_docstring_wiki(args.repo_root, output_path=args.output)
+    rendered = render_docstring_wiki(args.repo_root, output_path=args.output, **options)
     if args.write:
         path = args.output if args.output.is_absolute() else args.repo_root / args.output
         path.parent.mkdir(parents=True, exist_ok=True)

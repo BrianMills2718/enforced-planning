@@ -19,7 +19,7 @@ description: System model for enforced-planning's repository inventory and the d
 |---|---|---|---|
 | PROC-INVENTORY | `inventory_repository` builds one `ArtifactRecord` per git-tracked file | `relationship_context.py` | `tests/test_relationship_context.py` |
 | RULE-MD-SUMMARY | A Markdown summary is, in order: the document's own front-matter `description` (`markdown:front-matter:description`), a semantic `##` section (`markdown:section:<name>`), the first body paragraph (`markdown:first-paragraph`). Other front-matter keys never become a summary. Why: AES canonical AES-CTX-004 / Decision 0013, "truth lives where it is edited" | `_markdown_record`, `_split_front_matter` | `test_markdown_front_matter_description_outranks_body`, `test_markdown_prefers_semantic_section_and_labels_fallback` |
-| PROC-DOCSTRING-WIKI | `docstring_wiki` renders every `ArtifactRecord` into one Markdown page | `docstring_wiki.py` | `tests/test_docstring_wiki.py` |
+| PROC-DOCSTRING-WIKI | `docstring_wiki` renders every `ArtifactRecord` (or only the kinds named by `--classification`, headings linked with `--links`) into one Markdown page | `docstring_wiki.py` | `tests/test_docstring_wiki.py` |
 
 ## Views
 

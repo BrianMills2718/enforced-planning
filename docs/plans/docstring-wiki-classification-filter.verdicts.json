@@ -1,0 +1,227 @@
+{
+  "0ca7ffa1d312d8cc6559830e00c2651e52b31c8f6d8e58d1b4a3c13c41610446": {
+    "item_id": "CORE-UNCERTAINTIES",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly lists the uncertainty about whether additional files are needed and provides resolving evidence: a pre-edit `git diff --stat` showing the files in scope. No owner is required because resolving evidence is supplied.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-UNCERTAINTIES",
+    "verdict": "pass"
+  },
+  "1cebd46def55166e098ea5a2d25b1771a882526a5ae19d785b0b19aad0b422dc": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names the run being judged (the success check on the change-making commit), identifies where its complete trace is stored, and specifies required trace details beyond the final result, including commands, exit status, named checks, skipped checks, and System model outputs. It also states that both success and disproof are judged from that trace file.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "2c687d0cef46f70fc181e447d6fb5a1b3382614c3b3f3980eba61dd3cd7f3653": {
+    "item_id": "CORE-TRACE-DEBUGGING",
+    "materiality": "material",
+    "missing": "The evidence does not explicitly state that this procedure is distinct from anticipated failure modes. It also does not explicitly say that an unresolved diagnosis cannot authorize a causal repair; it only says to investigate before authorizing one.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly covers preserving the failed check and trace ID, full reconstruction of the run, divergence citation, evidence classification, targeted repair with a new traced verification run, retention of the original failure, and separation of review completeness from run outcome. However, the required explicit distinction from anticipated failure modes and the prohibition on authorizing causal repair while the diagnosis remains unresolved are not both stated.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-TRACE-DEBUGGING",
+    "verdict": "unresolved"
+  },
+  "2d34bcf71ac1246a3e51c10f7674999d45d1ee1e3bc10421064e84a81c51467f": {
+    "item_id": "CORE-CAPABILITY-REUSE",
+    "materiality": "material",
+    "missing": "The evidence claims reuse of the docstring_wiki generator but does not name the corresponding catalogue entry or capability id/key/provided id. It also does not explicitly identify any new capability being added; if the \u201cnew options\u201d constitute a new capability, their first consumer is not stated as a capability consumer.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "Although it names the catalogue files and gives a first consumer for the new options, \u201cdocstring_wiki generator\u201d is not an explicit catalogue entry identifier or capability id. The requirement does not allow reuse credit without naming the reused catalogue capability.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-CAPABILITY-REUSE",
+    "verdict": "unresolved"
+  },
+  "37d2935b37b6755454784afdbccfdfd6c5f8913e3c27c5accea8762a65358e2f": {
+    "item_id": "CORE-IRREVERSIBLE-SPEND",
+    "materiality": "material",
+    "missing": "The evidence identifies no proposed irreversible actions or spend, so it does not name a boundary, required authorizer, or containment method for each such action or spend.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The quoted section states \u201cNone\u201d and only describes a reverted code change, with \u201cno spend, no publication, no data deletion.\u201d It therefore provides no explicit boundary, authorization requirement, or containment for any proposed irreversible action or spend.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-IRREVERSIBLE-SPEND",
+    "verdict": "unresolved"
+  },
+  "389d1336ad47eee0f43a45fe083f3be43a17f022a076e7c2e3b05b4534c03d88": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "material",
+    "missing": "The plan does not cite a documentation entry point from which the model is reachable, identify applicable source-linked views, explain any material view omissions, name concrete model freshness or drift checks, or state how the model, view coverage, and verification evidence will be reconciled in the same change (or why updates are unnecessary).",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence supplies the model link `docs/model/ODD.md`, names `VIEW-DOCSTRING-WIKI` and `PROC-DOCSTRING-WIKI`, and specifies what the saved check must show for each. However, it does not provide the required discovery, view-coverage, freshness/drift, and reconciliation obligations beyond that bare link and element-level trace expectations.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-SYSTEM-MODEL",
+    "verdict": "unresolved"
+  },
+  "3ead969dd8a8ac8705d3e4fd8e9aa523c1fd8ab3ce82b3f0049bb7b8629ebbb1": {
+    "item_id": "CORE-REQUIREMENTS-TRACED",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence provides a requirements list with R1, including what was asked for, an explicit check, and status \"planned, not yet run.\" It also explicitly states that there are no additional requirements implied by the change's claims.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-REQUIREMENTS-TRACED",
+    "verdict": "pass"
+  },
+  "4d478f5429b99a7aebf036c71010ec4e7b3f725997ef1c3f42b0b455f749c6e5": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names the success-check run, identifies its full trace as the committed file `docs/plans/docstring-wiki-classification-filter.check.txt`, and specifies required trace contents beyond outcomes, including exact command, exit status, files checked, named non-skipped checks, and System model lines. It also states that both success and disproof are judged from that file and explicitly notes that no model, agent, or LLM pipeline runs occur.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "5d2491b51eb50a8d2d819cb66ef7e27054fdd2412aea3aa13023145fe211b0b6": {
+    "item_id": "CORE-REQUIREMENTS-TRACED",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan provides a requirements list with R1, explicitly covering the requested options and behavior. R1 names the success check, gives its saved output location, and states its status as \u201cplanned, not yet run\u201d; the plan also explicitly identifies no additional requirements implied by its claims.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-REQUIREMENTS-TRACED",
+    "verdict": "pass"
+  },
+  "6881fa7388f6c5246639fb3efe0e658fed7024033fcbb4b399fd5d47306d1f5d": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly declares shared_mechanism true, matching its change to the shared docstring_wiki mechanism. It declares the other listed facts false, while the proposed comparison is only a default-output verification against an expected result, not an experiment choosing among alternatives; no LLM-central behavior, irreversible/spend action, external standard claim, or AES-governed target is evidenced.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "6c44185267185944a340c39324e98b14c14bf7168d882856e96f48d24bc95a9f": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly characterizes the comparison as verification of default-output equality, not an experiment comparing alternative designs, and states no LLM-centered behavior, irreversible action or spend, external standard claim, or AES-governed target change. Thus none of the facts declared false is triggered.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/146bfc7df1f8/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "7b5533e5b746f276973f83023f8cc877726e5d4eb100d019bed3b5321fbb4b02": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "material",
+    "missing": "An explicit direct success check that establishes the filtered catalog contains only documentation artifacts (or otherwise tests the claimed classification/conformance property). The stated test pass and byte-identical output are pipeline/output stand-ins, and the evidence does not describe what the catalog test verifies.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The disproof condition is concrete: a filtered catalog containing a non-documentation artifact disproves the approach. However, success is supported mainly by test passage and byte equality, while the quoted evidence does not explicitly state a direct correctness check or its expected result.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-SUCCESS-DISPROOF",
+    "verdict": "unresolved"
+  },
+  "7e61ee696f85a39417d8ffbc6393cb3a40e632a3d793ab8a204c3a431e5d862d": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly states that it proposes no shared mechanism, comparison, LLM-centered behavior, irreversible action, spend, or external-standard claim, and the quoted work describes verification tests rather than an experiment comparing alternatives. The evidence also provides no indication of an AES-governed target, so the optional AES fact is not triggered.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "7f0af50a192527fed07ea3f28b43477ea6734393ed94a20def00032c67dfba45": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence specifies direct checks for both claimed properties: the catalog test verifies documentation-only relative links and rejects source/test artifacts, while `cmp` directly verifies unchanged default output. It also gives concrete disproof conditions: any default-output difference from main or any non-documentation artifact in the filtered catalog.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-SUCCESS-DISPROOF",
+    "verdict": "pass"
+  },
+  "840570ccea37b25a05af86acde87e7608464188c9e7dbeaca46de6e8cb6d2368": {
+    "item_id": "CORE-AUTHORITY-NONGOALS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies Brian as the requester/authority over the change and states the non-goals: work outside the listed files, irreversible actions, and spending.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-AUTHORITY-NONGOALS",
+    "verdict": "pass"
+  },
+  "862ad378844cfe027521f4a0ef584254ba34b5ca0475f664ebc99a91aad7b83c": {
+    "item_id": "CORE-TRACE-DEBUGGING",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly provides a separate failure/surprise procedure distinct from anticipated failure modes; preserves the failed check and trace ID; requires reading complete inputs, prompts, tool arguments/results, intermediate stages, final output, and command/output; requires citing divergence and classifying the specified evidence categories; links a targeted repair to a new traced verification run while retaining the original failure. It also states that unresolved diagnoses cannot authorize causal repairs and distinguishes review completeness from the run verdict.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-TRACE-DEBUGGING",
+    "verdict": "pass"
+  },
+  "8ca3170a762b50201c05b6e859aab1c3778447c24285c6f02d9d04ba5eb5c71e": {
+    "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names a concrete structural check: running `rg -n \"description:\" -l scripts/ Makefile` after adoption. It also states the expected observation\u2014only `enforced_planning.docstring_wiki` produces the catalog, with no DIGIMON script rendering `wiki/catalog.md` itself\u2014which would detect a silent parallel implementation.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/OV-PRIOR-ART-PARALLEL-CHECK",
+    "verdict": "pass"
+  },
+  "9e96f9d4fb9583347cc1870ef18aad7f6267f5cbabd615d776cbe5ffd3f07fbf": {
+    "item_id": "OV-PRIOR-ART-DISPOSITION",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies an existing owner, internal candidates, and external prior art under a dated \u201csearched\u201d table. Every listed candidate has an explicit disposition: extend, reuse, bounded exception, or bounded exception.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/146bfc7df1f8/OV-PRIOR-ART-DISPOSITION",
+    "verdict": "pass"
+  },
+  "a58fd141388ea17c26d114861a62871b9a01b6bc8782bf5176ec2f7f1298a47b": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence links the system model, identifies its documentation entry point and scope, names the changed view and process, and states what the saved test output must show for each. It also specifies the applicable view coverage, explains omissions, gives concrete freshness checks, and describes reconciliation of model rows with verification evidence in the same change.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  },
+  "a6a922f590bfca9b64f86a3571e2e9dcdba5a9c5f4ba2b9c69b9ab04d4e7b47c": {
+    "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names a concrete structural check: running `rg -n \"description:\" -l scripts/ Makefile` after adoption. It explicitly states the expected result\u2014only `enforced_planning.docstring_wiki` produces the catalog, with no DIGIMON script rendering `wiki/catalog.md` itself\u2014thereby detecting a silent parallel implementation.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/146bfc7df1f8/OV-PRIOR-ART-PARALLEL-CHECK",
+    "verdict": "pass"
+  },
+  "ae07938c94d7d3ed3677c249e2fa27b6e87a2321362c807f68ebdc69f41ad4b6": {
+    "item_id": "OV-PROTO-VERTICAL-RESET",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states the vertical result (repeatable `--classification` and `--links`, catalog behavior, unchanged default output), its completion check, the reset boundary (`git revert` of the commit), and the non-goal of anything outside the listed files. It does not add coordinated-work ceremony beyond the implementation, check, and revert instructions.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/OV-PROTO-VERTICAL-RESET",
+    "verdict": "pass"
+  },
+  "b13d26664f8f892cf3815601ada08e6996688e0de88db2c5320f03260bef62a9": {
+    "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the actor as Brian, states the desired result for docstring_wiki, and gives a stable, concrete user-visible example in DIGIMON showing the generated catalog heading and link.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/14f5ed06e09e/CORE-ACTOR-RESULT-EXAMPLE",
+    "verdict": "pass"
+  },
+  "b29d0fe6a4994da1e4f2de07e478d91d634574b3ea2e4fc231d3707206acb02e": {
+    "item_id": "CORE-CAPABILITY-REUSE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states, \u201cNo catalogue entry fits,\u201d and gives the required reason: the work needs a selection filter and link format in the enforced-planning `docstring_wiki` renderer, which neither catalogue file provides. This satisfies the no-entry alternative.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/CORE-CAPABILITY-REUSE",
+    "verdict": "pass"
+  },
+  "dc02e9f436d321d8f789a68ba263dc31dc8c71104407e12dd059a8551f3931d5": {
+    "item_id": "OV-PRIOR-ART-DISPOSITION",
+    "materiality": "material",
+    "missing": "The external prior-art candidates are marked \u201cnot adopted,\u201d which is not one of the required dispositions: reuse, extend, compose, supersede, or bounded exception.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies existing ownership, internal candidates, and external prior art, and dispositions the ownership/internal items using required categories. However, the external Sphinx, MkDocs, and pdoc candidates lack a qualifying disposition.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/de7288a8fd47/OV-PRIOR-ART-DISPOSITION",
+    "verdict": "unresolved"
+  },
+  "ffbe8d0024da0462fad10e1e2a42e9270ea723a05c34ccb3b2ad65053741aafb": {
+    "item_id": "CORE-IRREVERSIBLE-SPEND",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence states that no irreversible action or spend is proposed and explicitly provides the boundary (a squash-merged code commit), authorizer (Brian under his standing merge rule), and containment (`git revert` restoring the previous generator). It also states that no money is spent and nothing is published or deleted.",
+    "trace_id": "company-planning/method-conformance/docstring-wiki-classification-filter/146bfc7df1f8/CORE-IRREVERSIBLE-SPEND",
+    "verdict": "pass"
+  }
+}

@@ -1,0 +1,19 @@
+$ uv run pytest tests/test_docstring_wiki.py tests/test_relationship_context.py -v -p no:cacheprovider
+tests/test_docstring_wiki.py::test_wiki_lists_every_tracked_artifact_and_actual_symbol_docstrings PASSED [  7%]
+tests/test_docstring_wiki.py::test_wiki_is_deterministic_and_check_detects_hand_edit PASSED [ 15%]
+tests/test_docstring_wiki.py::test_source_docstring_change_makes_wiki_stale_until_regenerated PASSED [ 23%]
+tests/test_docstring_wiki.py::test_check_fails_when_wiki_is_missing PASSED [ 30%]
+tests/test_docstring_wiki.py::test_documentation_catalog_lists_only_docs_as_relative_links PASSED [ 38%]
+tests/test_relationship_context.py::test_inventory_exactly_matches_git_and_never_imports_target_code PASSED [ 46%]
+tests/test_relationship_context.py::test_undocumented_private_callable_is_visible_without_mandatory_debt PASSED [ 53%]
+tests/test_relationship_context.py::test_missing_and_invalid_python_context_is_explicit PASSED [ 61%]
+tests/test_relationship_context.py::test_markdown_prefers_semantic_section_and_labels_fallback PASSED [ 69%]
+tests/test_relationship_context.py::test_markdown_front_matter_description_outranks_body PASSED [ 76%]
+tests/test_relationship_context.py::test_inventory_json_is_byte_deterministic_and_workspace_neutral PASSED [ 84%]
+tests/test_relationship_context.py::test_non_git_root_fails_loudly PASSED [ 92%]
+tests/test_relationship_context.py::test_deleted_tracked_file_remains_explicitly_represented PASSED [100%]
+============================== 13 passed in 3.37s ==============================
+exit=0
+
+$ cmp <default render of DIGIMON plan-221-docs from main> <same from this branch>
+identical: 2035575 bytes each

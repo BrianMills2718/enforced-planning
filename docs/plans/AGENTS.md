@@ -117,6 +117,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 137 | Observe-Only Cross-Client Execution Tracking (`137_cross_client_execution_tracking.md`) | Critical | 🚧 In Progress — neutral/Codex and XCET-03R repair accepted; Claude live probe quota-blocked; activation excluded | visible Codex/Claude progress and criterion-complete goal closure without duplicate authority |
 | 138 | Claim Lifecycle Recovery (`138_claim_lifecycle_recovery.md`) | Critical | ✅ Complete — original create/reject/end/reconcile scope verified | Plan #108 PW-06 owns the unverified recovery-and-resume follow-up |
 | — | Markdown summaries prefer the document's own description line ([plan](markdown-description-summary.md), [goal](markdown-description-summary.goal.md)) | Medium | ✅ Complete | AES durable-docs CATALOG-STALE |
+| — | Docstring wiki can publish a linked documentation-only catalog ([plan](docstring-wiki-classification-filter.md), [goal](docstring-wiki-classification-filter.goal.md)) | Small | ✅ Complete | DIGIMON Plan #221 catalog |
 
 ## Status Key
 

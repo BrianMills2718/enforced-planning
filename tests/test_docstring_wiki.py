@@ -121,3 +121,22 @@ def test_check_fails_when_wiki_is_missing(tmp_path: Path) -> None:
 
     assert not ok
     assert "missing" in message
+
+
+def test_documentation_catalog_lists_only_docs_as_relative_links(tmp_path: Path) -> None:
+    """A filtered, linked catalog lists documents only and links each from the output's folder."""
+
+    repo = _repo(tmp_path)
+    output = Path("wiki/catalog.md")
+    args = ["--repo-root", str(repo), "--output", str(output), "--classification", "documentation", "--links"]
+
+    assert main([*args, "--write"]) == 0
+    rendered = (repo / output).read_text(encoding="utf-8")
+
+    assert "### [docs/decision.md](../docs/decision.md)" in rendered
+    assert "Use source-local summaries." in rendered
+    assert "src/service.py" not in rendered
+    assert "tests/test_service.py" not in rendered
+    assert "- Listed here (documentation): 1" in rendered
+    assert main([*args, "--check"]) == 0
+    assert main(["--repo-root", str(repo), "--output", str(output), "--check"]) == 1

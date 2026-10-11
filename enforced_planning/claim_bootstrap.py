@@ -15,6 +15,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import stat
 import subprocess
@@ -1508,6 +1509,28 @@ def _preserve_partial_session_claim_as_blocked(
     return True
 
 
+def _root_lane_continuation(roots: list[Any], *, parallel_route: bool) -> str:
+    """Name the exact commands that let a refused session continue.
+
+    Refusals that only said "close or transfer first" left agents to discover
+    the close command, the parallel flag and the parent-scope route by trial
+    (AES canonical #392, from #236 and #305).
+    """
+
+    closes = []
+    for claim in sorted(roots, key=lambda c: (c.primary_project(), c.scope)):
+        target = f" -C {shlex.quote(claim.repo_root)}" if claim.repo_root else ""
+        closes.append(f"make{target} session-close BRANCH={shlex.quote(claim.branch or claim.scope)}")
+    routes = ["if that lane's work is merged, close it: " + "; ".join(closes)]
+    if parallel_route:
+        routes.append(
+            "to keep it open, rerun with SESSION_ALLOW_PARALLEL=1 and narrow write paths "
+            "(MAINTENANCE_BOOTSTRAP_WRITE_PATHS or GOAL_BOOTSTRAP_WRITE_PATHS, never '.'); "
+            "a root in another repository never overlaps"
+        )
+    return "Continue: " + ". Or ".join(routes) + "."
+
+
 def _remove_pristine_bootstrap_repository(repo: Path, *, expected_head: str | None = None) -> list[str]:
     """Remove only an exact repository created by this failed transaction."""
 
@@ -1577,7 +1600,8 @@ def _execute_local_repository_worktree(
         labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in existing_roots))
         raise ClaimBootstrapError(
             "local repository bootstrap requires the native session to own zero existing claim roots; "
-            f"close or transfer first: {labels}"
+            f"close or transfer first: {labels}. "
+            + _root_lane_continuation(existing_roots, parallel_route=False)
         )
     occupied = [
         claim
@@ -1968,7 +1992,8 @@ def _execute_maintenance_worktree(
             raise ClaimBootstrapError(
                 "worktree bootstrap requires the native session to own zero existing claim roots "
                 "unless SESSION_ALLOW_PARALLEL=1 and every write path is narrow and disjoint "
-                f"from that root's; close or transfer first: {labels}"
+                f"from that root's; close or transfer first: {labels}. "
+                + _root_lane_continuation(blocking_roots, parallel_route=True)
             )
 
     if goal_bound:
@@ -1993,7 +2018,12 @@ def _execute_maintenance_worktree(
     )
     tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=SESSION_TRACKERS_DIR)
     if tracker_path.exists():
-        raise ClaimBootstrapError(f"maintenance session tracker already exists: {tracker_path}")
+        raise ClaimBootstrapError(
+            f"maintenance session tracker already exists: {tracker_path}. Continue: this session and goal "
+            f"already have a lane on branch {request.branch}, open or closed. If it is open, keep working in "
+            f"{worktree}, or once it is merged run make -C {shlex.quote(str(repo))} session-close "
+            f"BRANCH={shlex.quote(request.branch)}. For new work, rerun with a different BRANCH."
+        )
 
     # The network and remote-default freshness boundary precedes every lane
     # artifact. A stale primary checkout must never determine the new branch.

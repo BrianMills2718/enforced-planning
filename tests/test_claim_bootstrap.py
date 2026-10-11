@@ -2765,3 +2765,49 @@ def _lane_path_released(path) -> bool:
     """A closed lane's path is gone or left as an empty placeholder directory."""
 
     return not path.exists() or (path.is_dir() and not any(path.iterdir()))
+
+
+def test_root_lane_refusal_names_exact_continuation_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused second root names the close command and the parallel route (AES canonical #392)."""
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    claim_bootstrap.execute_request(
+        claim_bootstrap.parse_request_json(
+            json.dumps(_maintenance_payload(repo, scope="fix/lane-a", branch="fix/lane-a", write_paths=["CLAUDE.md"]))
+        )
+    )
+    first = next(c for c in claim_bootstrap.coordination_claims.check_claims(repo.name) if c.scope == "fix/lane-a")
+    second = claim_bootstrap.parse_request_json(
+        json.dumps(_maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"]))
+    )
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError) as refused:
+        claim_bootstrap.execute_request(second)
+    message = str(refused.value)
+    assert f"make -C {first.repo_root} session-close BRANCH=fix/lane-a" in message
+    assert "SESSION_ALLOW_PARALLEL=1" in message
+    assert "MAINTENANCE_BOOTSTRAP_WRITE_PATHS" in message
+
+
+def test_existing_tracker_refusal_names_exact_continuation_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An occupied tracker path names session-close for that branch and the different-BRANCH route."""
+    repo = _governed_repo(tmp_path)
+    _configure_maintenance_runtime(tmp_path, monkeypatch)
+    occupied = tmp_path / "occupied-tracker.yaml"
+    occupied.write_text("tracker: {}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        claim_bootstrap.session_contracts, "session_tracker_path", lambda *_args, **_kwargs: occupied
+    )
+    request = claim_bootstrap.parse_request_json(
+        json.dumps(_maintenance_payload(repo, scope="fix/lane-a", branch="fix/lane-a", write_paths=["CLAUDE.md"]))
+    )
+    with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="tracker already exists") as refused:
+        claim_bootstrap.execute_request(request)
+    message = str(refused.value)
+    assert f"make -C {repo.resolve()} session-close BRANCH=fix/lane-a" in message
+    assert "different BRANCH" in message

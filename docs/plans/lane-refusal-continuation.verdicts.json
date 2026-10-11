@@ -1,0 +1,155 @@
+{
+  "0043e7300ac42d272c7fdd7bc23bd591ac7caa97753854f520e21046e78ccb87": {
+    "item_id": "CORE-UNCERTAINTIES",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies the complete set of material uncertainties as one uncertainty: whether files beyond the listed files are needed. It also provides resolving evidence\u2014specific grep results, refusal sites, and the expected wiki/index.md change\u2014so every listed uncertainty has resolution evidence.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-UNCERTAINTIES",
+    "verdict": "pass"
+  },
+  "1a324e5df91113303de779a52271b909e2bfba1ec66a711b83fd97761770a100": {
+    "item_id": "OV-PROTO-VERTICAL-RESET",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the minimal vertical result, identifies the reset boundary as `git revert` of the commit, and states the non-goals (\u201canything outside these files\u201d plus no coordinated-work ceremony and its examples).",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/OV-PROTO-VERTICAL-RESET",
+    "verdict": "pass"
+  },
+  "2d3a66ee55d16d8c8459960452955d974f36b0a17c11ab9d34910a92a266593d": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly declares all relevant activation facts false, and the quoted evidence supports those declarations: it proposes no alternative comparison, shared mechanism, LLM-dependent behavior, irreversible action or spend, external-standard conformance, or AES-governed target. The success check is described as verification of the single change, not an experiment comparing alternatives.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "322a902808b385f6fc92a63cf2ac2e556edfa25c9e7c1c05a9cd9444c320c6c9": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "material",
+    "missing": "A direct check that the cited session-close continuation commands are actually runnable and valid for the stated repository, branch, and route; the evidence only checks that the refusal text contains those strings.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan does define a concrete disproof condition: a refusal lacking a runnable continuation command or any failing claim_bootstrap test. However, its success checks verify textual presence and routing labels, which do not directly establish that the commands are runnable or correct; no execution or other direct validation of that property is specified.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-SUCCESS-DISPROOF",
+    "verdict": "unresolved"
+  },
+  "34016f4d25afcfa4b9cc576e0fc91b353bf23858e5f57efc845f7559e1d0b597": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names both the disproof run on the parent commit and the success run on the change commit, identifies their full output location, and specifies the exact command, exit status, named checks/tests, non-skipped results, and required beyond-outcome observations. It also explicitly states that no model, agent, or LLM pipeline runs under the plan.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/5eaab6712638/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "38aca59ac8b1f1370c9de53b0024b1139b07d4b599fe3e96d1e833046a2122ad": {
+    "item_id": "CORE-CAPABILITY-REUSE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states, \u201cNo catalogue entry fits,\u201d and gives the reason: the work needs edits to this repository\u2019s own files, which no cross-project catalogue entry provides.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-CAPABILITY-REUSE",
+    "verdict": "pass"
+  },
+  "419a07a23f0e668f7239f03dbfd36afac4963db30f59e7c33d63b8d02cc8b840": {
+    "item_id": "OV-PROTO-VERTICAL-RESET",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the minimal vertical result (\u201cThe vertical delivers\u201d), defines the reset boundary as `git revert` of the commit, and states the non-goal scope (\u201canything outside these files\u201d). It also explicitly says the plan adds no coordinated-work ceremony, listing the excluded coordination mechanisms.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/5eaab6712638/OV-PROTO-VERTICAL-RESET",
+    "verdict": "pass"
+  },
+  "8210a6a45952fdb56412ae37d5f735a1aebbfd615ee8f43c27eaa7ddfc24ff92": {
+    "item_id": "CORE-REQUIREMENTS-TRACED",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly lists requirement R1 and names its verifying check, with status \"planned, not yet run.\" It also explicitly states that the change claims nothing beyond R1 and presents no standard, schema, or contract, so no additional implied requirement is omitted.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-REQUIREMENTS-TRACED",
+    "verdict": "pass"
+  },
+  "840570ccea37b25a05af86acde87e7608464188c9e7dbeaca46de6e8cb6d2368": {
+    "item_id": "CORE-AUTHORITY-NONGOALS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies authority: Brian requested the change in his own repository and one agent makes it. It also explicitly states non-goals, including work outside the listed files, irreversible actions, and spending.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-AUTHORITY-NONGOALS",
+    "verdict": "pass"
+  },
+  "92d30430ad427cdd2e80cc36287733887e454741995d6f66810ae748fbbb0429": {
+    "item_id": "CORE-REQUIREMENTS-TRACED",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence provides a requirements list with R1, explicitly states the requested work and its own implied claims, names the success check and saved output, and gives R1 the status \u201cplanned, not yet run.\u201d It also explicitly states that the change presents nothing as following a standard, schema, or contract, so no additional implied requirement is omitted.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/5eaab6712638/CORE-REQUIREMENTS-TRACED",
+    "verdict": "pass"
+  },
+  "99f8a600c6cedc534179ff735820ff54ecc47d332794817cbe99c2bb0e486d02": {
+    "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the actor as Brian, states the desired result for root-lane and existing-tracker refusals, and provides a stable, concrete, user-visible example containing the refusal text, exact command, and parallel-work route.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-ACTOR-RESULT-EXAMPLE",
+    "verdict": "pass"
+  },
+  "a3ca5fcb1ee93b1b9a80c0f386cf68a1a9e268f58f16b7ec8080ea0424e5171f": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence identifies both runs by commit (the parent disproof run and the change-commit success run), specifies that their complete output is saved at `docs/plans/lane-refusal-continuation.check.txt`, and states what must appear beyond the outcome: the exact command and exit status, named checks and results, no skipped checks, the files and reset used, and the relevant System model lines. It also explicitly states that no model, agent, or LLM pipeline runs exist under this plan.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "b40dd0e3afe8ef09ceaeb4c4ce87cd3959c73b18a34cd56e7dad15b678237c01": {
+    "item_id": "CORE-TRACE-DEBUGGING",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly establishes a separate procedure, preserves the failed check and execution trace ID, requires reading all specified run artifacts before fixing, and requires citing and classifying the observed divergence. It also prohibits causal repair for unresolved diagnoses, links targeted repairs to a new traced verification run while retaining the original, and states that a complete review is distinct from a passing run.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-TRACE-DEBUGGING",
+    "verdict": "pass"
+  },
+  "be0aa670033105aed5e4a24912eb43302ea59970f85261e20e1d4bfd4bf385d7": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly defines success through tests of the required refusal text and a live execution check verifying that the printed session-close command exits successfully and removes the worktree, branch, and claim. It also defines concrete disproof conditions: a refusal lacking the continuation command, a session-close command that fails, or any existing `claim_bootstrap` test failure; these directly test the claimed behavior rather than relying on counts, pictures, readability, or pipeline agreement.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/5eaab6712638/CORE-SUCCESS-DISPROOF",
+    "verdict": "pass"
+  },
+  "e4bcb7ec616bb9932be052ba1fa1169e3dd1bdceb290cbc739751a8d91eb1295": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly declares all relevant activation facts false, and the quoted evidence supports those declarations: it proposes no comparison, shared mechanism, LLM-dependent behavior, irreversible/spend action, or external-standard conformance. It also states that no `.aes/target.yaml` exists and the plan does not create one.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/5eaab6712638/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "e9d6c21760943163afd91a5f1b5ac7817e890dd42063dc021e10f24273811e85": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan links `docs/model/ODD.md`, identifies `wiki/index.md` as the documentation entry point, and explicitly scopes the model to this repository rather than a shared model. It states that no model elements are added, changed, or relied on and why, identifies the applicable verification view, explains why no other views apply, names concrete freshness tests, and specifies same-commit reconciliation of the model, view coverage, and saved verification output.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/f8259a8dd113/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  },
+  "f5c530c8b748c79dd4c788ef2173cf3923631f548845f6340478b1eaea3071a2": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan links `docs/model/ODD.md`, identifies `wiki/index.md` as the documentation entry point, and states that the model is repository-specific rather than shared. It explicitly declares that no model elements are added, changed, or relied on because the work changes refusal text only, identifies the applicable requirement-to-verification view, specifies concrete freshness tests, and requires model, view coverage, and saved verification output to be reconciled in the same commit.",
+    "trace_id": "company-planning/method-conformance/lane-refusal-continuation/5eaab6712638/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  }
+}

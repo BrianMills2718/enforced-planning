@@ -116,6 +116,7 @@ See `ROADMAP.md` for the full phase map and recommended priority order.
 | 136 | Criterion-Bound Outcome Gate (`136_criterion_bound_outcome_gate.md`) | Critical | ✅ Complete — local gate and exact Plan 52 browser consumer evidenced; activation excluded | prevents review-ready substitution after explicit rejection |
 | 137 | Observe-Only Cross-Client Execution Tracking (`137_cross_client_execution_tracking.md`) | Critical | 🚧 In Progress — neutral/Codex and XCET-03R repair accepted; Claude live probe quota-blocked; activation excluded | visible Codex/Claude progress and criterion-complete goal closure without duplicate authority |
 | 138 | Claim Lifecycle Recovery (`138_claim_lifecycle_recovery.md`) | Critical | ✅ Complete — original create/reject/end/reconcile scope verified | Plan #108 PW-06 owns the unverified recovery-and-resume follow-up |
+| — | Markdown summaries prefer the document's own description line ([plan](markdown-description-summary.md), [goal](markdown-description-summary.goal.md)) | Medium | ✅ Complete | AES durable-docs CATALOG-STALE |
 
 ## Status Key
 

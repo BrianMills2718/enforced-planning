@@ -160,6 +160,32 @@ def test_markdown_prefers_semantic_section_and_labels_fallback(tmp_path: Path) -
     assert [item.code for item in empty.diagnostics] == ["markdown-title-missing"]
 
 
+def test_markdown_front_matter_description_outranks_body(tmp_path: Path) -> None:
+    """A document's own description is its summary; other front matter never leaks into one."""
+
+    repo = _git_repo(tmp_path)
+    _write(
+        repo / "docs/described.md",
+        "---\ntype: Decision\ndescription: >\n  Why plans archive\n  after completion.\n---\n"
+        "# Record\n\n## Decision\n\nSection prose that must lose.\n",
+    )
+    _write(repo / "docs/typed.md", "---\ntitle: Typed\ntype: Plan\n---\n# Typed\n\nBody paragraph wins.\n")
+    _write(repo / "docs/broken.md", "---\ndescription: [unclosed\n---\n# Broken\n\n## Summary\n\nSection fallback.\n")
+    _track_all(repo)
+
+    by_path = {artifact.path: artifact for artifact in inventory_repository(repo).artifacts}
+
+    described = by_path["docs/described.md"]
+    assert described.summary == "Why plans archive after completion."
+    assert described.summary_source == "markdown:front-matter:description"
+    typed = by_path["docs/typed.md"]
+    assert typed.summary == "Body paragraph wins."
+    assert typed.summary_source == "markdown:first-paragraph"
+    broken = by_path["docs/broken.md"]
+    assert broken.summary == "Section fallback."
+    assert broken.summary_source == "markdown:section:Summary"
+
+
 def test_inventory_json_is_byte_deterministic_and_workspace_neutral(tmp_path: Path) -> None:
     """Repeated output is identical and contains no volatile or absolute root data."""
 

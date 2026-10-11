@@ -268,6 +268,7 @@ convergence work is complete.
 - [docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md](docs/designs/ECOSYSTEM_DASHBOARD_STATUS_SURFACES.md) - canonical operator-status design
 - [docs/designs/FRAMEWORK_SELF_MEASUREMENT.md](docs/designs/FRAMEWORK_SELF_MEASUREMENT.md) - canonical measurement and ROI boundaries
 - [docs/reference/CONFIG_REFERENCE.md](docs/reference/CONFIG_REFERENCE.md) - config key reference
+- [docs/model/ODD.md](docs/model/ODD.md) - system model, currently scoped to the repository inventory and docstring wiki
 
 ## Origin
 

@@ -127,6 +127,8 @@ def test_documentation_catalog_lists_only_docs_as_relative_links(tmp_path: Path)
     """A filtered, linked catalog lists documents only and links each from the output's folder."""
 
     repo = _repo(tmp_path)
+    _write(repo / "docs/plan#2 notes.md", "# Plan notes\n\nNotes for plan two.\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
     output = Path("wiki/catalog.md")
     args = ["--repo-root", str(repo), "--output", str(output), "--classification", "documentation", "--links"]
 
@@ -134,9 +136,10 @@ def test_documentation_catalog_lists_only_docs_as_relative_links(tmp_path: Path)
     rendered = (repo / output).read_text(encoding="utf-8")
 
     assert "### [docs/decision.md](../docs/decision.md)" in rendered
+    assert "### [docs/plan#2 notes.md](../docs/plan%232%20notes.md)" in rendered
     assert "Use source-local summaries." in rendered
     assert "src/service.py" not in rendered
     assert "tests/test_service.py" not in rendered
-    assert "- Listed here (documentation): 1" in rendered
+    assert "- Listed here (documentation): 2" in rendered
     assert main([*args, "--check"]) == 0
     assert main(["--repo-root", str(repo), "--output", str(output), "--check"]) == 1

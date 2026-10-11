@@ -12,6 +12,7 @@ from collections import Counter
 import os
 from pathlib import Path
 import sys
+from urllib.parse import quote
 
 from enforced_planning.relationship_context import ArtifactRecord
 from enforced_planning.relationship_context import ArtifactClassification
@@ -55,7 +56,7 @@ def _heading(artifact_path: str, *, link_from: str | None) -> str:
     if link_from is None:
         return f"### {_inline_code(artifact_path)}"
     target = os.path.relpath(artifact_path, os.path.dirname(link_from) or ".")
-    return f"### [{artifact_path}]({Path(target).as_posix()})"
+    return f"### [{artifact_path}]({quote(Path(target).as_posix())})"  # '#', spaces and brackets in names stay part of the link
 
 
 def _artifact_lines(

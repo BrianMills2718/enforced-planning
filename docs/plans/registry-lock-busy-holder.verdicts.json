@@ -1,0 +1,263 @@
+{
+  "039132941d5e2809ac5384e8af3f45b23232c357481d0e77e32145c895bd1de5": {
+    "item_id": "CORE-REQUIREMENTS-TRACED",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence provides a requirements list with five requirements, identifies whether each was asked for or implied, names a check for each, and gives each a status of planned and not yet run. No additional user-reliant standard, schema, contract, or other property is presented in the quoted evidence as omitted from the list.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-REQUIREMENTS-TRACED",
+    "verdict": "pass"
+  },
+  "1cd921ff86cac6d5c9838b31ef16f96f8d6a622bcf455687fd0ba84955739e0c": {
+    "item_id": "CORE-CAPABILITY-REUSE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly checks both catalogue files and states, \u201cNo catalogue entry fits, because this changes the contention behavior of an existing claim-registry lock rather than adding a capability.\u201d It also explains what the work needs that no entry provides: edits to the repository\u2019s own source and tests.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-CAPABILITY-REUSE",
+    "verdict": "pass"
+  },
+  "245df6acc4e5106f3f11aedafaabf527f177077c0b889e366cd4c3a7a2596510": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence defines direct success checks for the claimed lock behavior: holder identification and unchanged state on timeout, structured busy status, acquisition after release within the bound, and environment-value clamping. It also provides concrete disproof conditions covering each behavior and any existing claim-lock test failure; the trace review further requires the relevant tests and assertions to demonstrably fail before the change.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-SUCCESS-DISPROOF",
+    "verdict": "pass"
+  },
+  "262ef42b06ac89b98a72b1fe63410c24ae78f75f53bdb5ac08d4bfd171984f09": {
+    "item_id": "CORE-REQUIREMENTS-TRACED",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan provides a Requirements table containing R1 and R2, and each requirement explicitly names a check and has the status \u201cplanned, not yet run.\u201d R1 covers the stated lock behavior and busy-result claims, while R2 covers caller compatibility and the no-state-change guarantee; no separate named standard, schema, or contract claim is presented as omitted.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-REQUIREMENTS-TRACED",
+    "verdict": "pass"
+  },
+  "435d431a009331683a241ff861743849e9f918787c4af064c96086e1df0679b6": {
+    "item_id": "OV-PROTO-VERTICAL-RESET",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the minimal vertical scope and completion condition, defines the reset boundary as reverting the merge commit, and states the non-goals, including work outside the listed files and coordinated-work ceremonies.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/OV-PROTO-VERTICAL-RESET",
+    "verdict": "pass"
+  },
+  "43c2b84d4a4f4ca359567763b10f06b0162780703634e6b92e0f15c0be75721d": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly identifies the shared mechanism and declares it true. Each potentially triggered fact declared false is supported: no alternatives are compared, no LLM calls or irreversible/spend actions are proposed, only repository-local contracts are involved, and the repository has no `.aes/target.yaml`.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "50146714abfc05dab8d6ea1aba0ef8034791830f0f34121ad8eef6c3e367ef89": {
+    "item_id": "CORE-CAPABILITY-REUSE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states, \u201cNo catalogue entry fits,\u201d and explains that the work changes an existing repository-local lock rather than adding a cross-project capability; it also identifies the needed repository-source edits that no catalogue entry provides.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-CAPABILITY-REUSE",
+    "verdict": "pass"
+  },
+  "517b0aae1ba2792552d3d8ad99f37bec4d2585e7ec51b6c970d3f8b8515a4755": {
+    "item_id": "OV-PRIOR-ART-DISPOSITION",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states that internal ownership and lineage and relevant external prior art were searched. It also dispositiones each identified candidate as extend, compose, reuse, or bounded exception, including the separate holder registry file and stale-lock stealing.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/OV-PRIOR-ART-DISPOSITION",
+    "verdict": "pass"
+  },
+  "55e57f91741aee25c84ca7b057f68a6612a7f99c3cf25dc1e20072d095bb4c00": {
+    "item_id": "CORE-UNCERTAINTIES",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly identifies one material uncertainty and provides resolving evidence: a pre-edit `git diff --stat` check against the planned two-file scope. The table also states this is the complete set of material uncertainties.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-UNCERTAINTIES",
+    "verdict": "pass"
+  },
+  "578b43f6f195d0ba3fe46fb33a925bbfcdb6dfe406254ab658f98825b8c96e95": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "material",
+    "missing": "shared_mechanism is declared false, but the plan proposes a new structured busy-result contract and bounded release-and-retry behavior for the shared claim-registry lock.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan explicitly changes shared lock behavior and requires callers to receive a structured busy result, including `status`, `state_changed`, and holder fields. That is a new shared contract/mechanism despite the plan's assertion that it adds none.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-ACTIVATION-FACTS",
+    "verdict": "unresolved"
+  },
+  "58f574106bef2977ddbda9df49857120f9326fbe5d95eceb173045a10a3d2ee8": {
+    "item_id": "CORE-AUTHORITY-NONGOALS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies who holds authority\u2014Brian, via the feedback loop\u2019s fix-owner run, in his own repository\u2014and lists explicit non-goals, including no lock stealing or alteration of locking behavior, CLI outputs, exit codes, or installer propagation.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-AUTHORITY-NONGOALS",
+    "verdict": "pass"
+  },
+  "5ba78fa9447b2d9bfe5a2d61bc98e50610f2d4e1c2c18d332addc0ce63f393da": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence links `docs/model/ODD.md`, identifies `wiki/index.md` as the documentation entry point, scopes the model to this repository, and explicitly states that the work touches no model elements because it changes only claim-lock contention behavior. It also identifies the applicable requirement-to-verification view, explains why no other view applies, names concrete freshness tests, and states same-commit reconciliation for the model, view coverage, and saved verification output.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  },
+  "677dee0792328142317a46916a749b16f8e304609abc53cd9121edc705c45f25": {
+    "item_id": "CORE-SYSTEM-MODEL",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence provides the model path, repository scope, documentation entry point, and explicitly states that no model elements are touched, with a reason and required saved-check outcome. It also identifies the applicable view, explains why other views do not apply, names concrete freshness tests, and states how model, view coverage, and verification evidence are reconciled.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-SYSTEM-MODEL",
+    "verdict": "pass"
+  },
+  "67bc21a9b834a15a4921d3d5b0cb44b712ddbb44774d516c9d61793b7b819300": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names both the disproof and success runs, identifies their commits and exact saved trace location, and specifies that the complete output and exit status are examined. It also states what must appear beyond the outcome, including the command context, per-check results with none skipped, and the System model elements; it explicitly addresses the absence of model/agent/LLM runs.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "788f17d8d8fbc84a9d9ee6d5314474d0b7a19843055a4a1a076d9ab225059b56": {
+    "item_id": "OV-PRIOR-ART-DISPOSITION",
+    "materiality": "material",
+    "missing": "The evidence does not explicitly show that relevant external prior art was searched, and the rejected candidates (stale-lock breaking and a separate holder registry file) are labeled \"Rejected\" rather than dispositioned as reuse, extend, compose, supersede, or bounded exception.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The quote explicitly documents an internal repository search, identifies the existing owner, and assigns \"extend\" and \"composed\" dispositions. However, naming external patterns is not evidence that they were searched, and not every candidate is assigned one of the required disposition categories.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/OV-PRIOR-ART-DISPOSITION",
+    "verdict": "unresolved"
+  },
+  "82452bc361e6242eea1db6aa9f34dad5b5ec671f0143991958982fd7102ba456": {
+    "item_id": "CORE-ACTIVATION-FACTS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The plan declares `shared_mechanism: true`, while each triggered fact that applies is not falsely declared: it explicitly says no alternatives are compared, no model call is made, no irreversible action or spend is proposed, it conforms only to repository-local contracts, and no `.aes/target.yaml` exists. The quoted evidence therefore supports all declared false activation facts.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/CORE-ACTIVATION-FACTS",
+    "verdict": "pass"
+  },
+  "840570ccea37b25a05af86acde87e7608464188c9e7dbeaca46de6e8cb6d2368": {
+    "item_id": "CORE-AUTHORITY-NONGOALS",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies Brian as requesting the change in his own repository and states that one agent makes it, establishing authority. It also explicitly lists non-goals: work outside the specified files, irreversible actions, and spending.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-AUTHORITY-NONGOALS",
+    "verdict": "pass"
+  },
+  "8701a3791fbe303f31dfe56d38d55715e0264891d131c20655179222e967f492": {
+    "item_id": "CORE-IRREVERSIBLE-SPEND",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly states that no irreversible actions or spend are proposed. It also identifies the scope as one repository and says the change can be reverted via the merge commit, so there is no qualifying irreversible item requiring separate authorization or containment.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-IRREVERSIBLE-SPEND",
+    "verdict": "pass"
+  },
+  "9bd2c9f7e016fdb7ceb4f9c8818c78646b57e76bd07e06cd605b87220876f2d6": {
+    "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the served actor (Brian, on behalf of agents running claim lifecycle commands), states the desired structured busy-result and bounded retry outcome, and gives a stable, concrete user-visible example involving writer pid 1234, the timeout message, and the `to_dict()` result.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-ACTOR-RESULT-EXAMPLE",
+    "verdict": "pass"
+  },
+  "a20a96e8cf220332eaae4d3bf3295caab79b18d186e2555d95f17a294dde510c": {
+    "item_id": "OV-PROTO-VERTICAL-RESET",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly defines the vertical result, including bounded waiting, holder reporting, timeout behavior, and validation checks. It states the reset boundary as `git revert` of the commit and names non-goals, including work outside the listed files and coordinated-work ceremony such as work-unit graphs and review or release contracts.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/OV-PROTO-VERTICAL-RESET",
+    "verdict": "pass"
+  },
+  "a78d5295b9df57b2dd1f10b1693e2119e2b48739dac905669edd8b3fe036a197": {
+    "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names a concrete structural check\u2014`grep -rn ",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/OV-PRIOR-ART-PARALLEL-CHECK",
+    "verdict": "pass"
+  },
+  "b40dd0e3afe8ef09ceaeb4c4ce87cd3959c73b18a34cd56e7dad15b678237c01": {
+    "item_id": "CORE-TRACE-DEBUGGING",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly defines a separate procedure, preserves the failed check and trace ID, requires reading all specified run artifacts before fixing, cites and classifies divergence, restricts unresolved diagnoses to investigation, and links targeted repairs to new traced verification runs while retaining the original. It also explicitly distinguishes complete review from a passing run.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-TRACE-DEBUGGING",
+    "verdict": "pass"
+  },
+  "d7d4b4fed7a24cd1edc6511474749701164659d58b1bad01ad81d018eb22bacf": {
+    "item_id": "CORE-TRACE-DEBUGGING",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly defines a separate failure/surprise procedure, preserves the failed run and trace id, requires reading all specified artifacts before selecting a fix, citing and classifying the divergence, and prohibits causal repair for unresolved diagnoses. It also links targeted repairs to a new traced verification run while retaining the original failure and separates review completeness from the run verdict.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/CORE-TRACE-DEBUGGING",
+    "verdict": "pass"
+  },
+  "e14568b5f90ba5526744655b7714d182f42de79d48e9cb7e8087739c5e1e559e": {
+    "item_id": "CORE-TRACE-DEBUGGING",
+    "materiality": "material",
+    "missing": "The procedure does not require preserving the failed run and its trace id; it requires preserving only the failed check output and commit id. It also does not require reading full inputs, prompts, each tool call\u2019s arguments and results, intermediate stages, and final output before selecting a fix; it requires reading the check command/output and changed files instead.",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly provides the separate procedure, divergence citation, required diagnosis classifications, unresolved-diagnosis restriction, targeted repair with a new traced verification run, retention of the original failure, and separation of review completeness from the run verdict. However, the absent trace-id and full execution-record requirements are substantive elements of the requirement.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-TRACE-DEBUGGING",
+    "verdict": "unresolved"
+  },
+  "ee450e75bd8ad0e5a4dc69740773f1535d12fded7630d5c1ec10dc83ee36e39d": {
+    "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence names a concrete structural check\u2014`grep -rn ",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/OV-PRIOR-ART-PARALLEL-CHECK",
+    "verdict": "pass"
+  },
+  "f084806d93f301238f792749cfb5cd67fc72673be9f39925f9125cc9a2e8fc0e": {
+    "item_id": "CORE-UNCERTAINTIES",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The table explicitly lists three material uncertainties, and each has stated resolving evidence: the contention test and design behavior, saved timing output, or the `git diff --stat` check.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-UNCERTAINTIES",
+    "verdict": "pass"
+  },
+  "f4a685a5d8f71fafebf7f718602cbfa57058d515b7110789822ad7e9146cf86b": {
+    "item_id": "CORE-SUCCESS-DISPROOF",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence defines direct success checks for the claimed lock behavior, including the holder PID, structured busy state, unchanged state, absent claims directory, successful post-release waiting, and capped override. It also gives concrete disproof conditions: missing holder/busy information, failure after release, or any existing claim-lock test failure.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-SUCCESS-DISPROOF",
+    "verdict": "pass"
+  },
+  "f4e002045a057545b327c292a472fb4d02ecc6459092a34ed2fb8de01b83e467": {
+    "item_id": "CORE-TRACE-REVIEW",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly identifies the two runs (the parent commit before the change and the change commit), the full trace location (the complete command output with exact command and exit status saved in the named file), and the required trace details beyond the final outcome. It also explicitly states the no-run exemption for model, agent, or LLM pipeline runs and gives its reason.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-TRACE-REVIEW",
+    "verdict": "pass"
+  },
+  "fc2e042300b661ed000786aea9214b78f56669847a99fcd66a6936573429fb0e": {
+    "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+    "materiality": "non_material",
+    "missing": null,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "rationale": "The evidence explicitly names the actor (Brian), the desired result (bounded lock waiting, holder details, structured busy result, and no forced/deleted lock), and a stable concrete user-visible example involving writer contention with pid 1234 and the resulting timeout message and to_dict() output.",
+    "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/47e97354308f/CORE-ACTOR-RESULT-EXAMPLE",
+    "verdict": "pass"
+  }
+}

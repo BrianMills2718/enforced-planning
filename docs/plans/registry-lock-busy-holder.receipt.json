@@ -1,0 +1,586 @@
+{
+  "schema_version": "planning-method-conformance-receipt.v1",
+  "record_type": "planning_method_conformance_receipt",
+  "receipt_id": "RECEIPT-registry-lock-busy-holder-c241281c6a73",
+  "plan": {
+    "plan_ref": "docs/plans/registry-lock-busy-holder.md",
+    "plan_sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+  },
+  "path_decision": {
+    "ref": "docs/plans/registry-lock-busy-holder.path-decision.json",
+    "sha256": "0fbc69bf17f5be408c988ea2549e065572d734a14682c7b13c5be8d76fd5d1ec",
+    "selected_path": "prototype",
+    "classified_path": "prototype",
+    "errors": []
+  },
+  "route": "inline_prototype",
+  "profile": {
+    "profile_id": "bounded-design",
+    "revision": "bounded-design@13",
+    "path": "contracts/method-conformance/profiles/bounded-design.v1.json",
+    "sha256": "b62a29405f2c6a0ef730a8d4f78b8eb4bdccca5a29cc1c711a5a96902a121291"
+  },
+  "compiler": {
+    "path": "scripts/method_conformance/compiler.py",
+    "sha256": "9ca8d6e47f651430c21ff382a3d7c1f99e25c61f7ea85d0919ec09d71918d4f9"
+  },
+  "activation": {
+    "facts_ref": "docs/plans/registry-lock-busy-holder.facts.json",
+    "facts_sha256": "a5acdcd6d7106f29689d894c4c10c8b0ecbb352b01fb4d645982e2972e4be513",
+    "facts": {
+      "shared_mechanism": true,
+      "empirical_comparison_proposed": false,
+      "llm_central": false,
+      "irreversible_or_spend_action": false,
+      "crosses_system_boundary": false,
+      "deploys": false,
+      "claims_external_standard": false,
+      "aes_governed_target": false,
+      "durable_documents_declared": false,
+      "multiple_writers": false,
+      "consequential_boundary": false,
+      "inline_prototype": true
+    },
+    "fact_origins": {
+      "shared_mechanism": "declared:governing_authority",
+      "empirical_comparison_proposed": "declared:governing_authority",
+      "llm_central": "declared:governing_authority",
+      "irreversible_or_spend_action": "declared:governing_authority",
+      "crosses_system_boundary": "default:not_declared",
+      "deploys": "default:not_declared",
+      "claims_external_standard": "default:not_declared",
+      "aes_governed_target": "default:not_declared",
+      "durable_documents_declared": "default:not_declared",
+      "multiple_writers": "derived:path_decision.concurrent_writers",
+      "consequential_boundary": "derived:path_decision.persistent_migration|consequential_external_mutation",
+      "inline_prototype": "derived:classified_path==prototype"
+    },
+    "overlays": [
+      {
+        "overlay_id": "OV-PRIOR-ART",
+        "activation_fact": "shared_mechanism",
+        "active": true,
+        "reason": "shared_mechanism=true (declared:governing_authority)"
+      },
+      {
+        "overlay_id": "OV-EMPIRICAL-COMPARISON",
+        "activation_fact": "empirical_comparison_proposed",
+        "active": false,
+        "reason": "empirical_comparison_proposed=false (declared:governing_authority)"
+      },
+      {
+        "overlay_id": "OV-LLM-CENTRAL",
+        "activation_fact": "llm_central",
+        "active": false,
+        "reason": "llm_central=false (declared:governing_authority)"
+      },
+      {
+        "overlay_id": "OV-MULTIPLE-WRITERS",
+        "activation_fact": "multiple_writers",
+        "active": false,
+        "reason": "multiple_writers=false (derived:path_decision.concurrent_writers)"
+      },
+      {
+        "overlay_id": "OV-CONSEQUENTIAL-BOUNDARY",
+        "activation_fact": "consequential_boundary",
+        "active": false,
+        "reason": "consequential_boundary=false (derived:path_decision.persistent_migration|consequential_external_mutation)"
+      },
+      {
+        "overlay_id": "OV-INLINE-PROTOTYPE",
+        "activation_fact": "inline_prototype",
+        "active": true,
+        "reason": "inline_prototype=true (derived:classified_path==prototype)"
+      },
+      {
+        "overlay_id": "OV-SYSTEM-BOUNDARY",
+        "activation_fact": "crosses_system_boundary",
+        "active": false,
+        "reason": "crosses_system_boundary=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DEPLOYMENT",
+        "activation_fact": "deploys",
+        "active": false,
+        "reason": "deploys=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-STANDARD-CONFORMANCE",
+        "activation_fact": "claims_external_standard",
+        "active": false,
+        "reason": "claims_external_standard=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-AES",
+        "activation_fact": "aes_governed_target",
+        "active": false,
+        "reason": "aes_governed_target=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DURABLE-DOCS",
+        "activation_fact": "durable_documents_declared",
+        "active": false,
+        "reason": "durable_documents_declared=false (default:not_declared)"
+      }
+    ]
+  },
+  "checklist": {
+    "checklist_id": "method-conformance.bounded-design",
+    "revision": "sha256:541fb3c9fc1890e681d1e43893119cae0d1ebdcdbf0f9cdd14a832bf124764bc",
+    "definition_sha256": "585f5372bdf3c1ae0c19cf0fb27c1df60120ad7e60b5d2689741b31126a72466",
+    "bundle_ref": "docs/plans/registry-lock-busy-holder.bundle.json",
+    "bundle_sha256": "7f1a9b557dc040961e8f9e51ac3e99580a5f1bbf83159a6f3263935856ba0a9f",
+    "coverage": "complete",
+    "definition_matches_recompilation": true
+  },
+  "items": [
+    {
+      "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#actor-and-result",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-ACTOR-RESULT-EXAMPLE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the served actor (Brian, on behalf of agents running claim lifecycle commands), states the desired structured busy-result and bounded retry outcome, and gives a stable, concrete user-visible example involving writer pid 1234, the timeout message, and the `to_dict()` result.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ROUTE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "structural",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.path-decision.json",
+          "sha256": "0fbc69bf17f5be408c988ea2549e065572d734a14682c7b13c5be8d76fd5d1ec"
+        }
+      ],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-REQUIREMENTS-TRACED",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#requirements",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-REQUIREMENTS-TRACED",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence provides a requirements list with five requirements, identifies whether each was asked for or implied, names a check for each, and gives each a status of planned and not yet run. No additional user-reliant standard, schema, contract, or other property is presented in the quoted evidence as omitted from the list.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SUCCESS-DISPROOF",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#success-and-disproof",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-SUCCESS-DISPROOF",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence defines direct success checks for the claimed lock behavior: holder identification and unchanged state on timeout, structured busy status, acquisition after release within the bound, and environment-value clamping. It also provides concrete disproof conditions covering each behavior and any existing claim-lock test failure; the trace review further requires the relevant tests and assertions to demonstrably fail before the change.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-REVIEW",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#success-and-disproof",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-TRACE-REVIEW",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies the two runs (the parent commit before the change and the change commit), the full trace location (the complete command output with exact command and exit status saved in the named file), and the required trace details beyond the final outcome. It also explicitly states the no-run exemption for model, agent, or LLM pipeline runs and gives its reason.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-DEBUGGING",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#when-a-run-fails-or-surprises-us",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/CORE-TRACE-DEBUGGING",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly defines a separate failure/surprise procedure, preserves the failed run and trace id, requires reading all specified artifacts before selecting a fix, citing and classifying the divergence, and prohibits causal repair for unresolved diagnoses. It also links targeted repairs to a new traced verification run while retaining the original failure and separates review completeness from the run verdict.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SYSTEM-MODEL",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "warn",
+      "verifier_result": "pass",
+      "reason_codes": [
+        "MODEL-NO-ELEMENT-IDS",
+        "MODEL-NO-UNKNOWNS"
+      ],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#system-model",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-SYSTEM-MODEL",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence provides the model path, repository scope, documentation entry point, and explicitly states that no model elements are touched, with a reason and required saved-check outcome. It also identifies the applicable view, explains why other views do not apply, names concrete freshness tests, and states how model, view coverage, and verification evidence are reconciled.",
+        "reused": true
+      },
+      "suggested_action": "MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+    },
+    {
+      "item_id": "CORE-CAPABILITY-REUSE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#capability-reuse",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-CAPABILITY-REUSE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states, “No catalogue entry fits,” and explains that the work changes an existing repository-local lock rather than adding a cross-project capability; it also identifies the needed repository-source edits that no catalogue entry provides.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-AUTHORITY-NONGOALS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#authority-and-non-goals",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-AUTHORITY-NONGOALS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies who holds authority—Brian, via the feedback loop’s fix-owner run, in his own repository—and lists explicit non-goals, including no lock stealing or alteration of locking behavior, CLI outputs, exit codes, or installer propagation.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-IRREVERSIBLE-SPEND",
+      "effect": "blocking",
+      "applicability_mode": "conditional",
+      "condition_fact": "irreversible_or_spend_action",
+      "condition_value": false,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#irreversible-actions-and-spend",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-IRREVERSIBLE-SPEND",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states that no irreversible actions or spend are proposed. It also identifies the scope as one repository and says the change can be reverted via the merge commit, so there is no qualifying irreversible item requiring separate authorization or containment.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-UNCERTAINTIES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#uncertainties",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/CORE-UNCERTAINTIES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The table explicitly lists three material uncertainties, and each has stated resolving evidence: the contention test and design behavior, saved timing output, or the `git diff --stat` check.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ACTIVATION-FACTS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#activation-facts",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/CORE-ACTIVATION-FACTS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan declares `shared_mechanism: true`, while each triggered fact that applies is not falsely declared: it explicitly says no alternatives are compared, no model call is made, no irreversible action or spend is proposed, it conforms only to repository-local contracts, and no `.aes/target.yaml` exists. The quoted evidence therefore supports all declared false activation facts.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-DISPOSITION",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#prior-art-and-ownership",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/OV-PRIOR-ART-DISPOSITION",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states that internal ownership and lineage and relevant external prior art were searched. It also dispositiones each identified candidate as extend, compose, reuse, or bounded exception, including the separate holder registry file and stale-lock stealing.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PRIOR-ART-PARALLEL-CHECK",
+      "effect": "advisory",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#prior-art-and-ownership",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/f1edbfffd4af/OV-PRIOR-ART-PARALLEL-CHECK",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names a concrete structural check—`grep -rn ",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PROTO-VERTICAL-RESET",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/registry-lock-busy-holder.md#vertical-and-reset",
+          "sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/registry-lock-busy-holder/d6b8fe1ff149/OV-PROTO-VERTICAL-RESET",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the minimal vertical scope and completion condition, defines the reset boundary as reverting the merge commit, and states the non-goals, including work outside the listed files and coordinated-work ceremonies.",
+        "reused": true
+      },
+      "suggested_action": null
+    }
+  ],
+  "item_counts": {
+    "pass": 14,
+    "unresolved": 0,
+    "not_applicable": 0,
+    "unavailable": 0,
+    "missing": 0,
+    "warn": 1
+  },
+  "semantic_verifier": {
+    "kind": "llm_client",
+    "available": true,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "task": "company_planning.method_conformance.semantic_item_review"
+  },
+  "conformance_report": {
+    "schema_version": "1.0",
+    "record_type": "planning_conformance_report",
+    "report_id": "REPORT-registry-lock-busy-holder-c241281c6a73",
+    "snapshot_ref": "SNAPSHOT-registry-lock-busy-holder",
+    "snapshot_revision": "sha256:7f1a9b557dc040961e8f9e51ac3e99580a5f1bbf83159a6f3263935856ba0a9f",
+    "packet_ref": "docs/plans/registry-lock-busy-holder.md",
+    "packet_revision": "sha256:c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb",
+    "structural_status": "pass",
+    "semantic_review_status": "complete",
+    "diagnostics": [],
+    "route": "inline_prototype",
+    "adoption_readiness": "ready_for_contributor",
+    "limitations": [
+      "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+    ]
+  },
+  "advisory_deviations": [],
+  "result": "pass",
+  "reason_codes": [],
+  "actionable_summary": [
+    "pass: 14 items evidenced, 0 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "limitations": [
+    "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+  ],
+  "caller": {
+    "client": "claude-code",
+    "session": "4155e071-7906-49bb-bbd9-7391f8255849"
+  },
+  "started_at": "2026-10-12T09:34:26Z",
+  "completed_at": "2026-10-12T09:34:55Z",
+  "duration_ms": 25248
+}

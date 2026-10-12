@@ -1,0 +1,57 @@
+### BEFORE: parent commit 3f37f26c91d2f54c8afa6422c4864cb2ffda1a9a with new tests, unchanged source
+$ python3 -m pytest tests/test_check_coordination_claims.py -k registry_lock -rA --tb=short
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/brian/code/enforced-planning/worktrees/registry-lock-busy-holder
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 189 items / 182 deselected / 7 selected
+
+tests/test_check_coordination_claims.py ....FFF                          [100%]
+
+=================================== FAILURES ===================================
+____ test_registry_lock_contention_returns_bounded_retry_and_then_succeeds _____
+tests/test_check_coordination_claims.py:2671: in test_registry_lock_contention_returns_bounded_retry_and_then_succeeds
+    assert f"pid {os.getpid()}" in str(busy.value)
+E   AssertionError: assert 'pid 3436936' in 'Claim registry writer is contended at /tmp/pytest-of-brian/pytest-775/test_registry_lock_contention_0/.claims.lock; no claim state changed. Retry after the current writer releases this lock (waited 0.05s).'
+E    +  where 'Claim registry writer is contended at /tmp/pytest-of-brian/pytest-775/test_registry_lock_contention_0/.claims.lock; no claim state changed. Retry after the current writer releases this lock (waited 0.05s).' = str(ClaimRegistryLockTimeout('Claim registry writer is contended at /tmp/pytest-of-brian/pytest-775/test_registry_lock_contention_0/.claims.lock; no claim state changed. Retry after the current writer releases this lock (waited 0.05s).'))
+E    +    where ClaimRegistryLockTimeout('Claim registry writer is contended at /tmp/pytest-of-brian/pytest-775/test_registry_lock_contention_0/.claims.lock; no claim state changed. Retry after the current writer releases this lock (waited 0.05s).') = <ExceptionInfo ClaimRegistryLockTimeout('Claim registry writer is contended at /tmp/pytest-of-brian/pytest-775/test_re...on_0/.claims.lock; no claim state changed. Retry after the current writer releases this lock (waited 0.05s).') tblen=3>.value
+_______ test_registry_lock_waiter_succeeds_when_holder_releases_mid_wait _______
+tests/test_check_coordination_claims.py:2702: in test_registry_lock_waiter_succeeds_when_holder_releases_mid_wait
+    with claims_impl.claim_registry_lock(
+/usr/lib/python3.12/contextlib.py:301: in helper
+    return _GeneratorContextManager(func, args, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/contextlib.py:105: in __init__
+    self.gen = func(*args, **kwds)
+               ^^^^^^^^^^^^^^^^^^^
+E   TypeError: claim_registry_lock() got an unexpected keyword argument 'report_interval_seconds'
+______________ test_registry_lock_timeout_env_override_is_capped _______________
+tests/test_check_coordination_claims.py:2721: in test_registry_lock_timeout_env_override_is_capped
+    monkeypatch.delenv(claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_ENV, raising=False)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'enforced_planning.coordination_claims' has no attribute 'CLAIM_REGISTRY_LOCK_TIMEOUT_ENV'. Did you mean: 'CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS'?
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/test_check_coordination_claims.py::test_heartbeat_holds_registry_lock_through_projection_refresh
+PASSED tests/test_check_coordination_claims.py::test_hydration_holds_registry_lock_through_projection_refresh
+PASSED tests/test_check_coordination_claims.py::test_completion_and_every_prune_hold_registry_lock_through_projection_refresh
+PASSED tests/test_check_coordination_claims.py::test_registry_lock_prunes_only_old_sanctioned_write_artifacts
+FAILED tests/test_check_coordination_claims.py::test_registry_lock_contention_returns_bounded_retry_and_then_succeeds
+FAILED tests/test_check_coordination_claims.py::test_registry_lock_waiter_succeeds_when_holder_releases_mid_wait
+FAILED tests/test_check_coordination_claims.py::test_registry_lock_timeout_env_override_is_capped
+================= 3 failed, 4 passed, 182 deselected in 23.93s =================
+exit status: 1
+
+### AFTER: change on top of 3f37f26c91d2f54c8afa6422c4864cb2ffda1a9a (working tree; committed as the change commit)
+$ python3 -m pytest tests/test_check_coordination_claims.py -rA --tb=short -p no:cacheprovider  (full file; registry_lock tests listed by name)
+PASSED tests/test_check_coordination_claims.py::test_heartbeat_holds_registry_lock_through_projection_refresh
+PASSED tests/test_check_coordination_claims.py::test_hydration_holds_registry_lock_through_projection_refresh
+PASSED tests/test_check_coordination_claims.py::test_completion_and_every_prune_hold_registry_lock_through_projection_refresh
+PASSED tests/test_check_coordination_claims.py::test_registry_lock_prunes_only_old_sanctioned_write_artifacts
+PASSED tests/test_check_coordination_claims.py::test_registry_lock_contention_returns_bounded_retry_and_then_succeeds
+PASSED tests/test_check_coordination_claims.py::test_registry_lock_waiter_succeeds_when_holder_releases_mid_wait
+PASSED tests/test_check_coordination_claims.py::test_registry_lock_timeout_env_override_is_capped
+======================= 189 passed in 229.43s (0:03:49) ========================
+exit status: 0

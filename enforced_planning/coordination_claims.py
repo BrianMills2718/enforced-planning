@@ -85,12 +85,60 @@ CURRENT_CLAIM_SCHEMA_VERSION = 6
 BROAD_SCOPE_MODES = {"bootstrap", "bounded"}
 BOOTSTRAP_AUTHORITY_DISABLED_SUFFIX = ".bootstrap-no-mutation-authority"
 SESSION_TAKEOVER_RESERVATION_FIELD = "session_takeover_reservation"
-CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS = 5.0
+# Contention observed in practice (AES #325, #413) cleared within one manual
+# retry, so the default wait covers it; the env override is capped so a wait can
+# never become unbounded.
+CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS = 30.0
+CLAIM_REGISTRY_LOCK_TIMEOUT_MAX_SECONDS = 300.0
+CLAIM_REGISTRY_LOCK_TIMEOUT_ENV = "CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS"
 CLAIM_REGISTRY_LOCK_POLL_SECONDS = 0.05
+CLAIM_REGISTRY_LOCK_REPORT_SECONDS = 5.0
+
+
+def claim_registry_lock_timeout_seconds() -> float:
+    """Return the default bounded wait, honoring a capped environment override."""
+
+    raw = os.environ.get(CLAIM_REGISTRY_LOCK_TIMEOUT_ENV, "").strip()
+    if not raw:
+        return CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS
+    if value != value or value < 0:  # NaN or negative
+        return CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS
+    return min(value, CLAIM_REGISTRY_LOCK_TIMEOUT_MAX_SECONDS)
 
 
 class ClaimRegistryLockTimeout(TimeoutError):
-    """The single local claim writer stayed busy beyond the bounded wait."""
+    """The single local claim writer stayed busy beyond the bounded wait.
+
+    Carries the lock path, how long the caller waited, and the advisory holder
+    record so callers can report a structured busy result via ``to_dict()``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        lock_path: Path | None = None,
+        waited_seconds: float | None = None,
+        holder: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.lock_path = lock_path
+        self.waited_seconds = waited_seconds
+        self.holder = holder
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": "busy",
+            "state_changed": False,
+            "lock_path": str(self.lock_path) if self.lock_path is not None else None,
+            "waited_seconds": self.waited_seconds,
+            "holder": self.holder,
+            "message": str(self),
+        }
 
 # Directories whose contents are immutable, uniquely-named artifacts created by
 # an atomic exclusive open. Two lanes appending to one of these cannot collide:
@@ -222,14 +270,98 @@ class ProgressEventV1(BaseModel):
         return self
 
 
+def _registry_lock_holder_record() -> dict[str, Any]:
+    """Describe this process as the registry writer (advisory, never authority)."""
+
+    try:
+        command = Path("/proc/self/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+    except OSError:
+        command = " ".join(sys.argv)
+    session_id = next(
+        (
+            os.environ[key]
+            for keys in SESSION_ENV_KEYS.values()
+            for key in keys
+            if key != "CLAUDE_CODE_SSE_PORT" and os.environ.get(key)
+        ),
+        None,
+    )
+    return {
+        "pid": os.getpid(),
+        "command": " ".join(command.split())[:300],
+        "session_id": session_id,
+        "acquired_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _read_registry_lock_holder(lock_file: Any) -> dict[str, Any] | None:
+    """Read the holder record the current owner wrote; None when absent or torn."""
+
+    try:
+        lock_file.seek(0)
+        raw = lock_file.read()
+    except OSError:
+        return None
+    if not raw.strip():
+        return None
+    try:
+        holder = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(holder, dict):
+        return None
+    pid = holder.get("pid")
+    if isinstance(pid, int):
+        try:
+            os.kill(pid, 0)
+            holder["alive"] = True
+        except ProcessLookupError:
+            holder["alive"] = False
+        except PermissionError:
+            holder["alive"] = True
+    acquired_at = holder.get("acquired_at")
+    if isinstance(acquired_at, str):
+        try:
+            acquired = datetime.fromisoformat(acquired_at.replace("Z", "+00:00"))
+            holder["held_seconds"] = round((datetime.now(timezone.utc) - acquired).total_seconds(), 1)
+        except ValueError:
+            pass
+    return holder
+
+
+def _describe_registry_lock_holder(holder: dict[str, Any] | None) -> str:
+    if holder is None:
+        return "held by an unidentified writer (no holder record)"
+    alive = holder.get("alive")
+    state = "alive" if alive else ("exited" if alive is False else "liveness unknown")
+    parts = [f"held by pid {holder.get('pid')} ({state})"]
+    if holder.get("session_id"):
+        parts.append(f"session {holder['session_id']}")
+    if holder.get("held_seconds") is not None:
+        parts.append(f"for {holder['held_seconds']:g}s")
+    if holder.get("command"):
+        parts.append(f"command: {holder['command']}")
+    return ", ".join(parts)
+
+
 @contextmanager
 def claim_registry_lock(
     claims_dir: Path | None = None,
     *,
-    timeout_seconds: float = CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS,
+    timeout_seconds: float | None = None,
+    report_interval_seconds: float = CLAIM_REGISTRY_LOCK_REPORT_SECONDS,
 ) -> Iterator[None]:
-    """Serialize mutations, failing with an exact retry condition on contention."""
+    """Serialize mutations, waiting a bounded time and naming the current writer.
 
+    The kernel flock is the only authority. The owner writes an advisory holder
+    record into the lock file and clears it on release; a waiter reads it to
+    report who is busy, and never forces, unlinks, or truncates the lock. On
+    timeout no claim state has changed and ``ClaimRegistryLockTimeout`` carries
+    a structured busy result.
+    """
+
+    if timeout_seconds is None:
+        timeout_seconds = claim_registry_lock_timeout_seconds()
     if timeout_seconds < 0:
         raise ValueError("claim registry lock timeout_seconds must be non-negative")
 
@@ -238,24 +370,54 @@ def claim_registry_lock(
     lock_path = resolved_claims_dir.parent / f".{resolved_claims_dir.name}.lock"
     with lock_path.open("a+", encoding="utf-8") as lock_file:
         lock_path.chmod(0o600)
-        deadline = time.monotonic() + timeout_seconds
+        started = time.monotonic()
+        deadline = started + timeout_seconds
+        next_report = started + report_interval_seconds
         while True:
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except BlockingIOError as exc:
-                remaining = deadline - time.monotonic()
+                now = time.monotonic()
+                remaining = deadline - now
                 if remaining <= 0:
+                    holder = _read_registry_lock_holder(lock_file)
                     raise ClaimRegistryLockTimeout(
                         "Claim registry writer is contended at "
-                        f"{lock_path}; no claim state changed. Retry after the current "
-                        f"writer releases this lock (waited {timeout_seconds:g}s)."
+                        f"{lock_path}, {_describe_registry_lock_holder(holder)}; no claim state "
+                        "changed. Retry after the current writer releases this lock "
+                        f"(waited {timeout_seconds:g}s; raise the wait with "
+                        f"{CLAIM_REGISTRY_LOCK_TIMEOUT_ENV}, capped at "
+                        f"{CLAIM_REGISTRY_LOCK_TIMEOUT_MAX_SECONDS:g}s).",
+                        lock_path=lock_path,
+                        waited_seconds=round(now - started, 3),
+                        holder=holder,
                     ) from exc
+                if now >= next_report:
+                    holder = _read_registry_lock_holder(lock_file)
+                    print(
+                        f"claim registry busy: {_describe_registry_lock_holder(holder)}; "
+                        f"waiting up to {remaining:.0f}s more ({lock_path})",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    next_report = now + report_interval_seconds
                 time.sleep(min(CLAIM_REGISTRY_LOCK_POLL_SECONDS, remaining))
+        try:
+            # Opened in append mode, so after truncation the record lands at offset 0.
+            lock_file.truncate(0)
+            lock_file.write(json.dumps(_registry_lock_holder_record(), sort_keys=True))
+            lock_file.flush()
+        except OSError:
+            pass  # The record is advisory; the flock already grants ownership.
         try:
             _prune_abandoned_claim_write_artifacts(resolved_claims_dir)
             yield
         finally:
+            try:
+                lock_file.truncate(0)
+            except OSError:
+                pass
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 

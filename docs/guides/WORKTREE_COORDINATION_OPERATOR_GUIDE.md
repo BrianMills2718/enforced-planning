@@ -283,15 +283,23 @@ rejects an occupied slot or creates the claim while holding the registry lock.
 A concurrent exact-owner claim therefore cannot turn bootstrap into refresh.
 
 **Registry-writer contention is bounded.** Claim mutations serialize through
-`~/.claude/coordination/.claims.lock`. A mutation waits at most five seconds by
-default; if another writer still owns the lock, it raises
-`ClaimRegistryLockTimeout`, states that no claim state changed, and tells the
-caller to retry after the current writer releases the lock. The timeout is a
-runtime safety invariant, not a `meta-process.yaml` setting. Do not delete the
+`~/.claude/coordination/.claims.lock`. The writer that owns the lock records
+an advisory holder line in it (pid, command, session id, acquisition time) and
+clears it on release. A mutation waits at most 30 seconds by default
+(`CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS` in the environment overrides this,
+capped at 300 seconds) and prints one stderr line every five seconds naming the
+holder, whether its process is alive, and how long it has held the lock. If the
+holder still owns the lock at the bound, it raises `ClaimRegistryLockTimeout`
+naming that holder, states that no claim state changed, and tells the caller to
+retry after the current writer releases the lock; the exception's `to_dict()`
+gives the same as a structured busy result (`status: busy`,
+`state_changed: false`, `lock_path`, `waited_seconds`, `holder`). The timeout is
+a runtime safety invariant, not a `meta-process.yaml` setting. Do not delete the
 lock file or infer that its age identifies a stale owner: `flock` ownership is
-held by a live process, not by the file's timestamp. Inspect the holder, then
-retry the same sanctioned command. A timed-out claim start, heartbeat, resume,
-or close therefore never becomes ambiguous authority.
+held by a live process, not by the file's timestamp or the holder line, which
+is advisory. Read the named holder, then retry the same sanctioned command. A
+timed-out claim start, heartbeat, resume, or close therefore never becomes
+ambiguous authority.
 
 A successful cross-session `session-resume` also writes one immutable
 `claim_session_custody_transfer` receipt under the coordination root and returns

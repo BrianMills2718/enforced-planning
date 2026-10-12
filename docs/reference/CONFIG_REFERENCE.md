@@ -133,12 +133,17 @@ key. `session-resume --successor-agent` may transfer only an explicit `handoff`
 or `session_ended` claim: both prove the predecessor runtime is quiescent. Live
 and stale-heartbeat claims retain the fenced transfer path.
 
-Claim-registry writer contention is also not configurable. Mutations acquire
-`~/.claude/coordination/.claims.lock` for at most five seconds by default. If
-the lock remains owned, `ClaimRegistryLockTimeout` reports the lock path,
-confirms that no claim state changed, and directs the caller to retry after the
-current writer releases it. The lock file's age is not ownership evidence;
-inspect the live `flock` holder rather than deleting the file.
+Claim-registry writer contention is not a `meta-process.yaml` setting.
+Mutations wait for `~/.claude/coordination/.claims.lock` for at most 30 seconds
+by default; the environment variable `CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS`
+overrides the wait, capped at 300 seconds (an invalid value falls back to the
+default). While waiting, the caller prints the advisory holder the owning
+writer recorded in the lock file. If the lock remains owned,
+`ClaimRegistryLockTimeout` names that holder and the lock path, confirms that no
+claim state changed, and directs the caller to retry after the current writer
+releases it; `to_dict()` returns the structured busy result. The lock file's age
+and holder line are not ownership evidence; the live `flock` is, so never delete
+the file.
 
 An unused claimed lane remains active when its branch tip is exactly its retained
 `start_revision`, even if an unrelated default-branch commit makes that tip an

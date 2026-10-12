@@ -1,0 +1,16 @@
+{
+  "schema_version": "method-adoption-decision.v1",
+  "record_type": "method_adoption_decision",
+  "decision": "adopted",
+  "plan_ref": "docs/plans/claim-refusal-resolution.md",
+  "plan_sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53",
+  "receipt_ref": "docs/plans/claim-refusal-resolution.receipt.json",
+  "receipt_sha256": "6910b81e2551a3c5f49379dc03036dfc3c4b3e7fe740351ffc5d2253296c2368",
+  "receipt_result": "pass",
+  "reason_codes": [],
+  "summary": [
+    "pass: 11 items evidenced, 1 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "decided_at": "2026-10-12T01:15:15Z"
+}

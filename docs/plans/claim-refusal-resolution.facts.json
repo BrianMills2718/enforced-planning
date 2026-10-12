@@ -1,0 +1,21 @@
+{
+  "schema_version": "method-activation-facts.v1",
+  "record_type": "method_activation_facts",
+  "plan_ref": "docs/plans/claim-refusal-resolution.md",
+  "plan_sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53",
+  "path_decision_ref": "docs/plans/claim-refusal-resolution.path-decision.json",
+  "path_decision_sha256": "54d8ef3a2dcc97731b6b8b9eb5d05ccdda36c7337c85a751b1a4d0e4d953aa67",
+  "facts": {
+    "shared_mechanism": false,
+    "empirical_comparison_proposed": false,
+    "llm_central": false,
+    "irreversible_or_spend_action": false
+  },
+  "fact_sources": {
+    "shared_mechanism": "derived_current_boundary",
+    "empirical_comparison_proposed": "derived_current_boundary",
+    "llm_central": "derived_current_boundary",
+    "irreversible_or_spend_action": "derived_current_boundary"
+  },
+  "recorded_at": "2026-10-12T01:14:54Z"
+}

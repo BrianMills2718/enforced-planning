@@ -1147,6 +1147,16 @@ it still use the merge-base fallback; the rendered line says which was used,
 because a lane that rebased onto newer main moves its merge-base forward and
 will under-report.
 
+### Reading a broad-scope claim refusal
+
+A refused claim creation prints one line per refusal code, naming the write path
+that triggered it and the sanctioned resolution. Example: `broad_scope_ambiguous`
+for a top-level path that does not exist yet says to declare it in the
+maintenance request's `new_files` list (or claim an exact `dir/file` subpath),
+never to create the file in the canonical checkout first; `broad_scope_mode_required`
+lists the broad paths and the `--broad-scope-mode`/`--broad-scope-reason` flags.
+The bare codes are unchanged for callers that test membership (AES #363/#407).
+
 ### Overlapping an undeclared whole-repository claim
 
 A claim holding `["."]` because a scope was omitted has an owner who never

@@ -2147,9 +2147,41 @@ def validate_claim_for_creation(claim: ClaimRecord) -> None:
             f"Active {claim.claim_type} claims require {required_text}. "
             "Legacy claims remain readable, but new live claims must declare real ownership."
         )
-    broad_issues = _broad_scope_contract_issues(claim)
+    details: dict[str, str] = {}
+    broad_issues = _broad_scope_contract_issues(claim, details)
     if claim.is_live() and claim.schema_version >= 6 and broad_issues:
-        raise ValueError("; ".join(broad_issues))
+        raise ValueError(_explain_broad_scope_refusal(broad_issues, details))
+
+
+_BROAD_SCOPE_RESOLUTIONS = {
+    "broad_scope_ambiguous": (
+        "a top-level write path that does not exist yet cannot be classified as a file or a directory. "
+        "Resolve: if it is a new top-level file, declare it as a new file (the maintenance_worktree request's "
+        "\"new_files\" list in scripts/claim_bootstrap.py, or a worktree that already contains the file before "
+        "the claim is made by that route); if it is a new directory, claim its exact subpath (dir/file) instead; "
+        "never create the file in the canonical checkout before claiming"
+    ),
+    "broad_scope_mode_required": (
+        "the write paths include the repository root or an existing top-level directory. "
+        "Resolve: narrow the write paths to the files or subdirectories you will write, or pass "
+        "--broad-scope-mode bounded (or bootstrap) with --broad-scope-reason '<why the whole area>'"
+    ),
+    "broad_scope_reason_required": "Resolve: pass --broad-scope-reason '<why this lane needs the broad path>'",
+    "legacy_broad_scope_unclassified": "Resolve: re-create the claim with the current claim tool so its broad scope is classified",
+}
+
+
+def _explain_broad_scope_refusal(issues: list[str], details: dict[str, str]) -> str:
+    """Name each refusal code, the input that triggered it, and the sanctioned resolution."""
+
+    lines = []
+    for issue in issues:
+        line = details.get(issue, issue)
+        if issue in {"broad_scope_mode_required", "broad_scope_reason_required"} and details.get("broad_paths"):
+            line = f"{issue}: broad write paths {details['broad_paths']}"
+        resolution = _BROAD_SCOPE_RESOLUTIONS.get(issue)
+        lines.append(f"{line}; {resolution}" if resolution else line)
+    return "\n".join(lines)
 
 
 def _plan_number(plan_ref: str | None) -> int | None:
@@ -2673,8 +2705,13 @@ def _regular_top_level_files_at_revision(
     return verified
 
 
-def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
-    """Return deterministic schema-v6 broad-scope contract violations."""
+def _broad_scope_contract_issues(claim: ClaimRecord, details: dict[str, str] | None = None) -> list[str]:
+    """Return deterministic schema-v6 broad-scope contract violations.
+
+    ``details`` (optional) receives the triggering input per issue code so a
+    creation refusal can name it; the returned codes stay bare for callers that
+    test membership.
+    """
 
     if not _has_write_ownership(claim):
         return []
@@ -2761,7 +2798,11 @@ def _broad_scope_contract_issues(claim: ClaimRecord) -> list[str]:
         # rendering across the whole registry -- must survive one such claim
         # rather than crash on it.
         issues.append(str(exc).split(":", 1)[0])
+        if details is not None:
+            details[issues[-1]] = str(exc)
         broad_paths = None
+    if broad_paths and details is not None:
+        details["broad_paths"] = ", ".join(f"{path!r} ({kind})" for path, kind in sorted(broad_paths.items()))
     if broad_paths:
         if mode not in BROAD_SCOPE_MODES:
             issues.append("broad_scope_mode_required")

@@ -275,6 +275,43 @@ def test_new_broad_claim_requires_mode_and_reason(tmp_path: Path) -> None:
         claims_impl.validate_claim_for_creation(contradictory)
 
 
+def test_broad_scope_refusal_names_trigger_and_resolution(tmp_path: Path) -> None:
+    """A creation refusal names the write path that triggered it and the sanctioned fix (AES #363/#407)."""
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "docs").mkdir()
+    common = {
+        "agent": "codex",
+        "project": "demo",
+        "scope": "refusal",
+        "intent": "test refusal text",
+        "claim_type": "write",
+        "repo_root": str(repo),
+        "worktree_path": str(repo),
+        "branch": "main",
+        "session_name": "refusal",
+        "broader_goal": "test",
+        "tracker_path": str(tmp_path / "tracker.yaml"),
+        "session_id": "codex:owner",
+        "plan_ref": "UNPLANNED",
+    }
+    missing = claims_impl.build_candidate_claim(**common, write_paths=["llm_client_fallbacks.json"], schema_version=6)
+    with pytest.raises(ValueError) as refused:
+        claims_impl.validate_claim_for_creation(missing)
+    text = str(refused.value)
+    assert text.startswith("broad_scope_ambiguous")
+    assert "'llm_client_fallbacks.json'" in text
+    assert "new_files" in text and "Resolve:" in text
+
+    broad = claims_impl.build_candidate_claim(**common, write_paths=["docs"], schema_version=6)
+    with pytest.raises(ValueError) as refused:
+        claims_impl.validate_claim_for_creation(broad)
+    text = str(refused.value)
+    assert "'docs' (existing_top_level_directory)" in text
+    assert "--broad-scope-mode bounded" in text and "--broad-scope-reason" in text
+
+
 def test_broad_classifier_rejects_nested_symlink_escape(tmp_path: Path) -> None:
     """A nested path cannot hide an escape merely because it is not broad."""
 

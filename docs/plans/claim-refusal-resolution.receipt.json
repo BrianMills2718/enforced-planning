@@ -1,0 +1,519 @@
+{
+  "schema_version": "planning-method-conformance-receipt.v1",
+  "record_type": "planning_method_conformance_receipt",
+  "receipt_id": "RECEIPT-claim-refusal-resolution-8ae2d9436099",
+  "plan": {
+    "plan_ref": "docs/plans/claim-refusal-resolution.md",
+    "plan_sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+  },
+  "path_decision": {
+    "ref": "docs/plans/claim-refusal-resolution.path-decision.json",
+    "sha256": "54d8ef3a2dcc97731b6b8b9eb5d05ccdda36c7337c85a751b1a4d0e4d953aa67",
+    "selected_path": "prototype",
+    "classified_path": "prototype",
+    "errors": []
+  },
+  "route": "inline_prototype",
+  "profile": {
+    "profile_id": "bounded-design",
+    "revision": "bounded-design@13",
+    "path": "contracts/method-conformance/profiles/bounded-design.v1.json",
+    "sha256": "b62a29405f2c6a0ef730a8d4f78b8eb4bdccca5a29cc1c711a5a96902a121291"
+  },
+  "compiler": {
+    "path": "scripts/method_conformance/compiler.py",
+    "sha256": "9ca8d6e47f651430c21ff382a3d7c1f99e25c61f7ea85d0919ec09d71918d4f9"
+  },
+  "activation": {
+    "facts_ref": "docs/plans/claim-refusal-resolution.facts.json",
+    "facts_sha256": "3634867a9f06dd27cc909dfed0a72fe17c993cebd13844af36c95fc1ff6adc81",
+    "facts": {
+      "shared_mechanism": false,
+      "empirical_comparison_proposed": false,
+      "llm_central": false,
+      "irreversible_or_spend_action": false,
+      "crosses_system_boundary": false,
+      "deploys": false,
+      "claims_external_standard": false,
+      "aes_governed_target": false,
+      "durable_documents_declared": false,
+      "multiple_writers": false,
+      "consequential_boundary": false,
+      "inline_prototype": true
+    },
+    "fact_origins": {
+      "shared_mechanism": "declared:derived_current_boundary",
+      "empirical_comparison_proposed": "declared:derived_current_boundary",
+      "llm_central": "declared:derived_current_boundary",
+      "irreversible_or_spend_action": "declared:derived_current_boundary",
+      "crosses_system_boundary": "default:not_declared",
+      "deploys": "default:not_declared",
+      "claims_external_standard": "default:not_declared",
+      "aes_governed_target": "default:not_declared",
+      "durable_documents_declared": "default:not_declared",
+      "multiple_writers": "derived:path_decision.concurrent_writers",
+      "consequential_boundary": "derived:path_decision.persistent_migration|consequential_external_mutation",
+      "inline_prototype": "derived:classified_path==prototype"
+    },
+    "overlays": [
+      {
+        "overlay_id": "OV-PRIOR-ART",
+        "activation_fact": "shared_mechanism",
+        "active": false,
+        "reason": "shared_mechanism=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-EMPIRICAL-COMPARISON",
+        "activation_fact": "empirical_comparison_proposed",
+        "active": false,
+        "reason": "empirical_comparison_proposed=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-LLM-CENTRAL",
+        "activation_fact": "llm_central",
+        "active": false,
+        "reason": "llm_central=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-MULTIPLE-WRITERS",
+        "activation_fact": "multiple_writers",
+        "active": false,
+        "reason": "multiple_writers=false (derived:path_decision.concurrent_writers)"
+      },
+      {
+        "overlay_id": "OV-CONSEQUENTIAL-BOUNDARY",
+        "activation_fact": "consequential_boundary",
+        "active": false,
+        "reason": "consequential_boundary=false (derived:path_decision.persistent_migration|consequential_external_mutation)"
+      },
+      {
+        "overlay_id": "OV-INLINE-PROTOTYPE",
+        "activation_fact": "inline_prototype",
+        "active": true,
+        "reason": "inline_prototype=true (derived:classified_path==prototype)"
+      },
+      {
+        "overlay_id": "OV-SYSTEM-BOUNDARY",
+        "activation_fact": "crosses_system_boundary",
+        "active": false,
+        "reason": "crosses_system_boundary=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DEPLOYMENT",
+        "activation_fact": "deploys",
+        "active": false,
+        "reason": "deploys=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-STANDARD-CONFORMANCE",
+        "activation_fact": "claims_external_standard",
+        "active": false,
+        "reason": "claims_external_standard=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-AES",
+        "activation_fact": "aes_governed_target",
+        "active": false,
+        "reason": "aes_governed_target=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DURABLE-DOCS",
+        "activation_fact": "durable_documents_declared",
+        "active": false,
+        "reason": "durable_documents_declared=false (default:not_declared)"
+      }
+    ]
+  },
+  "checklist": {
+    "checklist_id": "method-conformance.bounded-design",
+    "revision": "sha256:3a66cd3eab2c15f94211536338fb22cab4191f0fc56fd2bca577eec8077ce6c1",
+    "definition_sha256": "e22e11a8ad5b4d77e0eac281184b39fa59d41d210c7d6e195e4f8eb6507f051e",
+    "bundle_ref": "docs/plans/claim-refusal-resolution.bundle.json",
+    "bundle_sha256": "e3a0ed01ad22761521e8419ee0525ae6764f98aefece7f1da4a82b87d05d43d5",
+    "coverage": "complete",
+    "definition_matches_recompilation": true
+  },
+  "items": [
+    {
+      "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#actor-and-result",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-ACTOR-RESULT-EXAMPLE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the actor as Brian, states the desired result for `validate_claim_for_creation`, and provides a stable, concrete user-visible example including the command, input condition, output, and exit code.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ROUTE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "structural",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.path-decision.json",
+          "sha256": "54d8ef3a2dcc97731b6b8b9eb5d05ccdda36c7337c85a751b1a4d0e4d953aa67"
+        }
+      ],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-REQUIREMENTS-TRACED",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-REQUIREMENTS-TRACED",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan explicitly lists R1 and R2 in a Requirements table, covering the requested behavior and the claimed compatibility with bare issue codes. Each requirement names its verification check and has the status “planned, not yet run”; no requirement is deferred, so no deferral reason or carry-forward record is required.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SUCCESS-DISPROOF",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#success-and-disproof",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-SUCCESS-DISPROOF",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence directly tests the claimed CLI refusal behavior by asserting the required code, file/directory names, and flags, rather than relying only on counts, hashes, or pipeline agreement. It also gives a concrete disproof condition: the missing-file refusal remains only `broad_scope_ambiguous` or an existing bare-code test fails.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-REVIEW",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#success-and-disproof",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-TRACE-REVIEW",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies the two runs by commit (the parent/disproof run and the change/success run), specifies that their complete output is saved at `docs/plans/claim-refusal-resolution.check.txt`, and requires seeing commands, exit statuses, named checks, non-skipped results, and System model lines beyond the final outcome. It also explicitly states that no model, agent, or LLM pipeline runs occur under the plan.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-DEBUGGING",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#when-a-run-fails-or-surprises-us",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-TRACE-DEBUGGING",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence defines a separate procedure for failed or surprising runs and explicitly requires preserving the failed run and trace ID, reviewing complete inputs, prompts, tool arguments/results, intermediate stages, and final output, citing and classifying divergences, and restricting unresolved diagnoses to investigation. It also requires a targeted repair with a new traced verification run while retaining the original failure, and distinguishes complete review from the run outcome.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SYSTEM-MODEL",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "warn",
+      "verifier_result": "pass",
+      "reason_codes": [
+        "MODEL-NO-ELEMENT-IDS",
+        "MODEL-NO-UNKNOWNS"
+      ],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-SYSTEM-MODEL",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan links `docs/model/ODD.md`, identifies `wiki/index.md` as the documentation entry point, and states that the model is repository-scoped rather than shared. It explicitly declares that the work touches no model elements and explains why, identifies the applicable source-linked requirements-to-verification view and omissions, names concrete freshness tests, and specifies same-commit reconciliation of the model, view coverage, and saved trace evidence.",
+        "reused": false
+      },
+      "suggested_action": "MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+    },
+    {
+      "item_id": "CORE-CAPABILITY-REUSE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#capability-reuse",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-CAPABILITY-REUSE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly checks both catalogue files and states, “No catalogue entry fits,” with a reason: the work needs edits to this repository’s own files, while the catalogue entries are cross-project capabilities and none provides repository-source editing.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-AUTHORITY-NONGOALS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#authority-and-non-goals",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-AUTHORITY-NONGOALS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies authority: Brian requested the change in his repository and one agent will make it. It also states explicit non-goals, including work outside the listed files, irreversible actions, and spending.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-IRREVERSIBLE-SPEND",
+      "effect": "blocking",
+      "applicability_mode": "conditional",
+      "condition_fact": "irreversible_or_spend_action",
+      "condition_value": false,
+      "verifier_kind": "semantic",
+      "disposition": "not_applicable",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-UNCERTAINTIES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#uncertainties",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-UNCERTAINTIES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies a material uncertainty—whether files beyond the listed two are needed—and provides resolving evidence: a pre-edit `git diff --stat` with the exact files and change counts. Thus the listed uncertainty has resolution evidence.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ACTIVATION-FACTS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#activation-facts",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/CORE-ACTIVATION-FACTS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan explicitly declares the relevant facts false and provides substantively consistent reasons: it adds no shared mechanism, compares no alternative designs, makes no LLM calls, performs no irreversible or spending action, claims no external standard, and states that no `.aes/target.yaml` exists or is created. The before/after checks are verification rather than an empirical comparison.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PROTO-VERTICAL-RESET",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/claim-refusal-resolution.md#vertical-and-reset",
+          "sha256": "8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/claim-refusal-resolution/c749e5968d7e/OV-PROTO-VERTICAL-RESET",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states the vertical result, the reset boundary as `git revert` of the commit, and the non-goal of work outside the listed files. It also explicitly says the plan adds no coordinated-work ceremony.",
+        "reused": false
+      },
+      "suggested_action": null
+    }
+  ],
+  "item_counts": {
+    "pass": 11,
+    "unresolved": 0,
+    "not_applicable": 1,
+    "unavailable": 0,
+    "missing": 0,
+    "warn": 1
+  },
+  "semantic_verifier": {
+    "kind": "llm_client",
+    "available": true,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "task": "company_planning.method_conformance.semantic_item_review"
+  },
+  "conformance_report": {
+    "schema_version": "1.0",
+    "record_type": "planning_conformance_report",
+    "report_id": "REPORT-claim-refusal-resolution-8ae2d9436099",
+    "snapshot_ref": "SNAPSHOT-claim-refusal-resolution",
+    "snapshot_revision": "sha256:e3a0ed01ad22761521e8419ee0525ae6764f98aefece7f1da4a82b87d05d43d5",
+    "packet_ref": "docs/plans/claim-refusal-resolution.md",
+    "packet_revision": "sha256:8ae2d94360997ad25c79521782631c7287d25eafc685a37c82bc67e4cec85e53",
+    "structural_status": "pass",
+    "semantic_review_status": "complete",
+    "diagnostics": [],
+    "route": "inline_prototype",
+    "adoption_readiness": "ready_for_contributor",
+    "limitations": [
+      "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+    ]
+  },
+  "advisory_deviations": [],
+  "result": "pass",
+  "reason_codes": [],
+  "actionable_summary": [
+    "pass: 11 items evidenced, 1 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "limitations": [
+    "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+  ],
+  "caller": {
+    "client": "quick-adopt",
+    "session": "c924db62-9fb2-4766-8a59-b4b9cb1f714f"
+  },
+  "started_at": "2026-10-12T01:14:55Z",
+  "completed_at": "2026-10-12T01:15:15Z",
+  "duration_ms": 17691
+}

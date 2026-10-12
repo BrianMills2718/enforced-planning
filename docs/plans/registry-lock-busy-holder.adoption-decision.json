@@ -1,0 +1,16 @@
+{
+  "schema_version": "method-adoption-decision.v1",
+  "record_type": "method_adoption_decision",
+  "decision": "adopted",
+  "plan_ref": "docs/plans/registry-lock-busy-holder.md",
+  "plan_sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb",
+  "receipt_ref": "docs/plans/registry-lock-busy-holder.receipt.json",
+  "receipt_sha256": "2dac1f664385ea29d3f04e33fb5062f1ec93f59553b16781a9e96989005d1a67",
+  "receipt_result": "pass",
+  "reason_codes": [],
+  "summary": [
+    "pass: 14 items evidenced, 0 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "decided_at": "2026-10-12T09:34:55Z"
+}

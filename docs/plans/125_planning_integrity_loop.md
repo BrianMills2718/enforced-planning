@@ -589,6 +589,10 @@ not weaken claim exclusivity, create authority, or alter Plan 125 selection;
 it preserves admission-before-mutation by making contention an explicit,
 retryable non-mutation. A holder/retry test proves the first attempt times out
 without creating claim state and the same mutation succeeds after release.
+The registry-lock-busy-holder plan (2026-10-12) later raised the default bound to
+30 seconds (environment override capped at 300) and made the timeout and the
+wait name the advisory holder and return a structured busy result; admission
+semantics are unchanged.
 
 ### Acceptance receipt — authentic successor custody
 

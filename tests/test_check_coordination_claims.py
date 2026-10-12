@@ -2663,15 +2663,69 @@ def test_registry_lock_contention_returns_bounded_retry_and_then_succeeds(tmp_pa
         with pytest.raises(
             claims_impl.ClaimRegistryLockTimeout,
             match=r"no claim state changed.*Retry after the current writer releases",
-        ), claims_impl.claim_registry_lock(claims_dir, timeout_seconds=0.05):
+        ) as busy, claims_impl.claim_registry_lock(claims_dir, timeout_seconds=0.05):
             pytest.fail("contended registry lock unexpectedly admitted a second writer")
         assert time.monotonic() - started < 0.5
         assert not claims_dir.exists()
+        # The refusal names the actual writer, not just the lock path.
+        assert f"pid {os.getpid()}" in str(busy.value)
+        result = busy.value.to_dict()
+        assert result["status"] == "busy"
+        assert result["state_changed"] is False
+        assert result["holder"]["pid"] == os.getpid()
+        assert result["holder"]["alive"] is True
+        assert result["lock_path"].endswith(".claims.lock")
         release_holder.set()
         holder.result(timeout=2)
 
     with claims_impl.claim_registry_lock(claims_dir, timeout_seconds=0.2):
         pass
+
+
+def test_registry_lock_waiter_succeeds_when_holder_releases_mid_wait(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A busy lock is a wait, reported while waiting, not an immediate failure."""
+
+    claims_dir = tmp_path / "claims"
+    holder_entered = Event()
+
+    def hold_registry_briefly() -> None:
+        with claims_impl.claim_registry_lock(claims_dir, timeout_seconds=1):
+            holder_entered.set()
+            time.sleep(0.4)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        holder = executor.submit(hold_registry_briefly)
+        assert holder_entered.wait(timeout=1)
+        with claims_impl.claim_registry_lock(
+            claims_dir,
+            timeout_seconds=3,
+            report_interval_seconds=0.1,
+        ):
+            pass
+        holder.result(timeout=2)
+
+    waiting_lines = [line for line in capsys.readouterr().err.splitlines() if "claim registry busy" in line]
+    assert waiting_lines, "the waiter never reported who held the lock"
+    assert f"pid {os.getpid()}" in waiting_lines[0]
+    # The holder record is cleared on release, so the next reader sees no stale writer.
+    lock_path = claims_dir.parent / f".{claims_dir.name}.lock"
+    assert lock_path.read_text(encoding="utf-8") == ""
+
+
+def test_registry_lock_timeout_env_override_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default wait is overridable by environment but can never become unbounded."""
+
+    monkeypatch.delenv(claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_ENV, raising=False)
+    assert claims_impl.claim_registry_lock_timeout_seconds() == claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS
+    monkeypatch.setenv(claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_ENV, "12")
+    assert claims_impl.claim_registry_lock_timeout_seconds() == 12.0
+    monkeypatch.setenv(claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_ENV, "99999")
+    assert claims_impl.claim_registry_lock_timeout_seconds() == claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_MAX_SECONDS
+    monkeypatch.setenv(claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_ENV, "not-a-number")
+    assert claims_impl.claim_registry_lock_timeout_seconds() == claims_impl.CLAIM_REGISTRY_LOCK_TIMEOUT_SECONDS
 
 
 def test_heartbeat_claims_refreshes_claude_code_session(

@@ -1,0 +1,21 @@
+{
+  "schema_version": "method-activation-facts.v1",
+  "record_type": "method_activation_facts",
+  "plan_ref": "docs/plans/registry-lock-busy-holder.md",
+  "plan_sha256": "c241281c6a73aea6d81f0a635652de75ebb25ba9d7331a9a7a99b0c47d989fdb",
+  "path_decision_ref": "docs/plans/registry-lock-busy-holder.path-decision.json",
+  "path_decision_sha256": "0fbc69bf17f5be408c988ea2549e065572d734a14682c7b13c5be8d76fd5d1ec",
+  "facts": {
+    "shared_mechanism": true,
+    "empirical_comparison_proposed": false,
+    "llm_central": false,
+    "irreversible_or_spend_action": false
+  },
+  "fact_sources": {
+    "shared_mechanism": "governing_authority",
+    "empirical_comparison_proposed": "governing_authority",
+    "llm_central": "governing_authority",
+    "irreversible_or_spend_action": "governing_authority"
+  },
+  "recorded_at": "2026-10-12T09:34:19Z"
+}

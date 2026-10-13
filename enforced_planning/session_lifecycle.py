@@ -16,7 +16,7 @@ import re
 import subprocess
 import tempfile
 from contextlib import nullcontext
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace as dataclass_replace
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -1209,6 +1209,53 @@ def _apply_cross_agent_handoff_transaction(
     return current
 
 
+
+def _recover_missing_session_tracker(claim: coordination_claims.ClaimRecord, *, project: str) -> Path:
+    """Find or rebuild the tracker of a lane claim that never recorded one.
+
+    A raw ``check_coordination_claims.py --claim`` writes a lane claim (worktree and
+    branch) but no session tracker. Cross-session resume then had nothing to
+    transfer, while session-close and release refused another session's managed
+    lane, so no session could ever close it (AES#783: 43 such live claims on
+    2026-10-13). A tracker only mirrors the claim's own identity, so it is rebuilt
+    from the claim and the resume transaction transfers it as usual.
+    """
+
+    trackers_dir = session_contracts.DEFAULT_SESSION_TRACKERS_DIR
+    found = session_contracts.find_session_tracker_path(
+        agent=claim.agent,
+        project=project,
+        scope=claim.scope,
+        session_id=claim.session_id,
+        tracker_dir=trackers_dir,
+    )
+    if found is not None:
+        return found.expanduser().resolve()
+    missing = [name for name in ("session_id", "worktree_path", "repo_root", "branch") if not getattr(claim, name, None)]
+    if missing:
+        raise ValueError(
+            "cross-session resume cannot rebuild a missing session tracker; the claim lacks " + ", ".join(missing)
+        )
+    contract = session_contracts.SessionContract.build(
+        agent=claim.agent,
+        project=project,
+        scope=claim.scope,
+        intent=claim.intent or claim.scope,
+        repo_root=str(claim.repo_root),
+        worktree_path=str(claim.worktree_path),
+        branch=str(claim.branch),
+        session_id=str(claim.session_id),
+        broader_goal=claim.broader_goal or claim.intent or claim.scope,
+        plan_ref=claim.plan_ref,
+        allow_unplanned=True,
+    )
+    tracker_path = session_contracts.session_tracker_path(contract, tracker_dir=trackers_dir)
+    record = session_contracts.build_session_tracker(
+        contract=dataclass_replace(contract, tracker_path=str(tracker_path)),
+        current_phase="tracker rebuilt from a claim that never recorded one",
+    )
+    return session_contracts.write_session_tracker(record, tracker_dir=trackers_dir).expanduser().resolve()
+
 def _apply_legacy_cross_session_resume_transaction(
     *,
     claim: coordination_claims.ClaimRecord,
@@ -1267,6 +1314,8 @@ def _apply_legacy_cross_session_resume_transaction(
                 "notes": note or "session resumed with a fresh runtime attachment",
             }
         )
+        if not current.get("tracker_path"):
+            current["tracker_path"] = str(tracker_path)
         successor_claim = coordination_claims.normalize_claim(
             current,
             source_file=str(claim_file.resolve()),
@@ -1487,6 +1536,8 @@ def _apply_codex_cross_session_resume_transaction(
                     "notes": note or "session resumed with a fresh runtime attachment",
                 }
             )
+            if not successor_payload.get("tracker_path"):
+                successor_payload["tracker_path"] = str(tracker_path)
             successor_claim = coordination_claims.normalize_claim(
                 successor_payload,
                 source_file=str(claim_file.resolve()),
@@ -5745,6 +5796,9 @@ def resume_session(
         if tracker_path is None:
             raise ValueError("same-runtime resume could not find one unique exact session tracker")
         tracker_path = tracker_path.expanduser().resolve()
+        tracker_path_text = str(tracker_path)
+    if not same_runtime and tracker_path is None:
+        tracker_path = _recover_missing_session_tracker(claim, project=project)
         tracker_path_text = str(tracker_path)
     if not same_runtime:
         if tracker_path is None or not tracker_path.is_file():

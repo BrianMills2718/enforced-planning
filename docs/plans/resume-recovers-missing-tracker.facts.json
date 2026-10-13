@@ -1,0 +1,21 @@
+{
+  "schema_version": "method-activation-facts.v1",
+  "record_type": "method_activation_facts",
+  "plan_ref": "docs/plans/resume-recovers-missing-tracker.md",
+  "plan_sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237",
+  "path_decision_ref": "docs/plans/resume-recovers-missing-tracker.path-decision.json",
+  "path_decision_sha256": "07481f5fcca5993a36e4eb272763403761fca831ace063b332a8612bc38db84b",
+  "facts": {
+    "shared_mechanism": false,
+    "empirical_comparison_proposed": false,
+    "llm_central": false,
+    "irreversible_or_spend_action": false
+  },
+  "fact_sources": {
+    "shared_mechanism": "derived_current_boundary",
+    "empirical_comparison_proposed": "derived_current_boundary",
+    "llm_central": "derived_current_boundary",
+    "irreversible_or_spend_action": "derived_current_boundary"
+  },
+  "recorded_at": "2026-10-13T23:08:13Z"
+}

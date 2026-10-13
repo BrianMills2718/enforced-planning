@@ -1524,7 +1524,7 @@ def _root_lane_continuation(roots: list[Any], *, parallel_route: bool) -> str:
     routes = ["if that lane's work is merged, close it: " + "; ".join(closes)]
     if parallel_route:
         routes.append(
-            "to keep it open, rerun with SESSION_ALLOW_PARALLEL=1 and narrow write paths "
+            "to keep it open, rerun with narrow write paths that do not overlap it "
             "(MAINTENANCE_BOOTSTRAP_WRITE_PATHS or GOAL_BOOTSTRAP_WRITE_PATHS, never '.'); "
             "a root in another repository never overlaps"
         )
@@ -1930,6 +1930,7 @@ def _execute_maintenance_worktree(
     owner_session_id = session_id
     parent_scope: str | None = None
     claim_type: ClaimType = "write" if goal_bound else "program"
+    parallel_root_authorized = bool(getattr(request, "allow_parallel", False))
     if delegated:
         owner_session_id = _delegated_session_id(
             agent=agent,
@@ -1962,8 +1963,7 @@ def _execute_maintenance_worktree(
             for claim in coordination_claims.check_claims()
             if claim.is_live() and claim.session_id == session_id and not claim.parent_scope
         ]
-        # A session may hold several roots only when asked (SESSION_ALLOW_PARALLEL)
-        # and when no declared write path overlaps another root's: tracker files
+        # A session may hold several roots when no declared write path overlaps another root's: tracker files
         # and claims are already per lane, and parallel_root_authorized already
         # exists on the claim. Refusing every second lane forced unrelated fixes
         # into unrelated PRs and lanes to be parked with discard flags
@@ -1975,15 +1975,16 @@ def _execute_maintenance_worktree(
         blocking_roots = [
             claim
             for claim in existing_roots
+            # Parallel lanes are the default since 2026-10-13 (Brian: cut the gates that
+            # slow agents). Requiring SESSION_ALLOW_PARALLEL=1 sent agents that did not
+            # know the flag onto raw claims with no tracker (AES#783, enforced-planning#660).
+            # Only an overlapping or whole-repo write set in the same project still blocks.
             if not (
-                getattr(request, "allow_parallel", False)
-                and (
-                    _disjoint_narrow_write_paths(request.write_paths, claim.write_paths)
-                    or (
-                        claim.primary_project() != request.project
-                        and bool(request.write_paths)
-                        and "." not in request.write_paths
-                    )
+                _disjoint_narrow_write_paths(request.write_paths, claim.write_paths)
+                or (
+                    claim.primary_project() != request.project
+                    and bool(request.write_paths)
+                    and "." not in request.write_paths
                 )
             )
         ]
@@ -1991,10 +1992,12 @@ def _execute_maintenance_worktree(
             labels = ", ".join(sorted(f"{claim.primary_project()}:{claim.scope}" for claim in blocking_roots))
             raise ClaimBootstrapError(
                 "worktree bootstrap requires the native session to own zero existing claim roots "
-                "unless SESSION_ALLOW_PARALLEL=1 and every write path is narrow and disjoint "
+                "unless every write path is narrow and disjoint "
                 f"from that root's; close or transfer first: {labels}. "
                 + _root_lane_continuation(blocking_roots, parallel_route=True)
             )
+        if existing_roots:
+            parallel_root_authorized = True
 
     if goal_bound:
         goal = request.broader_goal
@@ -2141,7 +2144,7 @@ def _execute_maintenance_worktree(
             target_worktree_path=str(worktree) if selected_bootstrap else None,
             new_files=declared_new_files,
             verified_goal_default_revision=starting_head if goal_bound else None,
-            allow_parallel=bool(getattr(request, "allow_parallel", False)),
+            allow_parallel=parallel_root_authorized,
             verified_maintenance_default_revision=(starting_head if not goal_bound else None),
         )
 
@@ -2200,7 +2203,7 @@ def _execute_maintenance_worktree(
                     start_point=starting_head,
                     require_native_session_binding=True,
                     verified_goal_default_revision=starting_head,
-                    allow_parallel=request.allow_parallel,
+                    allow_parallel=parallel_root_authorized,
                     broad_scope_mode="bootstrap" if bootstrap_broad else None,
                     broad_scope_reason=(
                         f"construct this {bootstrap_kind} lane, then narrow before its first repository write"

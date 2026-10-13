@@ -317,6 +317,14 @@ Codex uses the durable fenced-transfer journal below instead of rollback, becaus
 restoring pre-fence bytes would erase the evidence required to recover custody.
 Resume never reports a successor while the claim and tracker disagree.
 
+**A lane claim with no tracker.** A raw `check_coordination_claims.py --claim`
+records a worktree and branch but writes no session tracker. Cross-session
+`session-resume` of such a claim first finds the claim's exact tracker or, when
+none exists, rebuilds it from the claim's own identity (session, worktree, repo
+root, branch), then transfers it as usual and records its path in the claim.
+`session-close` then closes the lane normally. Before this (AES#783, 2026-10-13)
+resume, close and release all refused, so no session could ever close the lane.
+
 **Where the tracker lock lives, and why it is not beside the tracker.** The
 tracker mutation lock is named under `XDG_RUNTIME_DIR` (falling back to
 `~/.cache`) as `enforced-planning/tracker-locks/<sha256 of the resolved tracker

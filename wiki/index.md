@@ -20,7 +20,7 @@ Portable governed-repo framework for AI-assisted development: installs planning 
 - [Roadmap](../roadmap/README.md)
 - [Active plan queue](../docs/plans/AGENTS.md)
 - [System model](../docs/model/ODD.md)
-- Quick plans: [lane-refusal-continuation](../docs/plans/lane-refusal-continuation.md) ([goal](../docs/plans/lane-refusal-continuation.goal.md)); [claim-refusal-resolution](../docs/plans/claim-refusal-resolution.md) ([goal](../docs/plans/claim-refusal-resolution.goal.md)); [registry-lock-busy-holder](../docs/plans/registry-lock-busy-holder.md) ([goal](../docs/plans/registry-lock-busy-holder.goal.md))
+- Quick plans: [lane-refusal-continuation](../docs/plans/lane-refusal-continuation.md) ([goal](../docs/plans/lane-refusal-continuation.goal.md)); [claim-refusal-resolution](../docs/plans/claim-refusal-resolution.md) ([goal](../docs/plans/claim-refusal-resolution.goal.md)); [registry-lock-busy-holder](../docs/plans/registry-lock-busy-holder.md) ([goal](../docs/plans/registry-lock-busy-holder.goal.md)); [resume-recovers-missing-tracker](../docs/plans/resume-recovers-missing-tracker.md) ([goal](../docs/plans/resume-recovers-missing-tracker.goal.md))
 
 ## Coverage and unknowns
 

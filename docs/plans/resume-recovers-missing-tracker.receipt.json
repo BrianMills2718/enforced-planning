@@ -1,0 +1,519 @@
+{
+  "schema_version": "planning-method-conformance-receipt.v1",
+  "record_type": "planning_method_conformance_receipt",
+  "receipt_id": "RECEIPT-resume-recovers-missing-tracker-5f2ae24380ad",
+  "plan": {
+    "plan_ref": "docs/plans/resume-recovers-missing-tracker.md",
+    "plan_sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+  },
+  "path_decision": {
+    "ref": "docs/plans/resume-recovers-missing-tracker.path-decision.json",
+    "sha256": "07481f5fcca5993a36e4eb272763403761fca831ace063b332a8612bc38db84b",
+    "selected_path": "prototype",
+    "classified_path": "prototype",
+    "errors": []
+  },
+  "route": "inline_prototype",
+  "profile": {
+    "profile_id": "bounded-design",
+    "revision": "bounded-design@13",
+    "path": "contracts/method-conformance/profiles/bounded-design.v1.json",
+    "sha256": "b62a29405f2c6a0ef730a8d4f78b8eb4bdccca5a29cc1c711a5a96902a121291"
+  },
+  "compiler": {
+    "path": "scripts/method_conformance/compiler.py",
+    "sha256": "9ca8d6e47f651430c21ff382a3d7c1f99e25c61f7ea85d0919ec09d71918d4f9"
+  },
+  "activation": {
+    "facts_ref": "docs/plans/resume-recovers-missing-tracker.facts.json",
+    "facts_sha256": "57cc238839364e06bf652e11c9c758e45deeea9ecbb62ce96ce1265fda066898",
+    "facts": {
+      "shared_mechanism": false,
+      "empirical_comparison_proposed": false,
+      "llm_central": false,
+      "irreversible_or_spend_action": false,
+      "crosses_system_boundary": false,
+      "deploys": false,
+      "claims_external_standard": false,
+      "aes_governed_target": false,
+      "durable_documents_declared": false,
+      "multiple_writers": false,
+      "consequential_boundary": false,
+      "inline_prototype": true
+    },
+    "fact_origins": {
+      "shared_mechanism": "declared:derived_current_boundary",
+      "empirical_comparison_proposed": "declared:derived_current_boundary",
+      "llm_central": "declared:derived_current_boundary",
+      "irreversible_or_spend_action": "declared:derived_current_boundary",
+      "crosses_system_boundary": "default:not_declared",
+      "deploys": "default:not_declared",
+      "claims_external_standard": "default:not_declared",
+      "aes_governed_target": "default:not_declared",
+      "durable_documents_declared": "default:not_declared",
+      "multiple_writers": "derived:path_decision.concurrent_writers",
+      "consequential_boundary": "derived:path_decision.persistent_migration|consequential_external_mutation",
+      "inline_prototype": "derived:classified_path==prototype"
+    },
+    "overlays": [
+      {
+        "overlay_id": "OV-PRIOR-ART",
+        "activation_fact": "shared_mechanism",
+        "active": false,
+        "reason": "shared_mechanism=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-EMPIRICAL-COMPARISON",
+        "activation_fact": "empirical_comparison_proposed",
+        "active": false,
+        "reason": "empirical_comparison_proposed=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-LLM-CENTRAL",
+        "activation_fact": "llm_central",
+        "active": false,
+        "reason": "llm_central=false (declared:derived_current_boundary)"
+      },
+      {
+        "overlay_id": "OV-MULTIPLE-WRITERS",
+        "activation_fact": "multiple_writers",
+        "active": false,
+        "reason": "multiple_writers=false (derived:path_decision.concurrent_writers)"
+      },
+      {
+        "overlay_id": "OV-CONSEQUENTIAL-BOUNDARY",
+        "activation_fact": "consequential_boundary",
+        "active": false,
+        "reason": "consequential_boundary=false (derived:path_decision.persistent_migration|consequential_external_mutation)"
+      },
+      {
+        "overlay_id": "OV-INLINE-PROTOTYPE",
+        "activation_fact": "inline_prototype",
+        "active": true,
+        "reason": "inline_prototype=true (derived:classified_path==prototype)"
+      },
+      {
+        "overlay_id": "OV-SYSTEM-BOUNDARY",
+        "activation_fact": "crosses_system_boundary",
+        "active": false,
+        "reason": "crosses_system_boundary=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DEPLOYMENT",
+        "activation_fact": "deploys",
+        "active": false,
+        "reason": "deploys=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-STANDARD-CONFORMANCE",
+        "activation_fact": "claims_external_standard",
+        "active": false,
+        "reason": "claims_external_standard=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-AES",
+        "activation_fact": "aes_governed_target",
+        "active": false,
+        "reason": "aes_governed_target=false (default:not_declared)"
+      },
+      {
+        "overlay_id": "OV-DURABLE-DOCS",
+        "activation_fact": "durable_documents_declared",
+        "active": false,
+        "reason": "durable_documents_declared=false (default:not_declared)"
+      }
+    ]
+  },
+  "checklist": {
+    "checklist_id": "method-conformance.bounded-design",
+    "revision": "sha256:0c882ff9100e943f0c20f2c051991c5c0c76bf9a29279644715269a9cab9dd6d",
+    "definition_sha256": "17105f468ac828d6a711e97760c2cba91143a3a1b65a56582e137b7cc50800cd",
+    "bundle_ref": "docs/plans/resume-recovers-missing-tracker.bundle.json",
+    "bundle_sha256": "a1f8b0b2574a0b910c857694957972dcccb0c540e643d126926a0251aa9a50a6",
+    "coverage": "complete",
+    "definition_matches_recompilation": true
+  },
+  "items": [
+    {
+      "item_id": "CORE-ACTOR-RESULT-EXAMPLE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#actor-and-result",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/9dac3018b34a/CORE-ACTOR-RESULT-EXAMPLE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the actor as Brian, states the desired result for `resume_session`, and gives a concrete, user-visible example involving a specific claim, sessions, and resulting tracker.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ROUTE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "structural",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.path-decision.json",
+          "sha256": "07481f5fcca5993a36e4eb272763403761fca831ace063b332a8612bc38db84b"
+        }
+      ],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-REQUIREMENTS-TRACED",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/7bf954699d04/CORE-REQUIREMENTS-TRACED",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The Requirements table explicitly lists R1, identifies its source, names the success check and saved output, and marks it “planned, not yet run.” The plan also explicitly states that the change’s own claims imply no requirements beyond R1 and presents no named standard, schema, or contract claim requiring omission review.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SUCCESS-DISPROOF",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#success-and-disproof",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/9dac3018b34a/CORE-SUCCESS-DISPROOF",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The success evidence directly checks the claimed behavior: resume returns `resumed`, the persisted claim uses the successor session, and its tracker path points to a tracker whose session and branch match. The plan also gives concrete disproof conditions: the parent-commit test failure, any lifecycle-test failure after the change, or a persisted claim with `tracker_path` still null.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-REVIEW",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#success-and-disproof",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/9dac3018b34a/CORE-TRACE-REVIEW",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence names both runs (the parent commit disproof run and the change commit success run), identifies the full check output’s location, and specifies what must appear beyond the final result, including commands, file scope, named check results, skipped status, exit status, and system-model lines. It also explicitly states that no model, agent, or LLM pipeline runs exist under the plan.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-TRACE-DEBUGGING",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#when-a-run-fails-or-surprises-us",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/9dac3018b34a/CORE-TRACE-DEBUGGING",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence defines a separate procedure for any failed or surprising run, preserves the complete failed run and trace ID, requires reviewing all specified artifacts before choosing a fix, and requires citing and classifying the divergence. It also links targeted repairs to a new traced verification run while retaining the original, restricts unresolved diagnoses to investigation, and distinguishes complete review from the run outcome.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-SYSTEM-MODEL",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "warn",
+      "verifier_result": "pass",
+      "reason_codes": [
+        "MODEL-NO-ELEMENT-IDS",
+        "MODEL-NO-UNKNOWNS"
+      ],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/7bf954699d04/CORE-SYSTEM-MODEL",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan links `docs/model/ODD.md`, identifies the repository documentation entry point and scope, and names the process and records involved with specific evidence each run must show. It also identifies the applicable verification view, explains why no other view applies, names concrete drift tests, and specifies same-commit reconciliation of the model, view coverage, and saved verification evidence.",
+        "reused": false
+      },
+      "suggested_action": "MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+    },
+    {
+      "item_id": "CORE-CAPABILITY-REUSE",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#capability-reuse",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/7bf954699d04/CORE-CAPABILITY-REUSE",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly states “No catalogue entry fits” and gives a reason: the work needs edits to this repository’s own source, tests, and documentation, while the catalogue contains cross-project capabilities and none edits repository source.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-AUTHORITY-NONGOALS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#authority-and-non-goals",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/9dac3018b34a/CORE-AUTHORITY-NONGOALS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies authority: Brian, in his own repository, with one agent making the change. It also explicitly states non-goals: work outside the listed files, irreversible actions, and spending.",
+        "reused": true
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-IRREVERSIBLE-SPEND",
+      "effect": "blocking",
+      "applicability_mode": "conditional",
+      "condition_fact": "irreversible_or_spend_action",
+      "condition_value": false,
+      "verifier_kind": "semantic",
+      "disposition": "not_applicable",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [],
+      "semantic": null,
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-UNCERTAINTIES",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#uncertainties",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/7bf954699d04/CORE-UNCERTAINTIES",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly identifies the material uncertainty and provides resolving evidence: a pre-edit git diff showing the complete set of affected files, including the required documentation and wiki link.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "CORE-ACTIVATION-FACTS",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#activation-facts",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/7bf954699d04/CORE-ACTIVATION-FACTS",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The plan explicitly states that no alternatives are compared, no model call is made, no irreversible action or spend occurs, and no external standard, schema, or contract is claimed. It also states the change adds no shared mechanism, contract, or algorithm, and that the repository has no `.aes/target.yaml`; therefore no triggered activation fact is declared false.",
+        "reused": false
+      },
+      "suggested_action": null
+    },
+    {
+      "item_id": "OV-PROTO-VERTICAL-RESET",
+      "effect": "blocking",
+      "applicability_mode": "required",
+      "condition_fact": null,
+      "condition_value": null,
+      "verifier_kind": "semantic",
+      "disposition": "pass",
+      "verifier_result": "pass",
+      "reason_codes": [],
+      "evidence": [
+        {
+          "ref": "docs/plans/resume-recovers-missing-tracker.md#vertical-and-reset",
+          "sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237"
+        }
+      ],
+      "semantic": {
+        "trace_id": "company-planning/method-conformance/resume-recovers-missing-tracker/7bf954699d04/OV-PROTO-VERTICAL-RESET",
+        "model": "openrouter/openai/gpt-5.6-luna",
+        "verdict": "pass",
+        "materiality": "non_material",
+        "missing": null,
+        "rationale": "The evidence explicitly names the minimal vertical result, the reset boundary as reverting the commit, and the non-goals (“anything outside these files” and no coordinated-work ceremony). It also explicitly states that no work-unit graph, review or release contract, or extra claim is added.",
+        "reused": false
+      },
+      "suggested_action": null
+    }
+  ],
+  "item_counts": {
+    "pass": 11,
+    "unresolved": 0,
+    "not_applicable": 1,
+    "unavailable": 0,
+    "missing": 0,
+    "warn": 1
+  },
+  "semantic_verifier": {
+    "kind": "llm_client",
+    "available": true,
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "task": "company_planning.method_conformance.semantic_item_review"
+  },
+  "conformance_report": {
+    "schema_version": "1.0",
+    "record_type": "planning_conformance_report",
+    "report_id": "REPORT-resume-recovers-missing-tracker-5f2ae24380ad",
+    "snapshot_ref": "SNAPSHOT-resume-recovers-missing-tracker",
+    "snapshot_revision": "sha256:a1f8b0b2574a0b910c857694957972dcccb0c540e643d126926a0251aa9a50a6",
+    "packet_ref": "docs/plans/resume-recovers-missing-tracker.md",
+    "packet_revision": "sha256:5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237",
+    "structural_status": "pass",
+    "semantic_review_status": "complete",
+    "diagnostics": [],
+    "route": "inline_prototype",
+    "adoption_readiness": "ready_for_contributor",
+    "limitations": [
+      "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+    ]
+  },
+  "advisory_deviations": [],
+  "result": "pass",
+  "reason_codes": [],
+  "actionable_summary": [
+    "pass: 11 items evidenced, 1 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "limitations": [
+    "Semantic verdicts judge only the cited plan excerpt against the item statement; they do not judge product strategy."
+  ],
+  "caller": {
+    "client": "quick-adopt",
+    "session": "1c1c9d60-8e85-4004-bf7f-ae1a792ae04b"
+  },
+  "started_at": "2026-10-13T23:08:13Z",
+  "completed_at": "2026-10-13T23:08:23Z",
+  "duration_ms": 10062
+}

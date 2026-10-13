@@ -1,0 +1,16 @@
+{
+  "schema_version": "method-adoption-decision.v1",
+  "record_type": "method_adoption_decision",
+  "decision": "adopted",
+  "plan_ref": "docs/plans/resume-recovers-missing-tracker.md",
+  "plan_sha256": "5f2ae24380ad16247cb283ab9d5c805637b1cedad6d33cf01b9c4584c8d84237",
+  "receipt_ref": "docs/plans/resume-recovers-missing-tracker.receipt.json",
+  "receipt_sha256": "f03977337e2f8b384383ce88564e580d1172aec41848eb1ab0d8cf89bc29a213",
+  "receipt_result": "pass",
+  "reason_codes": [],
+  "summary": [
+    "pass: 11 items evidenced, 1 confirmed not applicable, 0 advisory deviation(s)",
+    "warn CORE-SYSTEM-MODEL: MODEL-NO-ELEMENT-IDS, MODEL-NO-UNKNOWNS -> MODEL-NO-ELEMENT-IDS: docs/model/ODD.md has no element lines; write each as `- ID (decided|guessed): what it is`; MODEL-NO-UNKNOWNS: docs/model/ODD.md has no unknowns table (header `| Unknown | What would decide it |`)"
+  ],
+  "decided_at": "2026-10-13T23:08:23Z"
+}

@@ -912,3 +912,69 @@ def test_closed_lane_leaves_reusable_placeholder_for_live_sessions(tmp_path: Pat
 
     _git(repo, "worktree", "add", "-b", "lane-again", str(worktree))
     assert (worktree / "README.md").read_text(encoding="utf-8") == "seed\n"
+
+
+def test_resume_session_rebuilds_a_tracker_the_claim_never_recorded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw ``--claim`` lane has no tracker; resume must still let another session take it.
+
+    Pinned defect (AES#783, 2026-10-13): a headless run claimed a worktree lane with
+    ``check_coordination_claims.py --claim``, which writes no session tracker, then
+    ended. Cross-session resume refused ("requires one existing exact session
+    tracker"), session-close refused (other session's lane), and release refused
+    (managed worktree), so no session could ever close the lane. 43 live claims
+    were in that state.
+    """
+
+    repo = _prepare_cross_agent_repo(tmp_path)
+    claims_dir = tmp_path / "claims"
+    claims_dir.mkdir()
+    trackers_dir = tmp_path / "sessions"
+    claim_path = _write_cross_agent_claim(
+        claims_dir,
+        repo=repo,
+        status=coordination_claims.SESSION_ENDED_STATUS,
+        session_id="claude-code:headless-run",
+    )
+    payload = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    payload["agent"] = "claude-code"
+    payload["tracker_path"] = None
+    claim_path.unlink()
+    claim_path = claims_dir / "claude-code_demo_cross-agent-lane.yaml"
+    claim_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    monkeypatch.setattr(coordination_claims, "CLAIMS_DIR", claims_dir)
+    monkeypatch.setattr(session_contracts, "DEFAULT_SESSION_TRACKERS_DIR", trackers_dir)
+    monkeypatch.setattr(
+        claim_mutation_receipts,
+        "DEFAULT_EVENTS_PATH",
+        tmp_path / "claim-mutation-events.jsonl",
+    )
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_poll_mailbox_after_committed_transition",
+        lambda **_: {"polled": True, "active_count": 0},
+    )
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "successor-run")
+
+    result = session_lifecycle.resume_session(
+        agent="claude-code",
+        project="demo",
+        scope="cross-agent-lane",
+        worktree_path=str(repo),
+        branch="lane",
+        current_phase="close a lane its headless owner left",
+    )
+
+    assert result["action"] == "resumed"
+    assert result["session_id"] == "claude-code:successor-run"
+    persisted = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
+    assert persisted["session_id"] == "claude-code:successor-run"
+    tracker = Path(persisted["tracker_path"])
+    assert tracker.parent == trackers_dir / "demo"
+    tracker_payload = session_contracts.read_session_tracker(tracker)
+    assert tracker_payload["claim"]["session_id"] == "claude-code:successor-run"
+    assert tracker_payload["claim"]["branch"] == "lane"

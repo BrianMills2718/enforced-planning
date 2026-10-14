@@ -744,9 +744,11 @@ Use ordinary `session-close` for real linked worktrees and
 ### Several lanes in one session
 
 `make maintenance-worktree` and `make goal-worktree` refuse a second lane while the session already
-owns a claim root, unless `SESSION_ALLOW_PARALLEL=1` is set and every declared
-write path of the new lane is narrow (not `.`) and disjoint from each existing
-root's write paths. Write paths are repository-relative, so a root in a
+owns a claim root, unless every declared write path of the new lane is narrow
+(not `.`) and disjoint from each existing root's write paths. Since 2026-10-13 no
+flag is needed for that (`SESSION_ALLOW_PARALLEL` is accepted and ignored by the
+worktree bootstrap): requiring it sent agents that did not know it onto raw
+claims with no tracker (AES#783, enforced-planning#660). Write paths are repository-relative, so a root in a
 different project never overlaps: there the new lane's paths need only be
 narrow. The new claim then records `parallel_root_authorized`. This
 replaced a blanket one-root rule that forced unrelated fixes into unrelated
@@ -1215,9 +1217,8 @@ session-root lifecycle enforcement. Related work must declare `parent_scope`.
 `--parent-scope` takes the parent's bare scope or the `<project>:<scope>` form
 the root-lane error prints; the claim's own project prefix is stripped on write
 and on read, so older children recorded with the prefix also find their parent.
-Before opening an unrelated root, close or transfer the existing root; use
-`SESSION_ALLOW_PARALLEL=1` / `--allow-parallel` only when multiple roots are an
-intentional part of the adopted plan graph. The claim check runs before branch
+A second worktree root opens without a flag when its write paths are narrow and
+disjoint; `--allow-parallel` still governs the other bootstrap routes. The claim check runs before branch
 or worktree creation and counts `active`, `blocked`, and `handoff` roots.
 
 For the sanctioned repo-local `make worktree` flow, the default claim is a

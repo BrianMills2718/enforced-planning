@@ -253,14 +253,15 @@ def test_goal_worktree_parallel_reservation_retains_disjoint_root_authority(
         _maintenance_payload(repo, scope=first_scope, branch=first_scope,
                              write_paths=["docs/plans/CLAUDE.md"])
     )))
-    for paths, parallel in [(["CLAUDE.md"], False), (["docs/plans/CLAUDE.md"], True)]:
-        denied = claim_bootstrap.parse_request_json(json.dumps(
-            _goal_worktree_payload(repo, write_paths=paths, allow_parallel=parallel)
+    for parallel in (False, True):
+        overlapping = claim_bootstrap.parse_request_json(json.dumps(
+            _goal_worktree_payload(repo, write_paths=["docs/plans/CLAUDE.md"], allow_parallel=parallel)
         ))
         with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
-            claim_bootstrap.execute_request(denied)
+            claim_bootstrap.execute_request(overlapping)
+    # Disjoint paths open the second root with no flag (2026-10-13).
     receipt = claim_bootstrap.execute_request(claim_bootstrap.parse_request_json(json.dumps(
-        _goal_worktree_payload(repo, write_paths=["CLAUDE.md"], allow_parallel=True)
+        _goal_worktree_payload(repo, write_paths=["CLAUDE.md"])
     )))
     claims = {claim.scope: claim for claim in claim_bootstrap.coordination_claims.check_claims(repo.name)}
     assert set(claims) == {first_scope, "goal/owner-visible-outcome"}
@@ -2685,7 +2686,7 @@ def test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """SESSION_ALLOW_PARALLEL opens a second lane only when write paths are disjoint.
+    """A second lane opens without any flag when write paths are disjoint, never when they overlap.
 
     One-root-per-session forced unrelated fixes into unrelated PRs and parked
     lanes with discard flags (project-meta policy friction
@@ -2698,11 +2699,11 @@ def test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths(
     )
     claim_bootstrap.execute_request(first)
 
-    without_flag = claim_bootstrap.parse_request_json(
-        json.dumps(_maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"]))
+    overlapping_without_flag = claim_bootstrap.parse_request_json(
+        json.dumps(_maintenance_payload(repo, scope="fix/lane-d", branch="fix/lane-d", write_paths=["CLAUDE.md"]))
     )
     with pytest.raises(claim_bootstrap.ClaimBootstrapError, match="zero existing claim roots"):
-        claim_bootstrap.execute_request(without_flag)
+        claim_bootstrap.execute_request(overlapping_without_flag)
 
     overlapping = claim_bootstrap.parse_request_json(
         json.dumps(
@@ -2716,7 +2717,7 @@ def test_typed_maintenance_allows_parallel_root_with_disjoint_write_paths(
 
     disjoint = claim_bootstrap.parse_request_json(
         json.dumps(
-            _maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"], allow_parallel=True)
+            _maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"])
         )
     )
     claim_bootstrap.execute_request(disjoint)
@@ -2781,13 +2782,13 @@ def test_root_lane_refusal_names_exact_continuation_commands(
     )
     first = next(c for c in claim_bootstrap.coordination_claims.check_claims(repo.name) if c.scope == "fix/lane-a")
     second = claim_bootstrap.parse_request_json(
-        json.dumps(_maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["docs/plans/CLAUDE.md"]))
+        json.dumps(_maintenance_payload(repo, scope="fix/lane-b", branch="fix/lane-b", write_paths=["CLAUDE.md"]))
     )
     with pytest.raises(claim_bootstrap.ClaimBootstrapError) as refused:
         claim_bootstrap.execute_request(second)
     message = str(refused.value)
     assert f"make -C {first.repo_root} session-close BRANCH=fix/lane-a" in message
-    assert "SESSION_ALLOW_PARALLEL=1" in message
+    assert "do not overlap it" in message
     assert "MAINTENANCE_BOOTSTRAP_WRITE_PATHS" in message
 
 

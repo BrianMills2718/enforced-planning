@@ -85,7 +85,7 @@ sign-off**:
   reproducible output a human can spot-check. The buck stops at
   execution-grounded evidence + human direction.
 
-Procedure: the `eval-decision-signoff` skill.
+Procedure: the `evaluation-design` skill, its decision sign-off reference (`references/decision-signoff.md`; the former `eval-decision-signoff` skill was merged there on 2026-10-13).
 
 ## One-line statement
 

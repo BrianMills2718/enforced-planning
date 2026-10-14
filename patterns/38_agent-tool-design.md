@@ -51,7 +51,7 @@ When tools return data for LLM consumption:
 
 | File | Purpose |
 |------|---------|
-| `~/.claude/skills/tool-design/SKILL.md` | Full tool design runbook |
+| `~/.claude/skills/prompt-design/tool-design-strategies.md` | Full tool design runbook (tool-design merged into prompt-design 2026-10-13) |
 | `~/projects/project-meta/research_synthesis/agent_tools/` | Deep reference library |
 
 ## Setup

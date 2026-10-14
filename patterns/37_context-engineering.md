@@ -61,7 +61,7 @@ Choose the cheapest mechanism that solves the problem:
 |------|---------|
 | `~/.claude/CLAUDE.md` | Cross-project context management rules |
 | `docs/guides/CONTINUOUS_EXECUTION_CONTRACT.md` | Continuous execution and durable state contract |
-| `~/.claude/skills/tool-design/SKILL.md` | Tool optimization runbook |
+| `~/.claude/skills/prompt-design/tool-design-strategies.md` | Tool optimization runbook (tool-design merged into prompt-design 2026-10-13) |
 | `~/.claude/skills/design-subagents/SKILL.md` | Subagent design guide |
 
 ## Setup

@@ -27,6 +27,7 @@ jobs:
             tests/test_closeout_foreign_writers.py \
             tests/test_prewrite_read_repair_invariant.py \
             tests/test_claim_bootstrap.py \
+            tests/test_chatgpt_rdc.py \
             tests/test_create_worktree.py \
             tests/test_install_governed_repo.py \
             tests/test_host_prewrite_claim_gate.py \

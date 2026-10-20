@@ -24,7 +24,7 @@ planning format and must not invent or weaken criteria.
 2. deterministic execution of argument-vector commands without a shell, under
    a fail-closed systemd read-only mount for the frozen checkout and a private
    network namespace with GitHub/SSH credential environment variables cleared;
-3. one fresh ephemeral Codex process per semantic review lane in a read-only
+3. one fresh Codex process per semantic review lane in a read-only
    sandbox;
 4. concurrent execution and explicit session custody for every declared lane;
 5. schema validation of every independent semantic result;
@@ -36,6 +36,26 @@ the signed-off receipt locally, rechecks the live PR head and required GitHub
 checks, merges with `--match-head-commit`, and closes the claimed worktree.
 This keeps the semantic review outside latency-sensitive hooks while making the
 hook-enforced finish command the operational merge gate.
+
+## Retained reviewer evidence
+
+New signoff receipts use schema version 2.0. Each declared lane retains its
+exact prompt, command, working directory, specification and output schema,
+full stdout/stderr and raw semantic output with an integrity digest. Process
+capture completeness and the semantic verdict are separate: a fully captured
+failed review remains rejected. CLI errors, malformed replies, missing native
+terminal events and partial timeout output cannot produce signoff. Concurrent
+lanes retain every result even when another lane fails. The finish wrapper
+copies available receipts before propagating errors and refuses content
+collisions; reviewer artifacts stay in the existing private review store.
+Native Codex session persistence provides secondary recovery. Historical 1.0
+receipts remain historical evidence and are not upgraded into current signoff.
+Signoff requires retained tool inspection and agreement between the native
+terminal message and the separately captured semantic output. A transcript
+without tool evidence or with a contradictory terminal verdict is rejected.
+Revalidating a signed receipt also checks the semantic head and exact rubric
+and programmatic-check membership against its retained review specification.
+Rehashing altered semantic output does not authorize substituted evidence.
 
 ## Review specification
 
@@ -165,7 +185,8 @@ recover this state, but cannot reuse an assertion created by the predecessor.
   the write and the check fails.
 - Programmatic code attempts external network access: the private network
   namespace blocks it; GitHub and SSH credential variables are also cleared.
-- The reviewer changes HEAD or worktree bytes: fail without a receipt.
+- The reviewer changes HEAD or worktree bytes: retain the completed reviewer
+  execution in a rejected receipt; the changed boundary cannot authorize merge.
 - Base is not an ancestor of head: stop before model use.
 - Programmatic check fails: retain its output digest and reject signoff.
 - Codex fails or emits invalid JSON: fail loud; emit no success payload.

@@ -1,0 +1,35 @@
+{
+  "request": {
+    "schema_version": "1.0",
+    "operation": "goal_worktree",
+    "agent": "codex",
+    "project": "company-planning",
+    "scope": "trace-review-provider-publish",
+    "repo_root": "/home/brian/code/inside-success/repos/company-planning",
+    "branch": "trace-review-provider-publish",
+    "claim_type": "program",
+    "allow_parallel": true,
+    "plan_ref": "goal:trace-review-enforcement",
+    "broader_goal": "Enforce trace review across all active projects: publish provider source",
+    "current_phase": "Publish the verified provider code phase without the active execution cursor",
+    "next_action": "Integrate pinned completed code paths and run native publication checks",
+    "write_paths": [
+      "README.md",
+      "docs/model/ODD.md",
+      "docs/model/VIEW_COVERAGE.md",
+      "plugins/company-planning/.claude-plugin/plugin.json",
+      "plugins/company-planning/.codex-plugin/plugin.json",
+      "plugins/company-planning/scripts/manage_plan_execution.py",
+      "plugins/company-planning/scripts/validate_trace_review.py",
+      "tests/test_plan_execution_manager.py",
+      "tests/test_trace_review.py",
+      "tests/test_trace_review_provider.py",
+      "proposals/trace-review-provider-publication"
+    ]
+  },
+  "output": {
+    "stdout": "{\n  \"agent\": \"codex\",\n  \"ok\": true,\n  \"operation\": \"goal_worktree\",\n  \"project\": \"company-planning\",\n  \"result\": {\n    \"action\": \"updated\",\n    \"authority_scope\": {\n      \"branch\": \"trace-review-provider-publish\",\n      \"operation\": \"goal_worktree\",\n      \"repo_root\": \"/home/brian/code/inside-success/repos/company-planning\"\n    },\n    \"bootstrap_requires_narrowing\": false,\n    \"broader_goal\": \"Enforce trace review across all active projects: publish provider source\",\n    \"canonical_lock\": {\n      \"actions\": [\n        {\n          \"action\": \"justifications_refreshed\",\n          \"justifying_claims\": [\n            \"trace-review-provider-guards\",\n            \"trace-review-provider-publish\"\n          ],\n          \"ok\": true,\n          \"reason\": \"live lane claim set changed\",\n          \"repo_root\": \"/home/brian/code/inside-success/repos/company-planning\"\n        }\n      ],\n      \"dry_run\": false,\n      \"ok\": true,\n      \"repos_considered\": 8\n    },\n    \"claim_type\": \"write\",\n    \"coordination_mailbox\": {\n      \"acknowledgement_count\": 0,\n      \"acknowledgement_message_ids\": [],\n      \"active_count\": 0,\n      \"degraded_reason\": null,\n      \"message_ids\": [],\n      \"polled\": true,\n      \"project\": \"company-planning\",\n      \"session_id\": \"codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e\",\n      \"summary\": \"coordination mailbox: no active messages\"\n    },\n    \"default_branch\": \"main\",\n    \"delegated_by_session_id\": null,\n    \"delegated_session_id\": null,\n    \"github_repo\": \"BrianMills2718/company-planning\",\n    \"new_files_created\": [],\n    \"outcome_admission_receipts\": [],\n    \"parent_scope\": null,\n    \"plan_ref\": \"goal:trace-review-enforcement\",\n    \"project_graph_id\": \"company-planning\",\n    \"session_id\": \"codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e\",\n    \"session_name\": \"enforce-trace-review-across-all-active-projects-publish-provider-source\",\n    \"start_revision\": \"cba95eaac0c7c78cbf1d2731a7e4e828f5c6d816\",\n    \"tracker_path\": \"/home/brian/.claude/coordination/sessions/company-planning/codex__company-planning__codex-01a11e81-72c9-7d20-b7e3-1738f0e9f68e__enforce-trace-review-across-all-active-projects-publish-provider-source.yaml\"\n  },\n  \"schema_version\": \"1.0\",\n  \"scope\": \"trace-review-provider-publish\",\n  \"session_id\": \"codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e\"\n}\n",
+    "stderr": "",
+    "exit_status": 0
+  }
+}

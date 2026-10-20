@@ -1,0 +1,42 @@
+{
+  "run_id": "ep-codex-payload-fixture-failure",
+  "events": [
+    {
+      "input": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/prewrite_claim_gate.py",
+          "--client",
+          "codex",
+          "--mode",
+          "enforce",
+          "--claims-dir",
+          "/tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/claims",
+          "--projection-path",
+          "/tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/projection.json",
+          "--receipt-path",
+          "/tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/reproduction-receipts.jsonl",
+          "--json"
+        ],
+        "payload": {
+          "session_id": "host-gate-test",
+          "cwd": "/tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/workspace",
+          "hook_event_name": "PreToolUse",
+          "tool_name": "Edit",
+          "tool_input": {
+            "file_path": "/tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/workspace/project/worktrees/host-gate-lane/src/allowed.py"
+          }
+        },
+        "claims": {
+          "claude-code_host-gate-test_host-gate-lane.yaml": "agent: codex\nbranch: host-gate-lane\nbroader_goal: exercise host prewrite admission\nclaim_type: write\nclaimed_at: '2026-10-09T22:58:13.994052+00:00'\nexpires_at: '2026-10-09T23:58:13.994052+00:00'\nheartbeat_at: '2026-10-09T22:58:13.994052+00:00'\nintent: exercise host prewrite admission\nplan_ref: UNPLANNED\nprojects:\n- host-gate-test\nread_paths: []\nrepo_root: /tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/workspace/project\nschema_version: 3\nscope: host-gate-lane\nsession_id: codex:host-gate-test\nsession_name: host-gate-test\nstatus: active\ntracker_path: /tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/tracker.yaml\nupdated_at: '2026-10-09T22:58:13.994052+00:00'\nworktree_path: /tmp/pytest-of-brian/pytest-46/test_ordinary_edit_cannot_esca0/workspace/project/worktrees/host-gate-lane\nwrite_paths:\n- src\n"
+        }
+      },
+      "output": {
+        "stdout": "{\"error\": \"Unsupported Codex pre-write tool: 'Edit'\", \"mode\": \"enforce\", \"ok\": false, \"reason_code\": \"invalid_hook_payload\"}\n",
+        "stderr": "",
+        "exit_status": 2
+      }
+    }
+  ],
+  "outcome": "fail"
+}

@@ -1,0 +1,25 @@
+{
+  "run_id": "ep-trace-guard-import-failure",
+  "events": [
+    {
+      "input": {
+        "command": [
+          "/usr/bin/python3",
+          "-m",
+          "pytest",
+          "tests/test_trace_review_guards.py",
+          "-rA"
+        ],
+        "test_source": "\"\"\"Host wiring checks; real provider semantics are verified by CP probes.\"\"\"\nimport json\nfrom pathlib import Path\n\nimport pytest\nimport yaml\n\nfrom enforced_planning import trace_review_provider as provider\nfrom enforced_planning.prewrite_claim_projection import write_projection\nfrom scripts import complete_plan\nfrom test_host_prewrite_claim_gate import _fixture, _payload, _run_cli\n\n\n@pytest.mark.parametrize(\"client\", [\"codex\", \"claude-code\"])\ndef test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_path, monkeypatch, capsys, client):\n    workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)\n    claim = yaml.safe_load(claim_path.read_text())\n    claim.update(agent=client, session_id=f\"{client}:host-gate-test\")\n    claim_path.write_text(yaml.safe_dump(claim))\n    write_projection(claims_dir=claims_dir, projection_path=tmp_path / \"projection.json\")\n    calls = []\n    def deny(root, operation, session_id, registry):\n        calls.append((root, operation, session_id, registry))\n        return {\"mode\": \"enforce\", \"disposition\": \"deny\", \"valid\": False,\n                \"errors\": [\"fixture: preserved failure requires its full review\"]}\n    monkeypatch.setattr(provider, \"admit\", deny)\n    payload = _payload(cwd=workspace, tool=\"Edit\", tool_input={\"file_path\": str(worktree / \"src/allowed.py\")})\n    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,\n                             projection_path=tmp_path / \"projection.json\", client=client)\n    assert code == 2\n    assert decision[\"decision\"] == \"deny\"\n    assert decision[\"reason_code\"] == \"trace_review_required\"\n    assert calls == [(worktree, \"repair\", f\"{client}:host-gate-test\", claims_dir)]\n    receipts = [json.loads(line) for line in (tmp_path / \"receipts.jsonl\").read_text().splitlines()]\n    assert receipts[-1][\"decision\"] == \"deny\"\n    assert receipts[-1][\"trace_review\"][\"valid\"] is False\n\n\ndef test_read_only_diagnosis_does_not_invoke_repair_guard(tmp_path, monkeypatch, capsys):\n    workspace, _, worktree, claims_dir, _ = _fixture(tmp_path)\n    def forbidden(*args):\n        raise AssertionError(\"read-only diagnosis reached repair admission\")\n    monkeypatch.setattr(provider, \"admit\", forbidden)\n    payload = _payload(cwd=worktree, tool=\"Bash\", tool_input={\"command\": \"git status --short\"})\n    code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,\n                             projection_path=tmp_path / \"projection.json\")\n    assert code == 0\n    assert decision[\"reason_code\"] == \"bash_read_only\"\n\n\ndef test_already_completed_plan_cannot_bypass_enabled_trace_guard(tmp_path, monkeypatch):\n    plans = tmp_path / \"docs/plans\"\n    plans.mkdir(parents=True)\n    plan = plans / \"12_fixture.md\"\n    plan.write_text(\"# Fixture\\nStatus: Complete\\n\")\n    original = plan.read_bytes()\n    monkeypatch.setattr(provider, \"admit\", lambda *args: {\n        \"mode\": \"enforce\", \"disposition\": \"deny\", \"valid\": False, \"errors\": [\"missing review\"]})\n    assert complete_plan.complete_plan(12, tmp_path, verbose=False) is False\n    assert plan.read_bytes() == original\n\n\ndef test_missing_cursor_and_disabled_gate_are_reported_uncovered(tmp_path):\n    result = provider.admit(tmp_path, \"repair\", \"codex:fixture\", tmp_path / \"claims\")\n    assert result[\"disposition\"] == \"uncovered\"\n    assert result[\"valid\"] is False\n\n\ndef test_enabled_missing_provider_fails_closed(tmp_path):\n    (tmp_path / \"meta-process.yaml\").write_text(\"meta_process:\\n  trace_review:\\n    mode: enforce\\n\")\n    result = provider.admit(tmp_path, \"repair\", \"codex:fixture\", tmp_path / \"claims\")\n    assert result[\"disposition\"] == \"deny\"\n    assert any(\"must pin\" in e for e in result[\"errors\"])\n\n\ndef test_untrusted_provider_is_refused_without_running_it(tmp_path):\n    script = tmp_path / \"untrusted.py\"\n    script.write_text(\"raise AssertionError('must not run')\\n\")\n    (tmp_path / \"meta-process.yaml\").write_text(yaml.safe_dump({\"meta_process\": {\"trace_review\": {\n        \"mode\": \"enforce\", \"command\": [\"/usr/bin/python3\", str(script)]}}}))\n    result = provider.admit(tmp_path, \"repair\", \"codex:fixture\", tmp_path / \"claims\")\n    assert result[\"disposition\"] == \"deny\"\n    assert result[\"valid\"] is False\n",
+        "tests_package_exists": true
+      },
+      "output": {
+        "error": "ModuleNotFoundError: No module named 'test_host_prewrite_claim_gate'",
+        "collected": 0,
+        "errored": 1,
+        "exit_status": 2
+      }
+    }
+  ],
+  "outcome": "fail"
+}

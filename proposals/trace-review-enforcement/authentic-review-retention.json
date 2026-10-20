@@ -1,0 +1,24 @@
+{
+  "source_head": "2e362c3324a646939944b0d5380c1ededcf27e81",
+  "consumer_head": "730ff8bc844348cade5a080fbdc27488efbbb35f",
+  "verdict": "rejected",
+  "reasons": [
+    "semantic review verdict for continuation-safety-and-integration is fail",
+    "one or more rubric criteria did not pass for continuation-safety-and-integration",
+    "semantic review for continuation-safety-and-integration reported blocking findings"
+  ],
+  "receipt_sha256": "ee00dc7eceb04548bce4733e682cdba334c397c8b0d84b0f73c716020bd6a1d3",
+  "receipt_file_sha256": "109b4c677795a778d60868146826d7535367fefa61cbec3caf23931f93960daa",
+  "private_review_store_member": "receipt-ee00dc7eceb04548bce4733e682cdba334c397c8b0d84b0f73c716020bd6a1d3.json",
+  "capture_complete": true,
+  "process_exit_status": 0,
+  "stdout_bytes": 509178,
+  "schema_validation_exit_status": 0,
+  "inspected_failure_tool_items": [
+    "item_22",
+    "item_27",
+    "item_33"
+  ],
+  "full_trace_review": "Cited failure items inspected; native terminal semantics validated against retained output. The original failed receipt is available in the source PR private review store without changing its verdict.",
+  "public_raw_trace": false
+}

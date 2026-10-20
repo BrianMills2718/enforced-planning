@@ -1,0 +1,527 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/brian/code/enforced-planning/worktrees/trace-review-guards
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 18 items
+
+tests/test_artifact_creation.py::test_registered_distinct_document_is_allowed PASSED [  5%]
+tests/test_fleet_drift.py::test_index_reads_head_tree_and_history PASSED [ 11%]
+tests/test_discover_squash_merge_commit.py::test_a_real_squash_merge_is_discovered PASSED [ 16%]
+tests/test_discover_squash_merge_commit.py::test_it_is_still_found_after_main_moves_on PASSED [ 22%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[off-codex] PASSED [ 27%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[off-claude-code] PASSED [ 33%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-codex] FAILED [ 38%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-claude-code] FAILED [ 44%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-codex] FAILED [ 50%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-claude-code] FAILED [ 55%]
+tests/test_trace_review_guards.py::test_read_only_diagnosis_does_not_invoke_repair_guard FAILED [ 61%]
+tests/test_trace_review_guards.py::test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[off] FAILED [ 66%]
+tests/test_trace_review_guards.py::test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[observe] FAILED [ 72%]
+tests/test_trace_review_guards.py::test_already_completed_plan_cannot_bypass_enabled_trace_guard PASSED [ 77%]
+tests/test_trace_review_guards.py::test_missing_cursor_and_disabled_gate_are_reported_uncovered PASSED [ 83%]
+tests/test_trace_review_guards.py::test_enabled_missing_provider_fails_closed PASSED [ 88%]
+tests/test_trace_review_guards.py::test_enrolled_cursor_reuses_existing_shared_pin_without_claiming_coverage PASSED [ 94%]
+tests/test_trace_review_guards.py::test_untrusted_provider_is_refused_without_running_it PASSED [100%]
+
+=================================== FAILURES ===================================
+_ test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-codex] _
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28414d5fa0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28414d5fd0>
+client = 'codex', mode = 'observe'
+
+    @pytest.mark.parametrize("client", ["codex", "claude-code"])
+    @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
+    def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_path, monkeypatch, capsys, client, mode):
+        workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)
+        claim = yaml.safe_load(claim_path.read_text())
+        claim.update(agent=client, session_id=f"{client}:host-gate-test")
+        claim_path.write_text(yaml.safe_dump(claim))
+        write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+        calls = []
+        def deny(root, operation, session_id, registry):
+            calls.append((root, operation, session_id, registry))
+            return {"mode": "enforce", "disposition": "deny", "valid": False,
+                    "errors": ["fixture: preserved failure requires its full review"]}
+        monkeypatch.setattr(provider, "admit", deny)
+        payload = _payload(cwd=workspace, tool="Edit", tool_input={"file_path": str(worktree / "src/allowed.py")})
+        if client == "codex":
+            payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+                f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch\n"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json", client=client, mode=mode)
+
+tests/test_trace_review_guards.py:32: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28414d5fa0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28414d5fd0>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace', 'hook_event_name': 'PreToolUse', 'tool_name': 'apply_patch', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/projection.json')
+mode = 'observe', client = 'codex'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 658.0085909990885,\n  "mode": "observe",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_b34c6e486c1b49caa22596ffea50a66a",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+_ test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-claude-code] _
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d284136aa80>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d2841369100>
+client = 'claude-code', mode = 'observe'
+
+    @pytest.mark.parametrize("client", ["codex", "claude-code"])
+    @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
+    def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_path, monkeypatch, capsys, client, mode):
+        workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)
+        claim = yaml.safe_load(claim_path.read_text())
+        claim.update(agent=client, session_id=f"{client}:host-gate-test")
+        claim_path.write_text(yaml.safe_dump(claim))
+        write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+        calls = []
+        def deny(root, operation, session_id, registry):
+            calls.append((root, operation, session_id, registry))
+            return {"mode": "enforce", "disposition": "deny", "valid": False,
+                    "errors": ["fixture: preserved failure requires its full review"]}
+        monkeypatch.setattr(provider, "admit", deny)
+        payload = _payload(cwd=workspace, tool="Edit", tool_input={"file_path": str(worktree / "src/allowed.py")})
+        if client == "codex":
+            payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+                f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch\n"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json", client=client, mode=mode)
+
+tests/test_trace_review_guards.py:32: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d284136aa80>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d2841369100>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace', 'hook_event_name': 'PreToolUse', 'tool_name': 'Edit', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/projection.json')
+mode = 'observe', client = 'claude-code'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "claude-code",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 917.6124750010786,\n  "mode": "observe",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_1492161ade4f4558a8a82656a6e8dac5",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "claude-code:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+_ test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-codex] _
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28413ad850>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28413ae5a0>
+client = 'codex', mode = 'enforce'
+
+    @pytest.mark.parametrize("client", ["codex", "claude-code"])
+    @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
+    def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_path, monkeypatch, capsys, client, mode):
+        workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)
+        claim = yaml.safe_load(claim_path.read_text())
+        claim.update(agent=client, session_id=f"{client}:host-gate-test")
+        claim_path.write_text(yaml.safe_dump(claim))
+        write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+        calls = []
+        def deny(root, operation, session_id, registry):
+            calls.append((root, operation, session_id, registry))
+            return {"mode": "enforce", "disposition": "deny", "valid": False,
+                    "errors": ["fixture: preserved failure requires its full review"]}
+        monkeypatch.setattr(provider, "admit", deny)
+        payload = _payload(cwd=workspace, tool="Edit", tool_input={"file_path": str(worktree / "src/allowed.py")})
+        if client == "codex":
+            payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+                f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch\n"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json", client=client, mode=mode)
+
+tests/test_trace_review_guards.py:32: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28413ad850>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28413ae5a0>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace', 'hook_event_name': 'PreToolUse', 'tool_name': 'apply_patch', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/projection.json')
+mode = 'enforce', client = 'codex'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 1029.7209229975124,\n  "mode": "enforce",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_cee82509b77b46388f221fe369ef8ce4",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+_ test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-claude-code] _
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d2841369b50>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28414615b0>
+client = 'claude-code', mode = 'enforce'
+
+    @pytest.mark.parametrize("client", ["codex", "claude-code"])
+    @pytest.mark.parametrize("mode", ["off", "observe", "enforce"])
+    def test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd(tmp_path, monkeypatch, capsys, client, mode):
+        workspace, _, worktree, claims_dir, claim_path = _fixture(tmp_path)
+        claim = yaml.safe_load(claim_path.read_text())
+        claim.update(agent=client, session_id=f"{client}:host-gate-test")
+        claim_path.write_text(yaml.safe_dump(claim))
+        write_projection(claims_dir=claims_dir, projection_path=tmp_path / "projection.json")
+        calls = []
+        def deny(root, operation, session_id, registry):
+            calls.append((root, operation, session_id, registry))
+            return {"mode": "enforce", "disposition": "deny", "valid": False,
+                    "errors": ["fixture: preserved failure requires its full review"]}
+        monkeypatch.setattr(provider, "admit", deny)
+        payload = _payload(cwd=workspace, tool="Edit", tool_input={"file_path": str(worktree / "src/allowed.py")})
+        if client == "codex":
+            payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+                f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n*** End Patch\n"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json", client=client, mode=mode)
+
+tests/test_trace_review_guards.py:32: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d2841369b50>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28414615b0>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace', 'hook_event_name': 'PreToolUse', 'tool_name': 'Edit', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/projection.json')
+mode = 'enforce', client = 'claude-code'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "claude-code",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 1438.7150389993622,\n  "mode": "enforce",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_d467f68e75a2480fa8e01e157d66c89f",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "claude-code:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+____________ test_read_only_diagnosis_does_not_invoke_repair_guard _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28413ac380>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28413ac530>
+
+    def test_read_only_diagnosis_does_not_invoke_repair_guard(tmp_path, monkeypatch, capsys):
+        workspace, _, worktree, claims_dir, _ = _fixture(tmp_path)
+        def forbidden(*args):
+            raise AssertionError("read-only diagnosis reached repair admission")
+        monkeypatch.setattr(provider, "admit", forbidden)
+        payload = _payload(cwd=worktree, tool="Bash", tool_input={"command": "git status --short"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json")
+
+tests/test_trace_review_guards.py:49: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28413ac380>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d28413ac530>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project/worktrees/host-gate-lane', 'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/projection.json')
+mode = 'enforce', client = 'claude-code'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": null,\n  "cache_hit": false,\n  "claim_project": null,\n  "claim_scope": null,\n  "claim_source_file": null,\n  "client": "claude-code",\n  "decision": "allow",\n  "details": [],\n  "elapsed_ms": 0.036317000194685534,\n  "mode": "enforce",\n  "normalized_target_paths": [],\n  "reason_code": "bash_read_only",\n  "receipt_id": "prewrite_e1667aa645f84b6384e447acf301404b",\n  "recovery": null,\n  "repo_root": null,\n  "schema_version": "1.0",\n  "session_id": "claude-code:host-gate-test",\n  "worktree_path": null\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+___ test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[off] ___
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d2841257500>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d2841255f70>, mode = 'off'
+
+    @pytest.mark.parametrize("mode", ["off", "observe"])
+    def test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory(tmp_path, monkeypatch, capsys, mode):
+        workspace, repo, worktree, claims_dir, _ = _fixture(tmp_path)
+        (worktree / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+        payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+            f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n"
+            f"*** Update File: {repo / 'README.md'}\n@@\n-seed\n+changed\n*** End Patch\n"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json", client="codex", mode=mode)
+
+tests/test_trace_review_guards.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d2841257500>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d2841255f70>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace', 'hook_event_name': 'PreToolUse', 'tool_name': 'apply_patch', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/projection.json')
+mode = 'off', client = 'codex'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n' = CaptureResult(out='{\n  "branch": null,\n  "cache_hit": false,\n  "claim_project": null,\n  "claim_scope": null,\n  "claim_source_file": null,\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n  ],\n  "elapsed_ms": 149.26269799980219,\n  "mode": "off",\n  "normalized_target_paths": [],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_0d5f226c41c84a74aaa46a83b6bd2780",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": null,\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": null\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+_ test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[observe] _
+
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28412574a0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d2841256930>
+mode = 'observe'
+
+    @pytest.mark.parametrize("mode", ["off", "observe"])
+    def test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory(tmp_path, monkeypatch, capsys, mode):
+        workspace, repo, worktree, claims_dir, _ = _fixture(tmp_path)
+        (worktree / "meta-process.yaml").write_text("meta_process:\n  trace_review:\n    mode: enforce\n")
+        payload = _payload(cwd=workspace, tool="apply_patch", tool_input={"command":
+            f"*** Begin Patch\n*** Update File: {worktree / 'src/allowed.py'}\n@@\n-VALUE = 1\n+VALUE = 2\n"
+            f"*** Update File: {repo / 'README.md'}\n@@\n-seed\n+changed\n*** End Patch\n"})
+>       code, decision = _run_cli(monkeypatch, capsys, tmp_path, payload, claims_dir=claims_dir,
+                                 projection_path=tmp_path / "projection.json", client="codex", mode=mode)
+
+tests/test_trace_review_guards.py:62: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d28412574a0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7d2841256930>
+tmp_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1')
+payload = {'session_id': 'host-gate-test', 'cwd': '/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace', 'hook_event_name': 'PreToolUse', 'tool_name': 'apply_patch', ...}
+claims_dir = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/claims')
+projection_path = PosixPath('/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/projection.json')
+mode = 'observe', client = 'codex'
+
+    def _run_cli(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        payload: dict[str, object],
+        *,
+        claims_dir: Path | None = None,
+        projection_path: Path | None = None,
+        mode: str = "enforce",
+        client: str = "claude-code",
+    ) -> tuple[int, dict[str, object]]:
+        monkeypatch.setattr(sys, "stdin", StringIO(json.dumps(payload)))
+        code = prewrite_claim_gate.main(
+            [
+                "--client",
+                client,
+                "--mode",
+                mode,
+                "--claims-dir",
+                str(claims_dir or tmp_path / "missing-claims"),
+                "--projection-path",
+                str(projection_path or tmp_path / "missing-projection.json"),
+                "--receipt-path",
+                str(tmp_path / "receipts.jsonl"),
+                "--outcome-receipt-path",
+                str(tmp_path / "outcome-receipts.jsonl"),
+                "--json",
+            ]
+        )
+        captured = capsys.readouterr()
+>       assert not captured.err
+E       assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n'
+E        +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n' = CaptureResult(out='{\n  "branch": null,\n  "cache_hit": false,\n  "claim_project": null,\n  "claim_scope": null,\n  "claim_source_file": null,\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n  ],\n  "elapsed_ms": 172.0877659972757,\n  "mode": "observe",\n  "normalized_target_paths": [],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_d6cc821cfd9d419b9991c3c24ed09ecb",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": null,\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": null\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n').err
+
+tests/test_host_prewrite_claim_gate.py:162: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-codex] - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 658.0085909990885,\n  "mode": "observe",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_b34c6e486c1b49caa22596ffea50a66a",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca2/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+FAILED tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-claude-code] - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "claude-code",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 917.6124750010786,\n  "mode": "observe",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_1492161ade4f4558a8a82656a6e8dac5",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "claude-code:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca3/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+FAILED tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-codex] - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 1029.7209229975124,\n  "mode": "enforce",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_cee82509b77b46388f221fe369ef8ce4",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca4/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+FAILED tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-claude-code] - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": "host-gate-lane",\n  "cache_hit": true,\n  "claim_project": "host-gate-test",\n  "claim_scope": "host-gate-lane",\n  "claim_source_file": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/claims/claude-code_host-gate-test_host-gate-lane.yaml",\n  "client": "claude-code",\n  "decision": "deny",\n  "details": [\n    "fixture: preserved failure requires its full review"\n  ],\n  "elapsed_ms": 1438.7150389993622,\n  "mode": "enforce",\n  "normalized_target_paths": [\n    "src/allowed.py"\n  ],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_d467f68e75a2480fa8e01e157d66c89f",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project",\n  "schema_version": "1.0",\n  "session_id": "claude-code:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "fixture: preserved failure requires its full review"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project/worktrees/host-gate-lane"\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_ordinary_edit_cannot_esca5/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+FAILED tests/test_trace_review_guards.py::test_read_only_diagnosis_does_not_invoke_repair_guard - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n' = CaptureResult(out='{\n  "branch": null,\n  "cache_hit": false,\n  "claim_project": null,\n  "claim_scope": null,\n  "claim_source_file": null,\n  "client": "claude-code",\n  "decision": "allow",\n  "details": [],\n  "elapsed_ms": 0.036317000194685534,\n  "mode": "enforce",\n  "normalized_target_paths": [],\n  "reason_code": "bash_read_only",\n  "receipt_id": "prewrite_e1667aa645f84b6384e447acf301404b",\n  "recovery": null,\n  "repo_root": null,\n  "schema_version": "1.0",\n  "session_id": "claude-code:host-gate-test",\n  "worktree_path": null\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_read_only_diagnosis_does_0/workspace/project", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], "cwd": "", "exit_status": 1, "stdout": "", "stderr": ""}\n').err
+FAILED tests/test_trace_review_guards.py::test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[off] - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n' = CaptureResult(out='{\n  "branch": null,\n  "cache_hit": false,\n  "claim_project": null,\n  "claim_scope": null,\n  "claim_source_file": null,\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n  ],\n  "elapsed_ms": 149.26269799980219,\n  "mode": "off",\n  "normalized_target_paths": [],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_0d5f226c41c84a74aaa46a83b6bd2780",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": null,\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": null\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann0/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n').err
+FAILED tests/test_trace_review_guards.py::test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[observe] - assert not 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n'
+ +  where 'FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n' = CaptureResult(out='{\n  "branch": null,\n  "cache_hit": false,\n  "claim_project": null,\n  "claim_scope": null,\n  "claim_source_file": null,\n  "client": "codex",\n  "decision": "deny",\n  "details": [\n    "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n  ],\n  "elapsed_ms": 172.0877659972757,\n  "mode": "observe",\n  "normalized_target_paths": [],\n  "reason_code": "trace_review_required",\n  "receipt_id": "prewrite_d6cc821cfd9d419b9991c3c24ed09ecb",\n  "recovery": "Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.",\n  "repo_root": null,\n  "schema_version": "1.0",\n  "session_id": "codex:host-gate-test",\n  "trace_review": {\n    "disposition": "deny",\n    "errors": [\n      "trace admission target unavailable: all target paths must resolve to the same Git worktree and branch"\n    ],\n    "mode": "enforce",\n    "valid": false\n  },\n  "worktree_path": null\n}\n', err='FULL_COMMAND_FAILURE {"command": ["git", "-C", "/tmp/pytest-of-brian/pytest-101/test_mixed_worktree_patch_cann1/workspace", "rev-parse", "--show-toplevel"], "cwd": "", "exit_status": 128, "stdout": "", "stderr": "fatal: not a git repository (or any of the parent directories): .git\\n"}\n').err
+======================== 7 failed, 11 passed in 58.47s =========================

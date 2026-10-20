@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "record_type": "trace_review",
+  "review_id": "host-import-failure",
+  "reviewer": "codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e",
+  "goal_ref": "goal:trace-review-enforcement",
+  "criterion_ids": [
+    "native-boundary"
+  ],
+  "evidence_revision": "62af30024cb1c8e34a63167ddcaeb68f9abf93f3",
+  "run_id": "ep-trace-guard-import-failure",
+  "run_outcome": "fail",
+  "source": {
+    "path": "proposals/trace-review-enforcement/host-import-failure.trace.json",
+    "sha256": "a9503699d514622bdcaa471f741a95a724b4f25500acf57f1b287b648f557ce2",
+    "format": "execution_trace"
+  },
+  "reviewed_entries": [
+    {
+      "pointer": "/events/0",
+      "sha256": "eea380958aae8c4a2a87f304a6b54f08f31171458be0a203993d842ee711a595",
+      "observation": "Read the test input, package existence and actual import failure before editing the fixture."
+    },
+    {
+      "pointer": "/outcome",
+      "sha256": "34e382cfb94027bb2ebfad2bcd3affd03b843b3d285b73bc2760d19b65abd85f",
+      "observation": "Read the test input, package existence and actual import failure before editing the fixture."
+    }
+  ],
+  "findings": [
+    {
+      "classification": "expectation_wrong",
+      "description": "New harness imported a package module as a top-level module. Existing tests use tests-prefixed imports. No guard item ran.",
+      "citations": [
+        {
+          "pointer": "/events/0/input/test_source",
+          "quote": "from test_host_prewrite_claim_gate import"
+        },
+        {
+          "pointer": "/events/0/output/error",
+          "quote": "No module named 'test_host_prewrite_claim_gate'"
+        }
+      ]
+    }
+  ]
+}

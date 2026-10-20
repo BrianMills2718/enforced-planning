@@ -6,9 +6,12 @@ import importlib.util
 import json
 import subprocess
 import sys
+import hashlib
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 MODULE_PATH = (
     Path(__file__).resolve().parents[1]
@@ -26,6 +29,36 @@ HOOK_PATH = (
 SHA_A = "a" * 40
 SHA_B = "b" * 40
 SHA_C = "c" * 40
+
+
+@pytest.mark.parametrize("raise_after_receipt", [False, True])
+def test_rejected_review_artifact_survives_temporary_cleanup(monkeypatch, tmp_path, raise_after_receipt):
+    module = _load()
+    receipt = module.PRSignoffReceipt(head_sha=SHA_A, rubric_revision="rubric",
+        reviewer_sessions=(), reviewer_executions=(), verdict="rejected", reasons=("CLI failed",),
+        programmatic_checks=({"check_id": "check", "argv": ["false"], "exit_code": 1,
+            "output_sha256": hashlib.sha256(b"failed check").hexdigest(),
+            "output_excerpt": "failed check", "full_output": "failed check", "capture_complete": True},),
+        semantic_reviews=(), reviewed_at="2026-10-10T00:00:00Z")
+    original = receipt.model_dump_json(indent=2) + "\n"
+
+    def review(*args, **kwargs):
+        kwargs["receipt_path"].write_text(original)
+        kwargs["check_payload_path"].write_text('{"conclusion":"failure"}')
+        if raise_after_receipt:
+            raise RuntimeError("failure after capture")
+        return receipt
+
+    monkeypatch.setattr(module, "run_review", review)
+    root = tmp_path / "receipts"
+    with pytest.raises(RuntimeError, match="failure after capture" if raise_after_receipt else "rejected"):
+        module.run_local_review_gate(spec=SimpleNamespace(repository="owner/repo", pull_request=42,
+            base_sha=SHA_B, head_sha=SHA_A), snapshot=snapshot(module), review_worktree=tmp_path,
+            repo_slug="owner/repo", pr_number=42, gh_env={}, output_root=root)
+    retained = root / f"receipt-{receipt.receipt_sha256()}.json"
+    assert retained.read_text() == original
+    assert retained.stat().st_mode & 0o777 == 0o600
+    assert (root / f"candidate-check-{receipt.receipt_sha256()}.json").read_text() == '{"conclusion":"failure"}'
 
 
 def _load():

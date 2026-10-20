@@ -1,0 +1,20 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/brian/code/enforced-planning/worktrees/trace-review-guards
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 277 items
+
+tests/test_claim_yaml_loading.py .......                                 [  2%]
+tests/test_coordination_hook.py ........................................ [ 16%]
+.........................                                                [ 25%]
+tests/test_check_coordination_claims.py ................................ [ 37%]
+........................................................................ [ 63%]
+........................................................................ [ 89%]
+..........                                                               [ 93%]
+tests/test_prewrite_claim_projection.py .................                [ 99%]
+tests/test_coordination_messages.py .                                    [ 99%]
+tests/test_e2e_sanctioned_entrypoints.py .                               [100%]
+
+======================== 277 passed in 90.84s (0:01:30) ========================

@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "record_type": "trace_review",
+  "review_id": "codex-payload-fixture-failure",
+  "reviewer": "codex:01a11e81-72c9-7d20-b7e3-1738f0e9f68e",
+  "goal_ref": "goal:trace-review-enforcement",
+  "criterion_ids": [
+    "native-boundary"
+  ],
+  "evidence_revision": "62af30024cb1c8e34a63167ddcaeb68f9abf93f3",
+  "run_id": "ep-codex-payload-fixture-failure",
+  "run_outcome": "fail",
+  "source": {
+    "path": "proposals/trace-review-enforcement/codex-payload-fixture-failure.trace.json",
+    "sha256": "bc27f1cb3398d23da71d5abd907df2337f2ee40b07a4531b4983ffe56fd89802",
+    "format": "execution_trace"
+  },
+  "reviewed_entries": [
+    {
+      "pointer": "/events/0",
+      "sha256": "a173389ed1e9c398f782e6ac5fedd150129af81d0e43fc88b0665eb7544c19fe",
+      "observation": "Read actual Codex hook payload and its full refusal: the fixture used Claude Edit instead of Codex apply_patch."
+    },
+    {
+      "pointer": "/outcome",
+      "sha256": "34e382cfb94027bb2ebfad2bcd3affd03b843b3d285b73bc2760d19b65abd85f",
+      "observation": "Read actual Codex hook payload and its full refusal: the fixture used Claude Edit instead of Codex apply_patch."
+    }
+  ],
+  "findings": [
+    {
+      "classification": "expectation_wrong",
+      "description": "Fixture supplied a Claude tool shape to Codex; the existing host correctly rejected it before review admission. Use the native apply_patch payload.",
+      "citations": [
+        {
+          "pointer": "/events/0/output/stdout",
+          "quote": "Unsupported Codex pre-write tool: 'Edit'"
+        }
+      ]
+    }
+  ]
+}

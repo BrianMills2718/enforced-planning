@@ -1,0 +1,78 @@
+{
+  "source_revision": "8bb129741866b25a3c0f6ae2e8f9be5f035e3686",
+  "native_review_verdict": "rejected",
+  "receipt_sha256": "0599f1769740d6942b0ec4639bfbeef36ca1fc83fde034e0cbe7c493d437a9c2",
+  "receipt_file_sha256": "ef7e391dbc400c41d744a24e822f82bc8c5fa4ecff70e70cd7d238b6359c414c",
+  "capture_complete": true,
+  "stdout_characters": 718452,
+  "programmatic_tests_passed": 97,
+  "inspected_failing_native_items": [
+    "item_24",
+    "item_27",
+    "item_34"
+  ],
+  "inspected_surprising_native_items": [
+    "item_31"
+  ],
+  "inspected_passing_native_items": [
+    "item_30",
+    "item_35",
+    "item_40"
+  ],
+  "controls": [
+    {
+      "id": "CORRECTNESS-1",
+      "cause": "final_trace_denial_ignored_by_json_exit_status",
+      "native_item": "item_34",
+      "replayed_json_exit_status": 2,
+      "replayed_native_exit_status": 2,
+      "repaired_boundary": "final_denial_precedes_outcome_allow"
+    },
+    {
+      "id": "CORRECTNESS-2",
+      "cause": "inspection_and_terminal_semantic_binding_missing",
+      "native_item": "item_24",
+      "replayed_no_tools_verdict": "rejected",
+      "replayed_contradictory_verdict": "rejected",
+      "separate_tool_bearing_contradictory_terminal_control": "passed"
+    },
+    {
+      "id": "CORRECTNESS-3",
+      "cause": "verified_snapshot_not_bound_to_consumed_projection",
+      "native_item": "item_27",
+      "real_file_replacement_controls_passed": 4,
+      "limitation": "original repro used mocked reads and digest; real-file controls replace derived projection bytes without a sanctioned registry mutation",
+      "verified_owner_returned": true,
+      "replacement_owner_returned": false
+    },
+    {
+      "id": "CORRECTNESS-4",
+      "cause": "disabled_uncovered_disposition_omitted_from_host_receipt",
+      "host_receipt_control": "passed"
+    }
+  ],
+  "targeted_regression_gate": {
+    "command": "python3 -m pytest -q tests/test_pr_review_signoff.py tests/test_trace_review_guards.py tests/test_coordination_hook.py -k \"native_inspection or outcome_allow_cannot or disabled_trace_admission or recovered_projection_replacement or transport_timeout_recovery or repair_transport_timeout\"",
+    "passed": 16,
+    "deselected": 125,
+    "exit_status": 0
+  },
+  "two_authentic_rejected_native_streams": "new terminal binding validated both; failed semantic verdicts retained",
+  "installed_native_hook_activation": "unverified",
+  "public_raw_trace": false,
+  "compatibility_gate": {
+    "command": "python3 -m pytest -q tests/test_pr_review_signoff.py tests/test_finish_pr.py tests/test_trace_review_guards.py tests/test_host_prewrite_claim_gate.py tests/test_coordination_hook.py",
+    "passed": 390,
+    "failed": 0,
+    "exit_status": 0,
+    "elapsed_seconds": 254.32
+  },
+  "tested_source_sha256": {
+    "enforced_planning/pr_review_signoff.py": "2541974cac02ad8773533bec691af5a8ca1194fab9becc06c3b357d9932af66c",
+    "scripts/coordination_hook.py": "062874eca9bead0c942db42e7d8aa8df61ba9b310ee246deabdc8cdfa100b0f0",
+    "scripts/prewrite_claim_gate.py": "f70590ac037b5a17203b1bcb249faf418cc052c4952bfc066c1bc5e092c21aa8",
+    "tests/test_pr_review_signoff.py": "5c4dbc864845d04c161d4722f944155592579a4eeef31fbad4461e0720636b5d",
+    "tests/test_trace_review_guards.py": "11c16237d48d45d96fa0f69eaa2aaa89d2af2b97ce4cd9f69963b5556b29a4dc",
+    "tests/test_coordination_hook.py": "a01f37fe6fd29f10d3e92d2789daf3195acffc578693d6b66a7f1d835bfc2421"
+  }
+}

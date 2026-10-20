@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/usr/bin/python3",
+    "-m",
+    "pytest",
+    "tests/test_claim_yaml_loading.py",
+    "tests/test_check_coordination_claims.py",
+    "tests/test_prewrite_claim_projection.py",
+    "tests/test_coordination_messages.py::test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim",
+    "tests/test_e2e_sanctioned_entrypoints.py::test_maintenance_worktree_and_session_close_real_subprocess_roundtrip",
+    "-ra"
+  ],
+  "exit_status": 1,
+  "elapsed_seconds": 91.34
+}

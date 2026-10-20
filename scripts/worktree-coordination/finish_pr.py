@@ -390,23 +390,40 @@ def run_local_review_gate(
         temporary = Path(directory)
         receipt_path = temporary / "receipt.json"
         payload_path = temporary / "candidate-check.json"
-        receipt = run_review(
-            spec,
-            repo_root=review_worktree,
-            output_schema=REPO_ROOT / "contracts" / "pr-review-signoff.schema.json",
-            receipt_path=receipt_path,
-            check_payload_path=payload_path,
-            pr_revision_resolver=resolve_live,
-        )
-        digest = receipt.receipt_sha256()
-        durable_receipt = output_root / f"receipt-{digest}.json"
-        durable_payload = output_root / f"candidate-check-{digest}.json"
-        for source, target in ((receipt_path, durable_receipt), (payload_path, durable_payload)):
-            content = source.read_bytes()
-            if target.exists() and target.read_bytes() != content:
-                raise RuntimeError(f"content-addressed review artifact collision: {target}")
-            if not target.exists():
-                target.write_bytes(content)
+        try:
+            receipt = run_review(
+                spec,
+                repo_root=review_worktree,
+                output_schema=REPO_ROOT / "contracts" / "pr-review-signoff.schema.json",
+                receipt_path=receipt_path,
+                check_payload_path=payload_path,
+                pr_revision_resolver=resolve_live,
+            )
+        finally:
+            # Preserve available evidence even when a later step raises. Never
+            # rewrite an existing receipt or manufacture missing evidence.
+            if receipt_path.is_file():
+                retained = PRSignoffReceipt.model_validate_json(receipt_path.read_bytes())
+                digest = retained.receipt_sha256()
+                durable_receipt = output_root / f"receipt-{digest}.json"
+                durable_payload = output_root / f"candidate-check-{digest}.json"
+                for source, target in ((receipt_path, durable_receipt), (payload_path, durable_payload)):
+                    if not source.is_file():
+                        continue
+                    content = source.read_bytes()
+                    if not target.exists():
+                        try:
+                            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                        except FileExistsError:
+                            pass
+                        else:
+                            with os.fdopen(descriptor, "wb") as handle:
+                                handle.write(content)
+                                handle.flush()
+                                os.fsync(handle.fileno())
+                    if target.read_bytes() != content:
+                        raise RuntimeError(f"content-addressed review artifact collision: {target}")
+
     if receipt.verdict != "signed_off":
         raise RuntimeError("evidence-bound review rejected the exact pull-request head")
     return receipt, durable_receipt

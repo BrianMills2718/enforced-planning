@@ -1,0 +1,9 @@
+{
+  "input_sha256": "687524e3da18b59e036a6dc8ad8387799f4a733dafcdad9a36054ba5bd7b3978",
+  "review": {
+    "findings": []
+  },
+  "cost": 0.0003744,
+  "supported": true,
+  "trace_id": "trace-review-enforcement/source-repair-privacy/687524e3da18b59e036a6dc8ad8387799f4a733dafcdad9a36054ba5bd7b3978"
+}

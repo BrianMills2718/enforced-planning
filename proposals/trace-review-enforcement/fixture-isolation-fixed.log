@@ -1,0 +1,30 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/brian/code/enforced-planning/worktrees/trace-review-guards
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 19 items
+
+tests/test_artifact_creation.py::test_registered_distinct_document_is_allowed PASSED [  5%]
+tests/test_fleet_drift.py::test_index_reads_head_tree_and_history PASSED [ 10%]
+tests/test_discover_squash_merge_commit.py::test_a_real_squash_merge_is_discovered PASSED [ 15%]
+tests/test_discover_squash_merge_commit.py::test_it_is_still_found_after_main_moves_on PASSED [ 21%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[off-codex] PASSED [ 26%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[off-claude-code] PASSED [ 31%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-codex] PASSED [ 36%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[observe-claude-code] PASSED [ 42%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-codex] PASSED [ 47%]
+tests/test_trace_review_guards.py::test_ordinary_edit_cannot_escape_repair_admission_from_workspace_cwd[enforce-claude-code] PASSED [ 52%]
+tests/test_trace_review_guards.py::test_read_only_diagnosis_does_not_invoke_repair_guard PASSED [ 57%]
+tests/test_trace_review_guards.py::test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[off] PASSED [ 63%]
+tests/test_trace_review_guards.py::test_mixed_worktree_patch_cannot_borrow_unenrolled_launch_directory[observe] PASSED [ 68%]
+tests/test_trace_review_guards.py::test_already_completed_plan_cannot_bypass_enabled_trace_guard PASSED [ 73%]
+tests/test_trace_review_guards.py::test_missing_cursor_and_disabled_gate_are_reported_uncovered PASSED [ 78%]
+tests/test_trace_review_guards.py::test_enabled_missing_provider_fails_closed PASSED [ 84%]
+tests/test_trace_review_guards.py::test_enrolled_cursor_reuses_existing_shared_pin_without_claiming_coverage PASSED [ 89%]
+tests/test_trace_review_guards.py::test_untrusted_provider_is_refused_without_running_it PASSED [ 94%]
+tests/test_pre_commit_hook.py::test_pre_commit_hook_blocks_when_explicitly_requested PASSED [100%]
+
+======================== 19 passed in 76.41s (0:01:16) =========================

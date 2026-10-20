@@ -423,7 +423,7 @@ def test_multiple_prewrite_targets_cannot_share_one_outcome_authority(tmp_path: 
     assert record.ordinary is None
 
 
-def test_cli_no_option_is_unchanged_and_both_signs_preserve_ordinary_allow(
+def test_cli_explicit_uncovered_and_both_signs_preserve_ordinary_allow(
     tmp_path: Path,
 ) -> None:
     _repo, worktree, claims_dir, _claim_path, projection_path = _fixture(tmp_path)
@@ -472,7 +472,11 @@ def test_cli_no_option_is_unchanged_and_both_signs_preserve_ordinary_allow(
         "recovery",
         "elapsed_ms",
         "cache_hit",
+        "trace_review",
     }
+    assert ordinary_payload["trace_review"]["mode"] == "off"
+    assert ordinary_payload["trace_review"]["disposition"] == "uncovered"
+    assert ordinary_payload["trace_review"]["valid"] is False
     assert "outcome_observation" not in ordinary_payload
     assert (positive_payload["decision"], positive_payload["reason_code"]) == (
         "allow",
@@ -489,6 +493,7 @@ def test_cli_no_option_is_unchanged_and_both_signs_preserve_ordinary_allow(
     ]
     observations = load_observation_records(tmp_path / "outcome-cli.jsonl")
     assert len(ordinary_receipts) == 3
+    assert all(item["trace_review"]["disposition"] == "uncovered" for item in ordinary_receipts)
     assert len(observations) == 2
     ordinary_by_id = {item["receipt_id"]: item for item in ordinary_receipts}
     for observation in observations:

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "enforced_planning.hook_wiring",
+    "--repo-root",
+    "/home/brian/code/inside-success/repos/company-planning/worktrees/trace-review-provider-guards",
+    "--profile",
+    "prewrite-claim",
+    "--json"
+  ],
+  "exit_status": 1,
+  "stdout": "",
+  "stderr": "Missing machine-readable governance file: /home/brian/code/inside-success/repos/company-planning/worktrees/trace-review-provider-guards/scripts/relationships.yaml\n"
+}

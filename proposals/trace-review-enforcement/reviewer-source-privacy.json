@@ -1,0 +1,8 @@
+{
+  "input_sha256": "083ebff5ee228a8230c249d683e7d63b08cd7e318bea8eeff153842b49f2f466",
+  "review": {
+    "findings": []
+  },
+  "trace_id": "trace-review-enforcement/reviewer-source-privacy/083ebff5ee228a8230c249d683e7d63b08cd7e318bea8eeff153842b49f2f466",
+  "cost": 0.0005052
+}

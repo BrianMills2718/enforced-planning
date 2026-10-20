@@ -261,7 +261,7 @@ def _session_bound_payload(
 
         command = tool_input.get("command")
         if isinstance(command, str):
-            target_worktree = _bash_explicit_worktree(command)
+            target_worktree = _bash_explicit_worktree(command, cwd=Path(str(payload.get("cwd") or Path.cwd())))
     elif tool_name == "apply_patch":
         from enforced_planning.prewrite_claim_fast import _patch_paths
 
@@ -354,6 +354,7 @@ def _session_bound_payload(
         # is necessary.
         return payload
     rebound = dict(payload)
+    rebound["_session_launch_cwd"] = payload["cwd"]
     rebound["cwd"] = str(resolution.worktree_path)
     rebound["_session_target_worktree"] = str(resolution.worktree_path)
     return rebound
@@ -537,6 +538,7 @@ def _parse_plan_execution_cursor_command(
 
     operation = tokens[6]
     candidate: Path | None = None
+    review_path: str | None = None
     if operation == "start" and len(tokens) == 8:
         candidate = Path(tokens[7]).expanduser()
     elif operation == "replace" and len(tokens) == 10 and tokens[8] == "--expected-revision":
@@ -548,6 +550,15 @@ def _parse_plan_execution_cursor_command(
             raise ValueError("plan execution cursor expected revision must be positive") from exc
     elif operation == "archive" and len(tokens) == 7:
         pass
+    elif (operation == "record-review" and len(tokens) == 11
+          and tokens[7] == "--record-json" and tokens[9] == "--expected-revision"):
+        record = json.loads(tokens[8])
+        identifier = record.get("review_id") if isinstance(record, dict) else None
+        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identifier):
+            raise ValueError("diagnosis review id must be one portable identifier")
+        if int(tokens[10]) < 1:
+            raise ValueError("diagnosis expected revision must be positive")
+        review_path = f"artifacts/trace_review/reviews/{identifier}.json"
     else:
         raise ValueError("plan execution cursor command does not match a supported exact operation")
     if candidate is not None and (
@@ -574,6 +585,8 @@ def _parse_plan_execution_cursor_command(
     if coordination_claims.claim_runtime_status(claim, active_claims=active_claims) != "healthy":
         raise ValueError("plan execution cursor target claim is not healthy")
     required_paths = [".company-planning/active-execution.json"]
+    if review_path is not None:
+        required_paths.append(review_path)
     if operation == "archive":
         required_paths.append(".company-planning/history")
     normalized_claim_paths = [
@@ -1569,6 +1582,49 @@ def _enforce_selected_outcome(
     return receipt.model_dump(mode="json")
 
 
+def _trace_error_requires_refusal(payload: object) -> bool:
+    """Claim-mode errors cannot waive an independent protected trace boundary."""
+    from enforced_planning.trace_review_provider import configuration
+    from enforced_planning.prewrite_claim_fast import (
+        _bash_declared_paths, _bash_explicit_worktree, _git_identity,
+    )
+    try:
+        if not isinstance(payload, dict) or not payload.get("cwd"):
+            return True
+        launch = Path(payload["cwd"]).expanduser().resolve()
+        targets = {launch}
+        tool_input = payload.get("tool_input", {})
+        if not isinstance(tool_input, dict):
+            return True
+        paths = []
+        command = tool_input.get("command", tool_input.get("cmd", ""))
+        if payload.get("tool_name") in {"Bash", "exec_command"} and isinstance(command, str):
+            explicit = _bash_explicit_worktree(command, cwd=launch)
+            if explicit is not None:
+                targets.add(explicit)
+            paths.extend(_bash_declared_paths(command))
+        for field in ("file_path", "path"):
+            if tool_input.get(field):
+                paths.append(tool_input[field])
+        if payload.get("tool_name") == "apply_patch" and isinstance(command, str):
+            for line in command.splitlines():
+                for prefix in ("*** Update File: ", "*** Add File: ", "*** Delete File: "):
+                    if line.startswith(prefix):
+                        paths.append(line[len(prefix):])
+        for raw in paths:
+            path = Path(raw).expanduser()
+            if not path.is_absolute():
+                path = launch / path
+            try:
+                root, _, _ = _git_identity(path)
+            except FastPreWriteError:
+                continue
+            targets.add(root)
+        return any(configuration(target)["mode"] == "enforce" for target in targets)
+    except Exception:
+        return True
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     payload: object = {}
@@ -1653,7 +1709,7 @@ def main(argv: list[str] | None = None) -> int:
             mode=mode,
             claims_dir=args.claims_dir,
             projection_path=projection_path,
-            receipt_path=args.receipt_path,
+            receipt_path=None,
             claim_bootstrap_classifier=special_classifier,
             projection_recovery_command=recovery_command,
         )
@@ -1710,7 +1766,104 @@ def main(argv: list[str] | None = None) -> int:
             print(_native_notice(f"OBSERVE ONLY: {message}"))
         elif mode == "enforce":
             print(message, file=sys.stderr)
-        return 2 if mode == "enforce" or outcome_config_invalid else 0
+        return 2 if mode == "enforce" or outcome_config_invalid or _trace_error_requires_refusal(payload) else 0
+
+    # Exact typed investigation/retention commands have already validated their
+    # narrow host scope. Ordinary mutations must pass the shared diagnosis gate.
+    exempt_reasons = {"bash_read_only", "claim_bootstrap_command", "native_mailbox_command",
+                      "native_closeout_command", "native_session_narrow_command",
+                      "hook_feedback_report_command", "read_target_selection_command",
+                      "projection_recovery_command"}
+    if decision.get("decision") in {"allow", "observe_violation"} and decision.get("reason_code") not in exempt_reasons:
+        from enforced_planning.trace_review_provider import admit
+        from enforced_planning.prewrite_claim_fast import adapt_native_payload, _repository_context, _bash_is_explicitly_bound
+        request = None
+        trace_target_cwd = Path(str(payload.get("cwd") or Path.cwd()))
+        try:
+            request = adapt_native_payload(payload, client=args.client,
+                                           claim_bootstrap_classifier=special_classifier)
+            if request["tool_name"] == "Bash":
+                from enforced_planning.prewrite_claim_fast import _bash_explicit_worktree
+                explicit_target = _bash_explicit_worktree(request["bash_command"], cwd=Path(request["bash_launch_cwd"]))
+                if explicit_target is not None:
+                    trace_target_cwd = explicit_target
+            context = _repository_context({**request, "cwd": str(trace_target_cwd)})
+            target = Path(context["worktree_path"])
+            if request["tool_name"] == "Bash":
+                from enforced_planning.prewrite_claim_fast import _git_identity
+                from enforced_planning.trace_review_provider import configuration
+                for raw in request["target_paths"]:
+                    candidate = Path(raw).expanduser()
+                    if not candidate.is_absolute():
+                        candidate = trace_target_cwd / candidate
+                    try:
+                        declared_root, _, _ = _git_identity(candidate)
+                    except FastPreWriteError:
+                        continue
+                    if declared_root != target:
+                        try:
+                            protected = configuration(declared_root)["mode"] == "enforce"
+                        except Exception as exc:
+                            raise FastPreWriteError(f"declared trace target configuration unavailable: {exc}") from exc
+                        if protected:
+                            raise FastPreWriteError("shell request includes another enforced trace target without a provable runtime binding")
+            admission = admit(target, "repair", request["session_id"], args.claims_dir)
+            if admission["mode"] == "enforce":
+                target_errors = []
+                if request.get("session_target_error_code"):
+                    target_errors.append(str(request.get("session_target_error") or request["session_target_error_code"]))
+                if context.get("bash_paths_outside_worktree"):
+                    target_errors.append("trace admission cannot authorize shell paths outside its target worktree")
+                if request.get("bash_target_unprovable") or (
+                    request.get("session_target_rebound") and
+                    request["tool_name"] == "Bash" and
+                    not _bash_is_explicitly_bound(request["bash_command"], target, cwd=Path(request["bash_launch_cwd"]))
+                ):
+                    target_errors.append("trace admission requires a provable shell target worktree")
+                if target_errors:
+                    admission = {**admission, "disposition": "deny", "valid": False,
+                                 "errors": [*admission["errors"], *target_errors]}
+        except (FastPreWriteError, OSError, ValueError, TypeError) as exc:
+            from enforced_planning.trace_review_provider import configuration
+            try:
+                fallback_settings = configuration(trace_target_cwd)
+                fallback_mode = fallback_settings["mode"]
+                if request is None:
+                    fallback_mode = "enforce"
+                else:
+                    # A launch directory cannot turn mixed or known enforced
+                    # write targets into an uncovered non-Git operation.
+                    from enforced_planning.prewrite_claim_fast import _git_identity
+                    target_roots = set()
+                    for raw in request["target_paths"]:
+                        candidate = Path(raw).expanduser()
+                        if not candidate.is_absolute():
+                            candidate = Path(request["cwd"]) / candidate
+                        try:
+                            target_root, _, _ = _git_identity(candidate)
+                        except FastPreWriteError:
+                            continue
+                        target_roots.add(target_root)
+                        if configuration(target_root)["mode"] == "enforce":
+                            fallback_mode = "enforce"
+                    if len(target_roots) > 1:
+                        fallback_mode = "enforce"
+            except Exception:
+                fallback_mode = "enforce"
+            admission = {"mode": fallback_mode,
+                         "disposition": "deny" if fallback_mode == "enforce" else "uncovered", "valid": False,
+                         "errors": [f"trace admission target unavailable: {exc}"]}
+        decision["trace_review"] = admission
+        if admission["disposition"] == "deny":
+            decision.update(decision="deny", reason_code="trace_review_required",
+                            details=admission["errors"],
+                            recovery="Read the full retained failure trace and use the pinned Company Planning manager record-review operation to save its cited diagnosis. Missing cursor/provider paths must be enrolled, not declared compliant.")
+
+    # The host owns the final claim/trace decision. Its component evaluator
+    # defers recording so an initial allow cannot duplicate the final receipt.
+    from enforced_planning.prewrite_claim_fast import _record_receipt
+    _record_receipt(args.receipt_path, decision)
+
 
     outcome_observation = None
     if args.outcome_scenario is not None:
@@ -1794,6 +1947,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(message, file=sys.stderr)
             return 2
 
+
     if args.json:
         output = decision
         if outcome_observation is not None:
@@ -1803,6 +1957,8 @@ def main(argv: list[str] | None = None) -> int:
         if outcome_admission_exemption is not None:
             output = {**output, "outcome_admission_exemption": outcome_admission_exemption}
         print(json.dumps(output, indent=2, sort_keys=True))
+        if decision["decision"] == "deny":
+            return 2
         if outcome_admission_receipt is not None:
             admission = outcome_admission_receipt["result"]["decision"]
             return 0 if admission["disposition"] == "allow" else 2

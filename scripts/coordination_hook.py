@@ -13,16 +13,20 @@ import subprocess
 import sys
 import time
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-try:
-    from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
-except ModuleNotFoundError:  # package-style tests import scripts.coordination_hook
-    from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+# The projection-only child does not emit hook invocation receipts or scan
+# repositories. Keep those imports in the normal lifecycle process.
+if __name__ != "__main__" or "--repair-projection-only" not in sys.argv:
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        from hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
+    except ModuleNotFoundError:  # package-style tests import scripts.coordination_hook
+        from scripts.hook_receipts import DEFAULT_RECEIPT_ROOT, HookInvocation, start_hook_invocation
 
 
 def _bootstrap_package() -> None:
@@ -382,6 +386,20 @@ def _repair_turn_end_projection(
         )
     except subprocess.TimeoutExpired as exc:
         last_phase = _repair_phase(exc.stderr)
+        # A killed worker may already have committed the derived projection.
+        # Trust its typed, digest-bound artifact, never a phase marker or a
+        # partially transported timing reply. The caller rechecks it too.
+        verified_sha = _current_projection_sha256(claims_dir) if last_phase == "complete" else None
+        if verified_sha is not None:
+            result = {
+                "action": "verified_after_transport_timeout",
+                "last_phase": last_phase,
+                "projection_verified": True,
+                "transport_timeout_seconds": timeout,
+                "projection_sha256": verified_sha,
+            }
+            print(json.dumps({"projection_repair": result}, sort_keys=True), file=sys.stderr, flush=True)
+            return result
         raise TurnEndProjectionError(
             f"claim projection repair exceeded {timeout:g}s "
             f"(last_phase={last_phase})"
@@ -398,20 +416,27 @@ def _repair_turn_end_projection(
     return result
 
 
-def _projection_is_current(claims_dir: Path) -> bool:
-    """Check the derived projection against one lock-owned registry state."""
+def _current_projection_sha256(claims_dir: Path) -> str | None:
+    """Return the digest of the exact typed, current projection snapshot."""
 
     projection_path = prewrite_claim_fast.projection_path_for(claims_dir)
     try:
-        projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
-            projection_path.read_text(encoding="utf-8")
-        )
-        return (
+        raw = projection_path.read_bytes()
+        projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(raw)
+        if (
             projection.claims_dir == str(claims_dir)
             and projection.registry_digest == prewrite_claim_fast.registry_digest(claims_dir)
-        )
+        ):
+            return hashlib.sha256(raw).hexdigest()
     except (OSError, ValueError):
-        return False
+        pass
+    return None
+
+
+def _projection_is_current(claims_dir: Path) -> bool:
+    """Check the derived projection against one lock-owned registry state."""
+
+    return _current_projection_sha256(claims_dir) is not None
 
 
 def _repair_projection_under_lock(claims_dir: Path) -> dict[str, Any]:
@@ -439,15 +464,22 @@ def _repair_projection_under_lock(claims_dir: Path) -> dict[str, Any]:
     }
 
 
-def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[Any, ...]:
+def _active_claims(
+    claims_dir: Path | None, *, turn_end: bool = False,
+    repair_diagnostics: dict[str, Any] | None = None,
+) -> tuple[Any, ...]:
     """Load active claims strictly, or repair derived state for ordinary turn end."""
 
     resolved = (claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
     projection_path = prewrite_claim_fast.projection_path_for(resolved)
+    expected_recovery_sha = None
     def load_projection() -> Any:
         try:
+            raw = projection_path.read_bytes()
+            if expected_recovery_sha is not None and hashlib.sha256(raw).hexdigest() != expected_recovery_sha:
+                raise ValueError("active-claim projection changed after timeout verification")
             projection = prewrite_claim_projection.PreWriteAuthorityProjectionV1.model_validate_json(
-                projection_path.read_text(encoding="utf-8")
+                raw
             )
         except (OSError, ValueError) as exc:
             error_type = TurnEndProjectionError if turn_end else RepositoryCloseoutError
@@ -476,9 +508,17 @@ def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[
     # never acquires the lock, and `_repair_turn_end_projection` is capped at
     # TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS. PreToolUse, the latency
     # boundary, does not call this function at all.
+    def repair_projection() -> None:
+        nonlocal expected_recovery_sha
+        result = _repair_turn_end_projection(resolved)
+        if result.get("action") == "verified_after_transport_timeout":
+            expected_recovery_sha = result["projection_sha256"]
+            if repair_diagnostics is not None:
+                repair_diagnostics.update(result)
+
     repaired = False
     if not projection_path.is_file() or _projection_has_registry_change(projection_path, resolved):
-        _repair_turn_end_projection(resolved)
+        repair_projection()
         repaired = True
     if projection_path.is_file():
         try:
@@ -486,13 +526,13 @@ def _active_claims(claims_dir: Path | None, *, turn_end: bool = False) -> tuple[
         except TurnEndProjectionError:
             if repaired:
                 raise
-            _repair_turn_end_projection(resolved)
+            repair_projection()
             repaired = True
             projection = load_projection()
         registry_digest = prewrite_claim_fast.registry_digest(resolved)
         if projection.registry_digest != registry_digest:
             if not repaired:
-                _repair_turn_end_projection(resolved)
+                repair_projection()
                 repaired = True
                 projection = load_projection()
                 registry_digest = prewrite_claim_fast.registry_digest(resolved)
@@ -1048,8 +1088,9 @@ def main(argv: list[str] | None = None) -> int:
         result = _repair_projection_under_lock(
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve()
         )
-        print(json.dumps(result, sort_keys=True))
+        print(json.dumps(result, sort_keys=True), flush=True)
         return 0
+    repair_diagnostics: dict[str, Any] = {}
     invocation: HookInvocation | None = None
     telemetry_decision = "warn"
     telemetry_reason = "hook_unavailable"
@@ -1101,12 +1142,12 @@ def main(argv: list[str] | None = None) -> int:
             active_claims = ()
         elif event_name == "Stop":
             try:
-                active_claims = _active_claims(args.claims_dir, turn_end=True)
+                active_claims = _active_claims(args.claims_dir, turn_end=True, repair_diagnostics=repair_diagnostics)
             except TurnEndProjectionError as exc:
                 active_claims = ()
                 projection_warning = f"turn-end claim projection unavailable after bounded repair: {exc}"
         else:
-            active_claims = _active_claims(args.claims_dir)
+            active_claims = _active_claims(args.claims_dir, repair_diagnostics=repair_diagnostics)
         closeout_ledger_dir = None if args.mailbox_only else args.closeout_ledger_dir or (
             (args.claims_dir or coordination_claims.CLAIMS_DIR).expanduser().resolve().parent
             / "repository-closeout-ledgers"
@@ -1349,7 +1390,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"systemMessage": warning}))
     finally:
         if invocation is not None:
-            invocation.complete(decision=telemetry_decision, reason_code=telemetry_reason)
+            invocation.complete(decision=telemetry_decision, reason_code=telemetry_reason, details=repair_diagnostics or None)
     return 0
 
 

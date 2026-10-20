@@ -250,6 +250,17 @@ validation is configured off. External claims use schema v5 and trackers v3;
 local claims and trackers retain their existing schemas. This adds custody,
 not discovery, a proxy-plan authority, or a new readiness decision owner.
 
+### Claim parsing implementation evidence
+
+The trace-review enforcement consumer uses the provisioned compiled safe YAML
+parser for claim reads. All 540 captured current registry records parsed
+identically under the original and compiled safe parsers; malformed input
+retains the original safe parser's diagnostics. Exact plan, worktree and
+session binding continue through the existing typed admission contract.
+Verification outcomes, including unresolved native timing and contention
+failures, are retained in
+[the consumer's control observations](../../proposals/trace-review-enforcement/claim-control-observations.json).
+
 ## Boundaries And Contracts
 
 | Boundary | Owns | Does not own |

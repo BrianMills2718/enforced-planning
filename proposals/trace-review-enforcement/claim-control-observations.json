@@ -1,0 +1,132 @@
+{
+  "scope": "observed control friction; causes not established",
+  "bootstrap": {
+    "process_id": 1910674,
+    "elapsed_seconds": 153,
+    "cpu_seconds": 143,
+    "cpu_percent": 93.2,
+    "max_rss_kib": 46832,
+    "exit_status": 0,
+    "trace": "provider-publish-disjoint-bootstrap.trace.json"
+  },
+  "registry_lock": {
+    "failed_progress_and_session_refresh": true,
+    "reported_wait_seconds": 5,
+    "no_state_change_on_refusal": true,
+    "later_holder_probe_found_no_process": true,
+    "subsequent_exact_owner_claim_refresh_exit_status": 0
+  },
+  "scope_preservation": {
+    "ep_parallel_root_authorized": false,
+    "foreign_lifecycle_lane_preserved": true
+  },
+  "registry_parse_profile": {
+    "pure_safe_loader_seconds": 8.261,
+    "safe_load_cpu_seconds": 8.112,
+    "files_parsed": 540,
+    "returned_records": 34,
+    "compiled_safe_loader_seconds": 0.707,
+    "same_membership_verified": true,
+    "existing_libyaml_provisioned": true,
+    "profile_author": "trace_provider_reuse read-only child",
+    "full_bootstrap_timeout_cause": "not established; phase outputs absent",
+    "projection_startup_timeout_cause": "not established; no phase marker"
+  },
+  "this_turn_coordination_friction": {
+    "own_claim_refresh_overlapped_native_test_cleanup": true,
+    "claim_refresh_refused_after_5_seconds": true,
+    "no_claim_state_change": true,
+    "repair": "Keep all registry writes sequential; retry only after prior operation completes and lock probe is clear",
+    "blocked_non_gating_shell_lists": 2
+  },
+  "compiled_parser_verification": {
+    "identical_current_corpus_parses": 540,
+    "parse_errors": 0,
+    "runtime_registry_read_seconds": 0.295,
+    "runtime_returned_records": 33,
+    "record_difference": "one exact ended test claim archived through native session-close",
+    "baseline_comparison": "timings measured separately; registry membership changed after legitimate close"
+  },
+  "compiled_parser_diagnostic_regression": {
+    "initial_focused_passed": 210,
+    "initial_focused_failed": 1,
+    "initial_exit_status": 1,
+    "cause": "Compiled parser phrased malformed YAML differently from the existing exposed error contract",
+    "repair": "Retain compiled safe parser for valid data; use existing SafeLoader diagnostics on malformed input",
+    "targeted_passed": 8,
+    "targeted_failed": 0,
+    "targeted_exit_status": 0,
+    "prior_timeout_cases": "Both passed in the 211-item native replay"
+  },
+  "completed_projection_transport_timeout": {
+    "final_replay_passed": 211,
+    "final_replay_failed": 1,
+    "pytest_seconds": 89.54,
+    "exit_status": 1,
+    "remaining_failure": "test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim",
+    "observed_phase": "complete",
+    "persisted_projection_sha256": "482c9fc534039661d9672055b1e56e74393041a14d5b34ec624f95b7b530235f",
+    "fresh_registry_digest": "e4612ddc819e4bc848d4b47e566e63476cad6a78186ba7f01ea4dd7bd028e7e5",
+    "verified_membership": [
+      "sender codex:thread-123",
+      "recipient claude-code:session-456"
+    ],
+    "diagnosis": "Repair persisted current typed state; child process transport/termination exceeded the unchanged deadline",
+    "verification_author": "read-only independent agent inspected actual failing fixture",
+    "repair": "Only complete-marker timeout with typed current exact-registry artifact may continue; retain transport fault separately in existing daily hook receipt details",
+    "new_deadline_or_retry": false,
+    "custody_review": {
+      "independent_findings": [
+        "Hash must identify exact validated snapshot, not a later read",
+        "Prove actual completed daily receipt, not only dictionary propagation"
+      ],
+      "repairs": [
+        "Typed parsing and SHA now share one captured bytes value",
+        "main() integration asserts exact recovery details via load_completed_receipts"
+      ],
+      "targeted_passed": 9,
+      "targeted_failed": 0,
+      "targeted_exit_status": 0,
+      "test_fixture_correction": "Initial daily-receipt fixture omitted native event ID; production rejected it correctly; fixture now supplies duplicate-safe event identity"
+    }
+  },
+  "final_coordination_replay": {
+    "passed": 273,
+    "failed": 4,
+    "skipped": 0,
+    "pytest_seconds": 113.44,
+    "exit_status": 1,
+    "failed_cases": [
+      "test_real_subprocess_secondary_posttool_preserves_root_pretool_obligation",
+      "test_stop_repairs_stale_projection_before_turn_end_check",
+      "test_stop_repair_waits_for_real_writer_then_uses_its_projection",
+      "test_maintenance_worktree_and_session_close_real_subprocess_roundtrip"
+    ],
+    "full_failure_sections_inspected": true,
+    "failures": [
+      "Three bounded repair workers timed out before a phase marker; root startup cause not established",
+      "Native cleanup refused another live registry writer after unchanged5-secondlockbudget"
+    ],
+    "deadline_extensions": false,
+    "merge_gate_passed": false
+  },
+  "minimal_worker_imports": {
+    "unused_worker_imports_removed": [
+      "hook_receipts",
+      "concurrent.futures.ThreadPoolExecutor"
+    ],
+    "normal_lifecycle_imports_preserved": true,
+    "authentic_worker_replay_passed": 12,
+    "authentic_worker_replay_failed": 0,
+    "authentic_worker_replay_exit_status": 0,
+    "fresh_probe_elapsed_seconds": 0.465,
+    "fresh_probe_repair_ms": 5.428,
+    "timing_limitation": "Separate probes; cached pages and host scheduling may differ",
+    "final_focused_passed": 277,
+    "final_focused_failed": 0,
+    "final_focused_skipped": 0,
+    "final_pytest_seconds": 90.84,
+    "final_exit_status": 0,
+    "broad_merge_gate": "not yet rerun at this source revision"
+  }
+}

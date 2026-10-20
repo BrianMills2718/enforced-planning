@@ -316,6 +316,9 @@ def test_prewrite_claim_profile_installs_only_native_claim_surfaces(tmp_path: Pa
     assert payload["profile"] == "prewrite-claim"
     assert (tmp_path / ".claude/hooks/prewrite-claim-gate.sh").is_file()
     assert (tmp_path / ".codex/hooks/prewrite-claim-gate.sh").is_file()
+    assert (tmp_path / "enforced_planning/trace_review_provider.py").read_bytes() == (
+        PROJECT_META_ROOT / "enforced_planning/trace_review_provider.py"
+    ).read_bytes()
     assert not (tmp_path / ".claude/hooks/gate-edit.sh").exists()
     assert not (tmp_path / ".claude/hooks/notify-coordination-messages.sh").exists()
     assert not (tmp_path / "scripts/meta/context_packet.py").exists()
@@ -323,6 +326,10 @@ def test_prewrite_claim_profile_installs_only_native_claim_surfaces(tmp_path: Pa
     claude = json.loads((tmp_path / ".claude/settings.json").read_text(encoding="utf-8"))
     claude_pre = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Edit|Write")
     assert [item["command"] for item in claude_pre["hooks"]] == [
+        "bash .claude/hooks/prewrite-claim-gate.sh"
+    ]
+    claude_shell = next(item for item in claude["hooks"]["PreToolUse"] if item["matcher"] == "Bash")
+    assert [item["command"] for item in claude_shell["hooks"]] == [
         "bash .claude/hooks/prewrite-claim-gate.sh"
     ]
     codex = json.loads((tmp_path / ".codex/hooks.json").read_text(encoding="utf-8"))
@@ -817,6 +824,7 @@ def test_installed_prewrite_runtime_projects_and_classifies_native_payloads(
         "path_outside_claim",
     )
     receipts = [json.loads(line) for line in receipt_path.read_text(encoding="utf-8").splitlines()]
+    assert all(item["trace_review"]["disposition"] == "uncovered" for item in receipts)
     assert [item["reason_code"] for item in receipts] == [
         "exact_live_claim",
         "path_outside_claim",

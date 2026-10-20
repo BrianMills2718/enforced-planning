@@ -1,0 +1,10 @@
+{
+  "files": 540,
+  "equal_parses": 540,
+  "errors": 0,
+  "elapsed_seconds": 4.846,
+  "libyaml": true,
+  "corpus_sha256": "2f24a27f7a70b13c583537322df046c9229ecf55865611d8234c8b6b6b0de26e",
+  "exit_status": 0,
+  "source": "existing native claim registry; raw records not published"
+}

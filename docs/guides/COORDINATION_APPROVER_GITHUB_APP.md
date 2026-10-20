@@ -36,6 +36,52 @@ in the repository, a shared worker environment, or the shared agent key file.
 The coordinator producer should receive only a short-lived installation token;
 workers should receive neither the private key nor that token.
 
+## Producer custody and liveness
+
+GitHub authenticates the account or App that created an approval; it does not
+authenticate the native Codex or Claude session that instructed a shared
+credential.  An approval producer therefore needs separate exact-session
+custody before it may use either compatibility credentials or the dedicated
+App service.
+
+`enforced_planning.coordination_approval` is the canonical custody contract and
+`scripts/worktree-coordination/publish_coordination_approval.py` is its operator
+entrypoint.  One lease is keyed by repository and pull request and binds all of
+these facts for its lifetime:
+
+- exact repository, PR URL, base branch, and 40-character head revision;
+- exact candidate sign-off receipt SHA-256;
+- compatibility-status versus GitHub-App mode and the protected App ID;
+- exact native owner session, revision, heartbeat, expiry, and predecessor
+  lease digest.
+
+The lifecycle is deliberately small:
+
+1. `acquire` creates custody only when no lease exists.
+2. `heartbeat` is exact-owner and compare-and-swap bound.
+3. `transfer` requires the exact owner and retains every target fact.
+4. `takeover` requires expiry plus the latest lease digest. Mailbox prose, a
+   session ID, or a stale cached lease is insufficient.
+5. `release` is exact-owner and leaves an immutable terminal receipt.
+
+Every transition is serialized under one state-root lock and writes an
+immutable digest-bound receipt. The short lease means a vanished coordinator
+delays integration only until expiry; it can no longer freeze the repository
+indefinitely. A healthy owner cannot be taken over.
+
+Before publication, the producer reloads the lease, re-reads the live PR and
+branch-protection binding, and refuses a moved head, expired or wrong-session
+lease, stale observation, or `coordination-approval-frozen` context. After
+publication it re-reads both live PR facts and the exact provider record and
+persists one publication receipt. The producer never changes branch protection
+and never merges the PR; `finish_pr.py` remains the final live-provenance and
+exact-head merge consumer.
+
+Compatibility mode remains migration-only. It accepts a status only when the
+creator is the repository owner and `target_url` is the exact PR URL. App mode
+accepts only the bound non-null App ID. The CLI publishes compatibility statuses
+only; App publication stays inside the coordinator-only credential service.
+
 ## Automated verification after setup
 
 The readiness command is read-only:

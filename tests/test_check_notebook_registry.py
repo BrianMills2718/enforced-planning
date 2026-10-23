@@ -308,10 +308,12 @@ def test_detect_workspace_root_handles_worktree_checkout(tmp_path: Path) -> None
     main_checkout = workspace / "enforced-planning"
     sibling_worktree = workspace / "enforced-planning_worktrees" / "plan-77-wave4-notebook-subtree"
     nested_worktree = main_checkout / "worktrees" / "plan-77-wave4-notebook-subtree"
+    dot_worktree = workspace / ".worktrees" / "pm-wiki-path-redirects"
 
     assert module._detect_workspace_root(main_checkout) == workspace
     assert module._detect_workspace_root(sibling_worktree) == workspace
     assert module._detect_workspace_root(nested_worktree) == workspace
+    assert module._detect_workspace_root(dot_worktree) == workspace
 
 
 def test_check_notebook_registry_cli_validates_demo_registry(tmp_path: Path) -> None:

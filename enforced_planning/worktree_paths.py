@@ -13,6 +13,9 @@ def detect_workspace_root(project_root: Path) -> Path:
         return parent.parent.parent
     if parent.name.endswith("_worktrees"):
         return parent.parent
+    # ~/code2 keeps one linked worktree per agent in <workspace>/.worktrees/<name>.
+    if parent.name == ".worktrees":
+        return parent.parent
     return resolved_project_root.parent
 
 

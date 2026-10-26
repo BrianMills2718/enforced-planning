@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,15 @@ from enforced_planning.pr_review_signoff import (
     load_review_spec,
     run_programmatic_checks,
     run_review,
+)
+
+# run_programmatic_checks confines every check with `systemd-run --user`, so the
+# tests that actually execute a check need systemd-run on PATH. It is absent from
+# minimal container images (and a container without user namespaces cannot run
+# the confinement at all), which failed these four on every fresh-clone run.
+requires_confinement = pytest.mark.skipif(
+    shutil.which("systemd-run") is None,
+    reason="systemd-run is not installed; programmatic checks run confined and cannot be executed here",
 )
 
 HEAD = "a" * 40
@@ -486,6 +496,7 @@ def test_check_payload_is_success_only_for_signed_exact_head() -> None:
     assert payload["external_id"] == receipt.receipt_sha256()
 
 
+@requires_confinement
 def test_runner_executes_checks_and_fresh_schema_bound_reviewer(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -676,6 +687,7 @@ def test_runner_refuses_dirty_worktree_before_checks_or_model(tmp_path: Path) ->
         )
 
 
+@requires_confinement
 def test_programmatic_check_cannot_mutate_frozen_worktree(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -705,6 +717,7 @@ def test_programmatic_check_cannot_mutate_frozen_worktree(tmp_path: Path) -> Non
     assert not (repo / "mutation.txt").exists()
 
 
+@requires_confinement
 def test_programmatic_check_cannot_mutate_sibling_checkout(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -731,6 +744,7 @@ def test_programmatic_check_cannot_mutate_sibling_checkout(tmp_path: Path) -> No
     assert sibling.read_text(encoding="utf-8") == "protected\n"
 
 
+@requires_confinement
 def test_programmatic_check_has_no_external_network(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

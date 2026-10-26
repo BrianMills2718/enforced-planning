@@ -10,6 +10,13 @@ from pathlib import Path
 
 import pytest
 
+# The autouse _isolate_llm_client_io_log fixture below needs llm_client.io_log.
+# llm_client is a sibling repository, not on PyPI and not in this project's dev
+# extra, so a fresh clone errors at fixture setup rather than running anything.
+pytest.importorskip(
+    "llm_client.io_log",
+    reason="llm_client sibling checkout is not installed; pip install -e ~/projects/llm_client",
+)
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 

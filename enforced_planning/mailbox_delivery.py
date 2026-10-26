@@ -332,10 +332,24 @@ def _path(path_text: str) -> Path:
 
 
 def _portable_text(value: str) -> str:
-    """Replace the current home prefix with ``~`` in durable display values."""
+    """Replace the current home prefix with ``~`` in durable display values.
 
-    home = str(Path.home())
-    return value.replace(home, "~") if home else value
+    The replacement is anchored to path-component boundaries. A bare
+    ``str.replace`` corrupted any value that merely contained the home string
+    inside a component: with ``HOME=/paperclip`` and ``TMPDIR=/tmp/paperclip-run-x``,
+    a backup written to ``/tmp/paperclip-run-x/backups/codex-config.toml`` was
+    recorded in the receipt as ``/tmp~-run-x/backups/codex-config.toml`` -- a
+    path that does not exist, leaving the rollback target unopenable.
+
+    Values here are a mix of plain paths and shell command strings, so the home
+    prefix is still matched mid-string, just only where a path could begin.
+    """
+
+    home = str(Path.home()).rstrip("/")
+    if not home:
+        return value
+    boundary = rf'(?<![^\s"\'=:,(\[]){re.escape(home)}(?=[/\s"\'),\]]|$)'
+    return re.sub(boundary, "~", value)
 
 
 def _sha256_bytes(value: bytes) -> str:

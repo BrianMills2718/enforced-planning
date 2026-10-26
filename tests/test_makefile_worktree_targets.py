@@ -155,9 +155,16 @@ def test_install_codex_runtime_delegates_to_canonical_updater() -> None:
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert (
-        f'python3 scripts/update_installed_runtime.py --revision "{revision}" '
+        f'scripts/update_installed_runtime.py --revision "{revision}" '
         "--allow-detached-replacement --write"
     ) in result.stdout
+    # The recipe runs $(PYTHON), which is .venv/bin/python when the repo has a
+    # virtualenv and python3 otherwise; assert it is a Python, not which one.
+    (invocation,) = [
+        line for line in result.stdout.splitlines() if "scripts/update_installed_runtime.py" in line
+    ]
+    interpreter = shlex.split(invocation)[0]
+    assert Path(interpreter).name.startswith("python"), invocation
     assert "git -C" not in result.stdout
 
 
@@ -356,9 +363,14 @@ TEMPLATE_PATH = PROJECT_ROOT / "templates" / "Makefile.worktree.block.template"
 
 
 def _session_start_invocation(make_output: str) -> str:
-    """Return the single session_start.py command from an expansion."""
+    """Return the single session_start.py command from an expansion.
+
+    Matched on the script, not on the interpreter: the recipes run $(PYTHON),
+    which resolves to .venv/bin/python once the repo has a virtualenv, so a
+    "starts with python" filter found nothing on any machine with a .venv.
+    """
     lines = make_output.splitlines()
-    starts = [i for i, line in enumerate(lines) if line.lstrip().startswith(("python", '"python')) and "session_start.py" in line]
+    starts = [i for i, line in enumerate(lines) if "session_start.py" in line]
     assert len(starts) == 1, f"expected exactly one session_start invocation, got {len(starts)}"
     collected = []
     for line in lines[starts[0] :]:

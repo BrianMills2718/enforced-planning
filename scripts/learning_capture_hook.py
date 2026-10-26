@@ -141,14 +141,22 @@ def read_correction_receipt(
 
 
 def _is_learning_hook_command(value: object, agent: str) -> bool:
-    """Return whether one config value invokes this hook for ``agent``."""
+    """Return whether one config value invokes this hook for ``agent``.
+
+    The interpreter is matched by basename, not by the literal ``python3``: hooks
+    default ``HOOK_PYTHON`` to ``<repo>/.venv/bin/python``, so pinning the bare
+    name here reported a correctly wired venv-based install as not live. The
+    script path resolved below is what actually identifies this hook.
+    """
     if not isinstance(value, str):
         return False
     try:
         tokens = shlex.split(value)
     except ValueError:
         return False
-    if len(tokens) != 4 or tokens[0] != "python3" or tokens[2:] != ["--agent", agent]:
+    if len(tokens) != 4 or tokens[2:] != ["--agent", agent]:
+        return False
+    if not Path(tokens[0]).name.startswith("python"):
         return False
     return Path(tokens[1]).expanduser().resolve() == SCRIPT_PATH
 

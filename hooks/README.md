@@ -113,6 +113,12 @@ Several git hooks use a `find_script()` pattern so they can work from either:
 That portability is intentional, but it does not mean every template is part of
 the canonical minimum install.
 
+Claude hooks never call a bare `python` (a Linux worker container has only
+`python3`). They run `"${HOOK_PYTHON:-python3}"`, and each hook that runs Python
+first sets `HOOK_PYTHON` to the repo's `.venv/bin/python` when it exists, because
+the hook scripts import the repo's dependencies (pydantic) that a system Python
+may lack. `tests/test_hooks_no_bare_python.py` enforces both.
+
 ## Debugging
 
 For a repo that already has the canonical minimum hook surface installed:

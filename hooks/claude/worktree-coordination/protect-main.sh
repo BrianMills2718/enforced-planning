@@ -123,13 +123,13 @@ if [[ "$FILE_PATH" =~ docs/plans/[0-9]+_.*\.md$ ]]; then
         CHECK_CLAIMS="$MAIN_REPO_ROOT/scripts/meta/check_claims.py"
         [[ ! -f "$CHECK_CLAIMS" ]] && CHECK_CLAIMS="$MAIN_REPO_ROOT/scripts/check_claims.py"
 
-        if python "$CHECK_CLAIMS" --check-plan-session "$PLAN_NUM" >/dev/null 2>&1; then
+        if "${HOOK_PYTHON:-python3}" "$CHECK_CLAIMS" --check-plan-session "$PLAN_NUM" >/dev/null 2>&1; then
             # Also update heartbeat when editing a plan
-            python "$CHECK_CLAIMS" --heartbeat --working-on "Plan #$PLAN_NUM" >/dev/null 2>&1 || true
+            "${HOOK_PYTHON:-python3}" "$CHECK_CLAIMS" --heartbeat --working-on "Plan #$PLAN_NUM" >/dev/null 2>&1 || true
             exit 0  # Session check passed - allow edit
         else
             # Get info about who owns it
-            OWNER_INFO=$(python "$CHECK_CLAIMS" --check-plan-session "$PLAN_NUM" 2>&1 || true)
+            OWNER_INFO=$("${HOOK_PYTHON:-python3}" "$CHECK_CLAIMS" --check-plan-session "$PLAN_NUM" 2>&1 || true)
             echo "BLOCKED: Plan #$PLAN_NUM is claimed by another active session" >&2
             echo "" >&2
             echo "$OWNER_INFO" >&2

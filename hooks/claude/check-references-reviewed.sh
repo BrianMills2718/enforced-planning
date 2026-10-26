@@ -70,7 +70,7 @@ else
 fi
 
 # Get references reviewed
-RESULT=$(python "$PARSE_PLAN" --plan "$PLAN_NUM" --references-reviewed --json 2>/dev/null || echo '{"error": "parse_failed"}')
+RESULT=$("${HOOK_PYTHON:-python3}" "$PARSE_PLAN" --plan "$PLAN_NUM" --references-reviewed --json 2>/dev/null || echo '{"error": "parse_failed"}')
 
 # Parse result
 REFS=$(echo "$RESULT" | jq -r '.references_reviewed // []')

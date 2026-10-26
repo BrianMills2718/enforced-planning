@@ -190,7 +190,7 @@ log_gate_decision() {
         return 0
     fi
     local -a command=(
-        python "$HOOK_LOG_SCRIPT" gate
+        "${HOOK_PYTHON:-python3}" "$HOOK_LOG_SCRIPT" gate
         --file-path "$REL_PATH"
         --tool-name "${TOOL_NAME:-unknown}"
         --decision "$decision"
@@ -277,9 +277,9 @@ fi
 CHECK_STDERR_FILE="$(mktemp)"
 set +e
 if [[ -n "$CHECK_CONFIG" ]]; then
-    RESULT="$(cd "$REPO_ROOT" && python "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" --config "$CHECK_CONFIG" 2>"$CHECK_STDERR_FILE")"
+    RESULT="$(cd "$REPO_ROOT" && "${HOOK_PYTHON:-python3}" "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" --config "$CHECK_CONFIG" 2>"$CHECK_STDERR_FILE")"
 else
-    RESULT="$(cd "$REPO_ROOT" && python "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" 2>"$CHECK_STDERR_FILE")"
+    RESULT="$(cd "$REPO_ROOT" && "${HOOK_PYTHON:-python3}" "$CHECK_SCRIPT" "$REL_PATH" --reads-file "$READS_FILE" 2>"$CHECK_STDERR_FILE")"
 fi
 CHECK_EXIT=$?
 set -e

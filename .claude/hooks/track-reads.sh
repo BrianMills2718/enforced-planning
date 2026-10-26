@@ -40,7 +40,7 @@ log_read_event() {
         return 0
     fi
     local -a command=(
-        python "$HOOK_LOG_SCRIPT" read
+        "${HOOK_PYTHON:-python3}" "$HOOK_LOG_SCRIPT" read
         --file-path "$REL_PATH"
         --reads-file "$READS_FILE"
         --reason "read observed"

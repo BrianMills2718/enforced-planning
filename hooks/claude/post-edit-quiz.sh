@@ -53,7 +53,7 @@ fi
 # Generate quiz (JSON mode for structured output)
 QUIZ_STDERR_FILE=$(mktemp)
 set +e
-RESULT=$(cd "$REPO_ROOT" && python "$QUIZ_SCRIPT" "$REL_PATH" --json 2>"$QUIZ_STDERR_FILE")
+RESULT=$(cd "$REPO_ROOT" && "${HOOK_PYTHON:-python3}" "$QUIZ_SCRIPT" "$REL_PATH" --json 2>"$QUIZ_STDERR_FILE")
 QUIZ_EXIT=$?
 set -e
 QUIZ_CRASHED=0
@@ -75,7 +75,7 @@ if [[ $QUIZ_EXIT -ne 0 ]] || [[ -z "$RESULT" ]] || [[ "$RESULT" == "[]" ]]; then
 fi
 
 # Extract just the questions as readable text
-QUIZ_TEXT=$(cd "$REPO_ROOT" && python "$QUIZ_SCRIPT" "$REL_PATH" 2>/dev/null)
+QUIZ_TEXT=$(cd "$REPO_ROOT" && "${HOOK_PYTHON:-python3}" "$QUIZ_SCRIPT" "$REL_PATH" 2>/dev/null)
 
 if [[ -z "$QUIZ_TEXT" ]]; then
     exit 0

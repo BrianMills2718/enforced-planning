@@ -25,7 +25,7 @@ is_hook_enabled() {
     # Use Python helper if available (more reliable YAML parsing)
     if [[ -f "$repo_root/scripts/meta_config.py" ]]; then
         local err status
-        { err=$(python "$repo_root/scripts/meta_config.py" --hook "$hook_name" 2>&1 1>&3); status=$?; } 3>&1
+        { err=$("${HOOK_PYTHON:-python3}" "$repo_root/scripts/meta_config.py" --hook "$hook_name" 2>&1 1>&3); status=$?; } 3>&1
         # An uncaught exception also exits 1, which reads as "disabled". A
         # crashed config reader must not switch a safety hook off unseen:
         # keep the hook on and say why.

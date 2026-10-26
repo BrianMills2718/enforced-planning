@@ -1039,3 +1039,25 @@ def test_real_hook_change_still_requires_restart(tmp_path: Path) -> None:
     assert receipt.codex_hooks_changed_at == changed_at
     assert receipt.restart_required is True
     assert [process.pid for process in receipt.stale_codex_processes] == [302]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("/paperclip/projects/x", "~/projects/x"),
+        ("/paperclip", "~"),
+        ("cmd /paperclip/bin/py --agent codex", "cmd ~/bin/py --agent codex"),
+        # The home string appearing inside another component must survive intact:
+        # with TMPDIR=/tmp/paperclip-run-x a bare str.replace recorded backups as
+        # /tmp~-run-x/..., a path that does not exist.
+        ("/tmp/paperclip-run-x/backups/codex-config.toml", "/tmp/paperclip-run-x/backups/codex-config.toml"),
+        ("/opt/paperclip/x", "/opt/paperclip/x"),
+    ],
+)
+def test_portable_text_only_collapses_whole_home_components(
+    value: str, expected: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Durable receipt paths keep their meaning when home is a short prefix."""
+
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: Path("/paperclip")))
+    assert mailbox_delivery._portable_text(value) == expected

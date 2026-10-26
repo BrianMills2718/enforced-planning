@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +14,7 @@ SCRIPT = REPO_ROOT / "scripts" / "learning_capture_hook.py"
 
 def codex_learning_config(config_path: Path, script_path: Path = SCRIPT) -> str:
     """Build an independently fingerprinted trusted Codex fixture."""
-    command = f"python3 {script_path} --agent codex"
+    command = f"{sys.executable} {script_path} --agent codex"
 
     def trusted_hash(event_name: str) -> str:
         identity = {
@@ -67,7 +68,7 @@ def run_hook(
         stop_payload["transcript_path"] = transcript_path
     return subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--agent",
             agent,
@@ -99,7 +100,7 @@ def run_prompt_hook(
 
     return subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--agent",
             agent,
@@ -237,7 +238,7 @@ def test_prompt_hook_state_failure_warns_but_does_not_block_user_turn(
     state_file.write_text("occupied", encoding="utf-8")
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--agent",
             "codex",
@@ -405,7 +406,7 @@ def test_openclaw_adapter_can_request_explicit_allow_result(tmp_path: Path) -> N
     """Non-native lifecycle adapters receive a parseable allow decision."""
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--agent",
             "openclaw",
@@ -467,7 +468,7 @@ def test_blocking_error_has_stable_code_copyable_next_step_and_verifier(tmp_path
 def test_malformed_stop_payload_fails_closed(tmp_path: Path) -> None:
     """A broken hook contract is visible and cannot silently skip the gate."""
     result = subprocess.run(
-        ["python3", str(SCRIPT), "--agent", "codex", "--state-dir", str(tmp_path)],
+        [sys.executable, str(SCRIPT), "--agent", "codex", "--state-dir", str(tmp_path)],
         input=json.dumps({"session_id": "session-123", "hook_event_name": "Stop"}),
         capture_output=True,
         text=True,
@@ -482,7 +483,7 @@ def test_malformed_stop_payload_fails_closed(tmp_path: Path) -> None:
 def test_non_object_hook_payload_fails_closed(tmp_path: Path) -> None:
     """A syntactically valid but structurally wrong payload cannot bypass the gate."""
     result = subprocess.run(
-        ["python3", str(SCRIPT), "--agent", "codex", "--state-dir", str(tmp_path)],
+        [sys.executable, str(SCRIPT), "--agent", "codex", "--state-dir", str(tmp_path)],
         input="[]",
         capture_output=True,
         text=True,
@@ -507,14 +508,14 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
                     "UserPromptSubmit": [
                         {
                             "hooks": [
-                                {"command": f"python3 {SCRIPT} --agent claude-code"},
+                                {"command": f"{sys.executable} {SCRIPT} --agent claude-code"},
                             ]
                         }
                     ],
                     "Stop": [
                         {
                             "hooks": [
-                                {"command": f"python3 {SCRIPT} --agent claude-code"},
+                                {"command": f"{sys.executable} {SCRIPT} --agent claude-code"},
                             ]
                         }
                     ]
@@ -532,7 +533,7 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
 
     live = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--check-install",
             "--codex-config",
@@ -555,7 +556,7 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     )
     modified = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--check-install",
             "--codex-config",
@@ -582,7 +583,7 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     )
     disabled = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--check-install",
             "--codex-config",
@@ -606,7 +607,7 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     claude.write_text("{}", encoding="utf-8")
     missing = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--check-install",
             "--codex-config",
@@ -628,10 +629,10 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
             {
                 "hooks": {
                     "UserPromptSubmit": [
-                        {"hooks": [{"command": f"python3 {SCRIPT} --agent claude-code"}]}
+                        {"hooks": [{"command": f"{sys.executable} {SCRIPT} --agent claude-code"}]}
                     ],
                     "Stop": [
-                        {"hooks": [{"command": f"python3 {SCRIPT} --agent claude-code"}]}
+                        {"hooks": [{"command": f"{sys.executable} {SCRIPT} --agent claude-code"}]}
                     ],
                 }
             },
@@ -641,7 +642,7 @@ def test_install_check_requires_all_coding_agent_completion_paths(tmp_path: Path
     openclaw.write_text("# ungated runner\n", encoding="utf-8")
     missing_openclaw = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--check-install",
             "--codex-config",
@@ -675,14 +676,14 @@ def test_install_check_accepts_symlink_equivalent_hook_path(tmp_path: Path) -> N
                     "UserPromptSubmit": [
                         {
                             "hooks": [
-                                {"command": f"python3 {aliased_script} --agent claude-code"},
+                                {"command": f"{sys.executable} {aliased_script} --agent claude-code"},
                             ]
                         }
                     ],
                     "Stop": [
                         {
                             "hooks": [
-                                {"command": f"python3 {aliased_script} --agent claude-code"},
+                                {"command": f"{sys.executable} {aliased_script} --agent claude-code"},
                             ]
                         }
                     ]
@@ -700,7 +701,7 @@ def test_install_check_accepts_symlink_equivalent_hook_path(tmp_path: Path) -> N
 
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
             str(SCRIPT),
             "--check-install",
             "--codex-config",

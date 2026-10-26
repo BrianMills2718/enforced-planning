@@ -928,7 +928,7 @@ def test_legacy_markdown_commands_are_fail_loud_tombstones(script_path: str) -> 
     """No supported command may continue writing or mutating the retired authority."""
 
     result = subprocess.run(
-        ["python", script_path],
+        [sys.executable, script_path],
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
@@ -967,7 +967,7 @@ def test_json_cli_runs_the_same_package_send_path(
     request_json = _send_request(idempotency_key="cli").model_dump_json()
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             script_path,
             "--root",
             str(root),
@@ -1004,7 +1004,7 @@ def test_native_cli_message_lifecycle_survives_write_claim_completion(
     codex_env = {**os.environ, "CODEX_THREAD_ID": "thread-123"}
     sent = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_messages.py",
             "--root",
             str(root),
@@ -1029,7 +1029,7 @@ def test_native_cli_message_lifecycle_survives_write_claim_completion(
     claude_env.pop("CLAUDE_CODE_SESSION_ID", None)
     polled = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_messages.py",
             "--root",
             str(root),
@@ -1053,7 +1053,7 @@ def test_native_cli_message_lifecycle_survives_write_claim_completion(
 
     acknowledged = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_messages.py",
             "--root",
             str(root),
@@ -1088,7 +1088,7 @@ def test_native_cli_rejects_unclaimed_sender_when_ambient_session_differs(
         path.unlink()
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_messages.py",
             "--root",
             str(root),
@@ -1120,7 +1120,7 @@ def test_agent_inbox_cli_injects_notice_and_observation_evidence(
     persisted = store.send(_send_request(idempotency_key="notice"))
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_inbox.py",
             "--agent",
             "claude-code",
@@ -1174,7 +1174,7 @@ def test_sender_lifecycle_hook_surfaces_acknowledgement_once_without_reply_loop(
         )
     )
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
             "--mailbox-only",
         "--claims-dir",
@@ -1248,7 +1248,7 @@ def test_codex_lifecycle_hook_observes_repeats_until_ack_then_hides(
         }
     )
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--claims-dir",
         str(claims_dir),
@@ -1346,7 +1346,7 @@ def test_mailbox_obligation_gate_blocks_mutation_allows_exact_ack_then_passes(
         _send_request(sender=sender, recipient=recipient, idempotency_key="mutation-gate")
     )
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--agent",
         agent,
@@ -1534,7 +1534,7 @@ def test_mailbox_obligation_gate_blocks_stop_until_acknowledged(
         _send_request(sender=sender, recipient=recipient, idempotency_key="stop-gate")
     )
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--agent",
         agent,
@@ -1615,7 +1615,7 @@ def test_claude_stop_gate_uses_native_last_message_when_event_id_is_absent(
     )
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--agent",
             "claude-code",
@@ -1653,7 +1653,7 @@ def test_codex_lifecycle_hook_workspace_root_without_claim_or_message_is_silent(
     for claim_path in claims_dir.glob("*.yaml"):
         claim_path.unlink()
     result = subprocess.run(
-        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        [sys.executable, "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
         input=json.dumps({"session_id": "thread-123", "cwd": str(tmp_path), "hook_event_name": "UserPromptSubmit", "event_id": "workspace-root-no-claim"}),
         cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=False,
     )
@@ -1671,7 +1671,7 @@ def test_codex_lifecycle_hook_workspace_root_heartbeats_one_claim_and_delivers(
     claim_path = claims_dir / "codex_enforced-planning_sender-lane.yaml"
     before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     result = subprocess.run(
-        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        [sys.executable, "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
         input=json.dumps({"session_id": "thread-123", "cwd": str(tmp_path), "hook_event_name": "UserPromptSubmit", "event_id": "workspace-root-one-claim"}),
         cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=False,
     )
@@ -1689,7 +1689,7 @@ def test_codex_lifecycle_hook_workspace_root_heartbeats_multiple_claims_and_poll
     _write_claim(claims_dir, agent="codex", project="project-meta", scope="second-lane", session_id=CODEX_SESSION)
     persisted = store.send(_send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, project="project-meta", idempotency_key="workspace-multiple"))
     result = subprocess.run(
-        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        [sys.executable, "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
         input=json.dumps({"session_id": "thread-123", "cwd": str(tmp_path), "hook_event_name": "UserPromptSubmit", "event_id": "workspace-root-multiple-claims"}),
         cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=False,
     )
@@ -1711,7 +1711,7 @@ def test_codex_lifecycle_hook_workspace_root_delivers_closed_lane_message(
         claim["status"] = "completed"
         claim_path.write_text(yaml.safe_dump(claim, sort_keys=False), encoding="utf-8")
     result = subprocess.run(
-        ["python", "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
+        [sys.executable, "scripts/coordination_hook.py", "--claims-dir", str(claims_dir), "--root", str(root)],
         input=json.dumps({"session_id": "thread-123", "cwd": str(tmp_path), "hook_event_name": "UserPromptSubmit", "event_id": "workspace-root-closed-lane"}),
         cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=False,
     )
@@ -1729,7 +1729,7 @@ def test_claude_lifecycle_adapter_is_duplicate_safe_with_repository_project_over
         _send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-hook")
     )
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--agent",
         "claude-code",
@@ -1799,7 +1799,7 @@ def test_claude_prompt_lifecycle_uses_native_prompt_id_for_duplicate_safety(
         _send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-prompt-id")
     )
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--agent",
         "claude-code",
@@ -1861,7 +1861,7 @@ def test_non_sessionstart_lifecycle_adapter_missing_event_identity_does_not_obse
     persisted = store.send(_send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="no-event"))
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--mailbox-only",
             "--claims-dir",
@@ -1897,7 +1897,7 @@ def test_stop_gate_mailbox_failure_warns_without_fabricating_a_block_receipt(
     )
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--claims-dir",
             str(claims_dir),
@@ -1932,7 +1932,7 @@ def test_claude_session_start_without_event_identity_uses_bounded_duplicate_key(
     store, claims_dir, root = mailbox
     persisted = store.send(_send_request(sender=CODEX_SESSION, recipient=CLAUDE_SESSION, idempotency_key="claude-start"))
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--agent",
         "claude-code",
@@ -1968,7 +1968,7 @@ def test_codex_session_start_without_event_identity_uses_bounded_duplicate_key(
     store, claims_dir, root = mailbox
     persisted = store.send(_send_request(sender=CLAUDE_SESSION, recipient=CODEX_SESSION, idempotency_key="codex-start"))
     command = [
-        "python",
+        sys.executable,
         "scripts/coordination_hook.py",
         "--claims-dir",
         str(claims_dir),
@@ -2004,7 +2004,7 @@ def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
     before = yaml.safe_load(claim_path.read_text(encoding="utf-8"))
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--claims-dir",
             str(claims_dir),
@@ -2051,7 +2051,7 @@ def test_codex_lifecycle_hook_polls_after_write_claim_completion(
 
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--mailbox-only",
             "--claims-dir",
@@ -2095,7 +2095,7 @@ def test_codex_lifecycle_hook_rejects_malformed_input_without_receipt(
     )
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--claims-dir",
             str(claims_dir),
@@ -2161,7 +2161,7 @@ def _run_repository_closeout_hook(
         payload.update({"tool_name": "Bash", "tool_input": {"command": "true"}})
     return subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/coordination_hook.py",
             "--claims-dir",
             str(claims_dir),

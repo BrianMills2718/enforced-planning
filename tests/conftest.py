@@ -23,3 +23,11 @@ if (_bin / "python3").exists():
     _path = os.environ.get("PATH", "")
     if str(_bin) not in _path.split(os.pathsep):
         os.environ["PATH"] = os.pathsep.join([str(_bin), _path]) if _path else str(_bin)
+
+# coordination_hook caps turn-end projection repair at 1.5s so an interactive
+# hook stays snappy. The repair is a fresh CPython subprocess, and `make test`
+# runs 8 xdist workers, so under that contention startup alone can exhaust the
+# deadline: tests driving a real repair went red in roughly one full run in
+# three, in whichever file happened to catch the load. The suite gets headroom;
+# the shipped default is unchanged.
+os.environ.setdefault("COORDINATION_TURN_END_REPAIR_TIMEOUT_SECONDS", "15")

@@ -255,7 +255,12 @@ class TestVerifyCouplingFunction:
         mock_complete = MagicMock()
         mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
 
-        with patch("verify_coupling._load_llm_client", return_value=mock_complete):
+        # _default_model() imports llm_client.core.models, so patching only the
+        # call path still reached the sibling package these tests mean to avoid.
+        with (
+            patch("verify_coupling._load_llm_client", return_value=mock_complete),
+            patch("verify_coupling._default_model", return_value="test-model"),
+        ):
             verify_coupling(self._make_request(), max_budget=0.05)
 
         called_kwargs = mock_complete.call_args.kwargs
@@ -274,7 +279,12 @@ class TestVerifyCouplingFunction:
         mock_complete = MagicMock()
         mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
 
-        with patch("verify_coupling._load_llm_client", return_value=mock_complete):
+        # _default_model() imports llm_client.core.models, so patching only the
+        # call path still reached the sibling package these tests mean to avoid.
+        with (
+            patch("verify_coupling._load_llm_client", return_value=mock_complete),
+            patch("verify_coupling._default_model", return_value="test-model"),
+        ):
             verify_coupling(self._make_request())
 
         called_kwargs = mock_complete.call_args.kwargs
@@ -293,7 +303,12 @@ class TestVerifyCouplingFunction:
         mock_complete = MagicMock()
         mock_complete.return_value = (VerificationJudgment.model_validate(judgment_data), MagicMock())
 
-        with patch("verify_coupling._load_llm_client", return_value=mock_complete):
+        # _default_model() imports llm_client.core.models, so patching only the
+        # call path still reached the sibling package these tests mean to avoid.
+        with (
+            patch("verify_coupling._load_llm_client", return_value=mock_complete),
+            patch("verify_coupling._default_model", return_value="test-model"),
+        ):
             result = verify_coupling(self._make_request())
 
         assert isinstance(result, VerificationJudgment)

@@ -186,12 +186,18 @@ def _process_start_token(pid: int) -> str | None:
             return f"proc:{fields_after_command[19]}"
     except OSError:
         pass
-    result = subprocess.run(
-        ["ps", "-p", str(pid), "-o", "lstart="],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "lstart="],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        # ps is a fallback for a pid /proc could not answer for, and it is absent
+        # from minimal container images. "No start token" is the same answer ps
+        # gives for a pid that has exited, so degrade instead of raising.
+        return None
     token = " ".join(result.stdout.split())
     return f"ps:{token}" if token else None
 

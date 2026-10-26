@@ -21,7 +21,17 @@ from enforced_planning.correction_learning import (
     extract_transcript_exchanges,
     load_native_corpus_exchanges,
 )
-from scripts import correction_learning_audit
+
+# scripts.correction_learning_audit imports llm_client at module scope.
+# llm_client is a sibling repository, not on PyPI and not in this project's dev
+# extra, so a fresh clone cannot import it and the whole module failed to
+# collect. Install it (pip install -e ~/projects/llm_client) to run these.
+pytest.importorskip(
+    "llm_client",
+    reason="llm_client sibling checkout is not installed; pip install -e ~/projects/llm_client",
+)
+
+from scripts import correction_learning_audit  # noqa: E402
 
 
 def _exchange(event_id: str, *, at: str = "2026-09-11T18:00:00Z") -> TranscriptExchange:

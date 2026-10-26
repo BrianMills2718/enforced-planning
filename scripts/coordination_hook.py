@@ -78,7 +78,14 @@ REPOSITORY_SCAN_MAX_WORKERS = 16
 # The worker loads registry/projection code only; unrelated mailbox/completion
 # imports previously consumed the deadline even after repair had completed.
 # Healthy projections never spawn a worker or acquire the registry lock.
-TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = 1.5
+# The budget is an interactive-latency decision, so 1.5s stays the default for
+# real hook use. It is overridable because the repair is a fresh CPython
+# subprocess: `make test` runs 8 xdist workers, and under that contention
+# interpreter startup alone can eat the deadline, which made every test driving
+# a real repair intermittently red. Only the test suite sets this.
+TURN_END_PROJECTION_REPAIR_TIMEOUT_SECONDS = float(
+    os.environ.get("COORDINATION_TURN_END_REPAIR_TIMEOUT_SECONDS") or 1.5
+)
 STARTUP_PROJECTION_READ_LOCK_TIMEOUT_SECONDS = 1.0
 STARTUP_PROJECTION_READ_LOCK_POLL_SECONDS = 0.01
 

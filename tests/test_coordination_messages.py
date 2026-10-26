@@ -1644,6 +1644,7 @@ def test_claude_stop_gate_uses_native_last_message_when_event_id_is_absent(
     assert store.boundary_blocks(persisted.message.message_id)[0].hook_event_name == "Stop"
 
 
+@pytest.mark.xdist_group("codex_lifecycle_turn_end")
 def test_codex_lifecycle_hook_workspace_root_without_claim_or_message_is_silent(
     mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
 ) -> None:
@@ -1661,6 +1662,7 @@ def test_codex_lifecycle_hook_workspace_root_without_claim_or_message_is_silent(
     assert result.stdout == ""
 
 
+@pytest.mark.xdist_group("codex_lifecycle_turn_end")
 def test_codex_lifecycle_hook_workspace_root_heartbeats_one_claim_and_delivers(
     mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
 ) -> None:
@@ -1680,6 +1682,7 @@ def test_codex_lifecycle_hook_workspace_root_heartbeats_one_claim_and_delivers(
     assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["heartbeat_at"] != before["heartbeat_at"]
 
 
+@pytest.mark.xdist_group("codex_lifecycle_turn_end")
 def test_codex_lifecycle_hook_workspace_root_heartbeats_multiple_claims_and_polls_all_projects(
     mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
 ) -> None:
@@ -1699,6 +1702,7 @@ def test_codex_lifecycle_hook_workspace_root_heartbeats_multiple_claims_and_poll
         assert yaml.safe_load(claim_path.read_text(encoding="utf-8"))["heartbeat_at"] != NOW.isoformat()
 
 
+@pytest.mark.xdist_group("codex_lifecycle_turn_end")
 def test_codex_lifecycle_hook_workspace_root_delivers_closed_lane_message(
     mailbox: tuple[CoordinationMessageStore, Path, Path], tmp_path: Path
 ) -> None:
@@ -1994,6 +1998,7 @@ def test_codex_session_start_without_event_identity_uses_bounded_duplicate_key(
     assert [receipt.event for receipt in status.receipts] == ["observed"]
 
 
+@pytest.mark.xdist_group("codex_lifecycle_turn_end")
 def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:
@@ -2031,6 +2036,7 @@ def test_codex_lifecycle_hook_does_not_adopt_a_different_session_claim(
     assert after["heartbeat_at"] == before["heartbeat_at"]
 
 
+@pytest.mark.xdist_group("codex_lifecycle_turn_end")
 def test_codex_lifecycle_hook_polls_after_write_claim_completion(
     mailbox: tuple[CoordinationMessageStore, Path, Path],
 ) -> None:

@@ -22,16 +22,21 @@ install-codex-runtime:  ## Install an exact pushed revision into the clean detac
 # Keep recursive Make entrypoints' machine-readable replies free of directory banners.
 test test-quick: export MAKEFLAGS += --no-print-directory
 
+# Worker count for the suite. The serial suite took about an hour on a busy laptop,
+# mostly waiting on subprocesses; PYTEST_WORKERS=0 runs serially. --dist loadgroup
+# lets a test that must not share a worker carry @pytest.mark.xdist_group.
+PYTEST_WORKERS ?= 8
+
 test:  ## Run full test suite
-	python -m pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v -n $(PYTEST_WORKERS) --dist loadgroup
 
 test-quick:  ## Run tests with minimal output
-	python -m pytest tests/ -q
+	$(PYTHON) -m pytest tests/ -q -n $(PYTEST_WORKERS) --dist loadgroup
 
 check: lint test-quick  ## Run lint + tests
 
 lint:  ## Run ruff linter
-	ruff check scripts/ tests/ --ignore=F401
+	$(PYTHON) -m ruff check scripts/ tests/ --ignore=F401
 
 dead-code:  ## Run dead code detection
 	$(PYTHON) scripts/check_dead_code.py

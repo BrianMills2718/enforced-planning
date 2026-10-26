@@ -8,6 +8,13 @@
 
 set -euo pipefail
 
+# Hook scripts import the repo's dependencies (pydantic), so prefer its venv over python3.
+if [[ -z "${HOOK_PYTHON:-}" ]]; then
+    _hook_venv="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)/.venv/bin/python"
+    if [[ -x "$_hook_venv" ]]; then HOOK_PYTHON="$_hook_venv"; fi
+fi
+
+
 resolve_repo_root() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,7 +47,7 @@ log_read_event() {
         return 0
     fi
     local -a command=(
-        python "$HOOK_LOG_SCRIPT" read
+        "${HOOK_PYTHON:-python3}" "$HOOK_LOG_SCRIPT" read
         --file-path "$REL_PATH"
         --reads-file "$READS_FILE"
         --reason "read observed"

@@ -10,6 +10,12 @@
 # Or check directly:
 #   ./check-hook-enabled.sh protect_main  # exits 0 if enabled
 
+# Hook scripts import the repo's dependencies (pydantic), so prefer its venv over python3.
+if [[ -z "${HOOK_PYTHON:-}" ]]; then
+    _hook_venv="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)/.venv/bin/python"
+    if [[ -x "$_hook_venv" ]]; then HOOK_PYTHON="$_hook_venv"; fi
+fi
+
 # Get repo root
 get_repo_root() {
     git rev-parse --show-toplevel 2>/dev/null || dirname "$(dirname "$(dirname "$0")")"
@@ -25,7 +31,7 @@ is_hook_enabled() {
     # Use Python helper if available (more reliable YAML parsing)
     if [[ -f "$repo_root/scripts/meta_config.py" ]]; then
         local err status
-        { err=$(python "$repo_root/scripts/meta_config.py" --hook "$hook_name" 2>&1 1>&3); status=$?; } 3>&1
+        { err=$("${HOOK_PYTHON:-python3}" "$repo_root/scripts/meta_config.py" --hook "$hook_name" 2>&1 1>&3); status=$?; } 3>&1
         # An uncaught exception also exits 1, which reads as "disabled". A
         # crashed config reader must not switch a safety hook off unseen:
         # keep the hook on and say why.

@@ -11,6 +11,12 @@
 
 # set -e  # Disabled: causes silent exits on non-zero returns
 
+# Hook scripts import the repo's dependencies (pydantic), so prefer its venv over python3.
+if [[ -z "${HOOK_PYTHON:-}" ]]; then
+    _hook_venv="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)/.venv/bin/python"
+    if [[ -x "$_hook_venv" ]]; then HOOK_PYTHON="$_hook_venv"; fi
+fi
+
 # Debug mode (set DEBUG=1 to enable)
 debug() {
     if [[ -n "$DEBUG" ]]; then
@@ -115,7 +121,7 @@ debug "SCRIPT_PATH=$SCRIPT_PATH"
 # Note: parse_plan.py returns exit 0 if in scope, exit 2 if not in scope, exit 1 on error
 # We capture stdout regardless of exit code, then check for JSON validity
 debug "Running: python $SCRIPT_PATH --plan $PLAN_NUM --check-file $WORKTREE_PATH --json"
-RESULT=$(python "$SCRIPT_PATH" --plan "$PLAN_NUM" --check-file "$WORKTREE_PATH" --json 2>/dev/null)
+RESULT=$("${HOOK_PYTHON:-python3}" "$SCRIPT_PATH" --plan "$PLAN_NUM" --check-file "$WORKTREE_PATH" --json 2>/dev/null)
 EXIT_CODE=$?
 debug "Parse script exit code: $EXIT_CODE"
 

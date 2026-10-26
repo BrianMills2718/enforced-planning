@@ -14,6 +14,13 @@
 # Bypass: SKIP_READ_GATE=1 in environment.
 
 set -euo pipefail
+
+# Hook scripts import the repo's dependencies (pydantic), so prefer its venv over python3.
+if [[ -z "${HOOK_PYTHON:-}" ]]; then
+    _hook_venv="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)/.venv/bin/python"
+    if [[ -x "$_hook_venv" ]]; then HOOK_PYTHON="$_hook_venv"; fi
+fi
+
 extract_section_items() {
     local text="$1"
     local section_label="$2"

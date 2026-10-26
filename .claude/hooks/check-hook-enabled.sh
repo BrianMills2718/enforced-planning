@@ -10,6 +10,12 @@
 # Or check directly:
 #   ./check-hook-enabled.sh protect_main  # exits 0 if enabled
 
+# Hook scripts import the repo's dependencies (pydantic), so prefer its venv over python3.
+if [[ -z "${HOOK_PYTHON:-}" ]]; then
+    _hook_venv="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel 2>/dev/null || true)/.venv/bin/python"
+    if [[ -x "$_hook_venv" ]]; then HOOK_PYTHON="$_hook_venv"; fi
+fi
+
 # Get repo root
 get_repo_root() {
     git rev-parse --show-toplevel 2>/dev/null || dirname "$(dirname "$(dirname "$0")")"

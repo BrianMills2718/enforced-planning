@@ -45,6 +45,9 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
+from enforced_planning import claim_bootstrap
+from enforced_planning.repository_authority import RepositoryAuthorityError
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLAIMS_DIR = Path.home() / ".claude" / "coordination" / "claims"
@@ -85,6 +88,32 @@ def _origin_reachable() -> bool:
     return result.returncode == 0
 
 
+def _maintenance_worktree_authority_granted() -> bool:
+    """Would the installed provider grant *this* checkout a maintenance worktree?
+
+    ``make maintenance-worktree`` is fail-closed behind the repository-authority
+    provider installed at ``~/.config/enforced-planning/repository-authority-provider-v1.json``
+    (``enforced_planning/repository_authority.py``). That provider only matches a
+    checkout whose path the host's Project Graph records, or one under the
+    agent-workspace root; a clone at any other path is denied with ``no unique
+    active Project Graph repository record matches the request``. The nightly
+    fresh-clone check clones into ``/tmp/nightly-checks/<repo>``, which is neither,
+    so the entrypoint this test exercises cannot run there at all -- the lane this
+    test would create is never admitted, and the failure says nothing about the
+    code under test. Probe with the same helper the entrypoint itself uses; the
+    call only asks the provider for a decision and creates no lane, branch, or
+    claim.
+    """
+    try:
+        claim_bootstrap._repository_authority(
+            _canonical_repo_root(PROJECT_ROOT).resolve(),
+            branch="probe-maintenance-worktree-authority",
+        )
+    except (claim_bootstrap.ClaimBootstrapError, RepositoryAuthorityError, OSError):
+        return False
+    return True
+
+
 def _run_make(target: str, branch: str, thread_id: str, **make_vars: str) -> subprocess.CompletedProcess[str]:
     args = ["make", target, f"BRANCH={branch}", *(f"{key}={value}" for key, value in make_vars.items())]
     env = dict(os.environ)
@@ -114,6 +143,15 @@ def _branch_exists(branch: str, *, cwd: Path) -> bool:
 
 
 @pytest.mark.skipif(not _origin_reachable(), reason="origin remote is not reachable from this environment")
+@pytest.mark.skipif(
+    not _maintenance_worktree_authority_granted(),
+    reason=(
+        "the installed repository-authority provider grants no maintenance-worktree "
+        "authority for this checkout path: the host Project Graph records no active "
+        "repository at it and it is not under the agent-workspace root, so "
+        "`make maintenance-worktree` is denied before any lane exists"
+    ),
+)
 def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> None:
     """The two sanctioned entrypoints must really create and really clean up a lane."""
     branch = f"test-e2e-sanctioned-{uuid.uuid4().hex[:10]}"
@@ -133,8 +171,10 @@ def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> N
         SESSION_PHASE="probe",
         SESSION_WRITE_PATHS="README.md",
     )
+    lane_created = False
     try:
         assert create.returncode == 0, create.stdout + create.stderr
+        lane_created = True
         payload = json.loads(create.stdout)
         assert payload.get("ok") is True, payload
         assert worktree_dir.is_dir(), (
@@ -158,14 +198,23 @@ def test_maintenance_worktree_and_session_close_real_subprocess_roundtrip() -> N
             WORKTREE_DISPOSITION="merged",
             SESSION_NOTE="pytest e2e probe cleanup",
         )
-        assert close.returncode == 0, close.stdout + close.stderr
-        assert "NOT CHECKED" not in close.stdout
-        assert _lane_path_released(worktree_dir), f"make session-close reported ok but {worktree_dir} still exists"
-        assert not _branch_exists(branch, cwd=canonical_root), (
-            "make session-close reported ok but branch still exists"
-        )
-        remaining_claims = list(CLAIMS_DIR.glob(f"*{branch}*"))
-        assert not remaining_claims, f"claim file(s) not released: {remaining_claims}"
+        # Always attempt the close so any partial state is swept, but only judge
+        # it when a lane was actually admitted. Closing a lane that was never
+        # created cannot succeed, and asserting on it replaces the admission
+        # error that actually matters -- which is what happened in the
+        # 2026-10-27 nightly, where a reported "Claim file missing" from this
+        # block hid the `claim_bootstrap_denied` that failed the create.
+        if lane_created:
+            assert close.returncode == 0, close.stdout + close.stderr
+            assert "NOT CHECKED" not in close.stdout
+            assert _lane_path_released(worktree_dir), (
+                f"make session-close reported ok but {worktree_dir} still exists"
+            )
+            assert not _branch_exists(branch, cwd=canonical_root), (
+                "make session-close reported ok but branch still exists"
+            )
+            remaining_claims = list(CLAIMS_DIR.glob(f"*{branch}*"))
+            assert not remaining_claims, f"claim file(s) not released: {remaining_claims}"
 
 
 def _lane_path_released(path) -> bool:

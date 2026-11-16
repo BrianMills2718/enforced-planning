@@ -10,7 +10,13 @@ def detect_workspace_root(project_root: Path) -> Path:
     resolved_project_root = project_root.resolve()
     parent = resolved_project_root.parent
     if parent.name == "worktrees":
-        return parent.parent.parent
+        # <workspace>/<repo>/worktrees/<name>: the folder above ``worktrees`` is a
+        # repository, so the workspace is one level further up.
+        if (parent.parent / ".git").exists():
+            return parent.parent.parent
+        # <workspace>/worktrees/<name>: the shared flat folder where ~/code2 keeps
+        # every repository's lanes; ``worktrees`` sits directly in the workspace.
+        return parent.parent
     if parent.name.endswith("_worktrees"):
         return parent.parent
     # ~/code2 keeps one linked worktree per agent in <workspace>/.worktrees/<name>.

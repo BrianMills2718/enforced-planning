@@ -306,6 +306,9 @@ def test_detect_workspace_root_handles_worktree_checkout(tmp_path: Path) -> None
     workspace = tmp_path.resolve() / "projects"
 
     main_checkout = workspace / "enforced-planning"
+    # A repo-owned worktrees/ folder is told apart from the shared workspace-level
+    # worktrees/ folder by the repository above it, so the repository must exist.
+    (main_checkout / ".git").mkdir(parents=True)
     sibling_worktree = workspace / "enforced-planning_worktrees" / "plan-77-wave4-notebook-subtree"
     nested_worktree = main_checkout / "worktrees" / "plan-77-wave4-notebook-subtree"
     dot_worktree = workspace / ".worktrees" / "pm-wiki-path-redirects"

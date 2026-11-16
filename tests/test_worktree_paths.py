@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from enforced_planning.worktree_paths import resolve_canonical_repo_root
+from enforced_planning.worktree_paths import detect_workspace_root, resolve_canonical_repo_root
 
 
 def _init_repo(path: Path) -> None:
@@ -141,3 +141,26 @@ def test_gitfile_pointing_at_missing_common_dir_is_ignored(tmp_path: Path) -> No
     )
 
     assert resolve_canonical_repo_root(worktree) == worktree.resolve()
+
+
+def test_detect_workspace_root_for_shared_flat_worktrees_folder(tmp_path: Path) -> None:
+    """~/code2/worktrees/<lane> belongs to the workspace, not to a repo named worktrees.
+
+    Every lane in the shared folder resolved to the workspace's parent, so a
+    notebook registry check run from a lane looked for its notebooks one level
+    too high and failed.
+    """
+    lane = tmp_path / "workspace" / "worktrees" / "some-lane"
+    lane.mkdir(parents=True)
+
+    assert detect_workspace_root(lane) == (tmp_path / "workspace").resolve()
+
+
+def test_detect_workspace_root_for_repo_owned_worktrees_folder(tmp_path: Path) -> None:
+    """<workspace>/<repo>/worktrees/<lane> still resolves to the workspace."""
+    repo = tmp_path / "workspace" / "sample"
+    _init_repo(repo)
+    lane = repo / "worktrees" / "some-lane"
+    lane.mkdir(parents=True)
+
+    assert detect_workspace_root(lane) == (tmp_path / "workspace").resolve()

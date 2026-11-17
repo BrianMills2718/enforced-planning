@@ -645,9 +645,10 @@ registry -- see the fix's own docstring and regression tests in
      `other_session_id`) in the finding and can message the owner directly
      instead of treating them as unreachable.
 4. Execute, commit verified slices, and keep docs/trackers truthful.
-5. Push from the checked-out claimed branch. The installed `pre-push` hook runs
-   the canonical deterministic push check automatically. Use `make push-check`
-   directly when diagnosing a blocked push.
+5. Push from the checked-out branch. The installed `pre-push` hook runs only the
+   global secret scan (gitleaks) and never checks coordination claims; claims
+   were retired (Brian, 2026-11-05). `make push-check` is a separate, manual
+   tool and is not run by the hook.
 6. Merge/push from the safe root-anchored control session. Keep the source
    claim live until the default-branch integration is pushed. The push gate
    permits that overlap only for the exact native session when the claimed
@@ -1015,7 +1016,6 @@ guard was individually correct:
 |---|---|
 | `session-resume` | `Cannot resume a lane with no plan_ref` |
 | a fresh claim on the same scope | the existing `session_ended` claim is not overwritable |
-| `git push` (to create merge evidence) | `missing_branch_claim` -- no live claim on the branch |
 | `session-close --reconcile-session-ended` | wants the merge evidence the push would have produced |
 
 Recorded 2026-08-25 as `lrn-20260825T051949695806Z-29b10f7045`, then

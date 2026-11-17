@@ -1,0 +1,5 @@
+specification { element component }
+model {
+ paths = component 'Worktree path helpers' { metadata { python 'enforced_planning.worktree_paths' } }
+}
+views { view index { include * } }

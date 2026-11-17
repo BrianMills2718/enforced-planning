@@ -13,3 +13,7 @@ worktrees/
 !.company-planning/active-execution.json
 !.company-planning/history/
 !.company-planning/history/*.json
+
+.venv/
+.code2check/
+.import_linter_cache/

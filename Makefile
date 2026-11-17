@@ -1,6 +1,7 @@
 ## enforced-planning — framework for enforced planning, context gating, doc-code alignment
 
-.PHONY: help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json install-codex-runtime
+unexport GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
+.PHONY: full fast docs-specs help test test-quick check lint dead-code dead-code-audit dead-code-validate push-check infer check-deps check-caps apparatus-ratio migrate-rels verify-couplings review-surfaces promote plan-registry ecosystem-status docstring-wiki docstring-wiki-check test-relationships status reachability reachability-check reachability-baseline repo-stats fleet-drift fleet-drift-json install-codex-runtime
 
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PROJECT_STATUS_PYTHON ?= $(PYTHON)
@@ -33,7 +34,20 @@ test:  ## Run full test suite
 test-quick:  ## Run tests with minimal output
 	$(PYTHON) -m pytest tests/ -q -n $(PYTEST_WORKERS) --dist loadgroup
 
-check: lint test-quick  ## Run lint + tests
+full: lint test-quick  ## Run lint + the full suite (slow)
+
+fast:  ## Lockstep checks on the scoped capability
+	uv run lockstep check trace
+	uv run lockstep check sources
+	uv run lockstep check project --check
+
+docs-specs:  ## Link the OpenSpec contract into docs/
+	@mkdir -p docs/specs/canonical-repo-resolution
+	@ln -sfn ../../../openspec/specs/canonical-repo-resolution/spec.md docs/specs/canonical-repo-resolution/spec.md
+
+check: docs-specs fast lint  ## Fast check: lockstep (check project) + lint + scoped tests
+	uv run pytest tests/test_worktree_paths.py -q -p no:cacheprovider
+	uv run lockstep check arch check
 
 lint:  ## Run ruff linter
 	$(PYTHON) -m ruff check scripts/ tests/ --ignore=F401

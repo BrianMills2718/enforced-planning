@@ -1,0 +1,1 @@
+../../../openspec/specs/canonical-repo-resolution/spec.md

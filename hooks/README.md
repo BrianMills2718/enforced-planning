@@ -36,7 +36,7 @@ deterministic branch-publication gate:
 | `.codex/hooks/prewrite-claim-gate.sh` | Check Codex apply-patch calls against exact live claim ownership when opted in |
 | `.claude/hooks/track-reads.sh` | Record document reads for gating |
 | `.claude/settings.json` | Wires the `Read` and `Edit|Write` hook commands |
-| `hooks/pre-push` | Requires a healthy canonical claim before a checked-out branch can be pushed |
+| `hooks/pre-push` | Runs the global secret scan on the pushed refs; does not check coordination claims |
 
 The installer configures `core.hooksPath=hooks` when it is unset. It refuses to
 replace a different custom hook path. The broader raw git-hook stack and larger
@@ -69,7 +69,7 @@ The source repo includes these git hook templates:
 | `pre-commit` | Run staged validation checks and refuse tracked one-commit acknowledgement state |
 | `commit-msg` | Enforce commit prefix conventions |
 | `post-commit` | Remove untracked one-commit coupling acknowledgements and advise about unpushed commits |
-| `pre-push` | Fail-closed canonical claim/session validation for branch pushes |
+| `pre-push` | Runs the global secret scan on pushed refs; refuses the push on a finding. No claim check (claims retired 2026-11-05) |
 
 These remain reference/legacy rollout assets until the broader hook-distribution
 story is fully converged.

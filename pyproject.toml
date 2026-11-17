@@ -8,6 +8,15 @@ dependencies = ["PyYAML>=6.0", "pydantic>=2.11,<3"]
 [project.optional-dependencies]
 dev = ["pytest", "pytest-xdist", "ruff", "mypy", "vulture"]
 
+[dependency-groups]
+dev = ["agentic-engineering-system", "pytest>=9.1", "import-linter>=2.15", "ruff", "pytest-xdist"]
+
+[tool.uv.sources]
+agentic-engineering-system = { git = "https://github.com/BrianMills2718/agentic-engineering-system-canonical", rev = "05ee80c1a9cc77f692954b6de09a81ab0d9bdb0a" }
+
+[tool.lockstep]
+source = ["enforced_planning"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"

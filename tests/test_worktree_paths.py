@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from enforced_planning.worktree_paths import detect_workspace_root, resolve_canonical_repo_root
 
 
@@ -63,6 +65,7 @@ def test_does_not_rewrite_claude_dir_without_owning_repo(tmp_path: Path) -> None
 # its .git gitfile, not to itself.
 
 
+@pytest.mark.req("canonical-repo-resolution/linked-worktree-outside-the-repository-folder", existing=True)
 def test_resolves_real_external_linked_worktree_through_gitfile(tmp_path: Path) -> None:
     repo = tmp_path / "code" / "sample"
     _init_repo(repo)
@@ -114,6 +117,7 @@ def test_resolves_relative_gitdir(tmp_path: Path) -> None:
     assert resolve_canonical_repo_root(worktree) == canonical.resolve()
 
 
+@pytest.mark.req("canonical-repo-resolution/main-checkout", existing=True)
 def test_keeps_main_checkout_with_git_directory(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
@@ -121,6 +125,7 @@ def test_keeps_main_checkout_with_git_directory(tmp_path: Path) -> None:
     assert resolve_canonical_repo_root(repo) == repo.resolve()
 
 
+@pytest.mark.req("canonical-repo-resolution/submodule-gitfile", existing=True)
 def test_submodule_gitfile_is_not_resolved_to_superproject(tmp_path: Path) -> None:
     superproject = tmp_path / "super"
     modules_dir = superproject / ".git" / "modules" / "child"

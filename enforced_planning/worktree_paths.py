@@ -79,6 +79,14 @@ def resolve_canonical_repo_root(repo_root: Path) -> Path:
     Git's own linked-worktree pointer (the ``.git`` gitfile) wins when present;
     directory naming conventions are the fallback for paths that are already
     gone (idempotent closeout) or were never git checkouts.
+
+    Implements: canonical-repo-resolution/canonical-repository-root
+
+    Requirement text (generated):
+        canonical-repo-resolution/canonical-repository-root: The path helper SHALL resolve a linked
+            worktree to the main checkout named by its `.git` gitfile, SHALL fall back to directory
+            naming conventions only when no usable gitfile exists, and SHALL return a path that is
+            not a linked worktree unchanged.
     """
     resolved_repo_root = repo_root.resolve()
     from_gitfile = _canonical_root_from_gitfile(resolved_repo_root)

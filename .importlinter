@@ -1,0 +1,5 @@
+# Generated from docs/architecture/*.c4 by `lockstep check arch gen`. Do not edit by hand.
+
+[importlinter]
+root_packages =
+    enforced_planning

@@ -6,6 +6,21 @@ set -euo pipefail
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
+# git writes the refs being pushed to stdin once; the secret scan and the branch loop below both read them.
+REFS=$(cat)
+
+# Global secret scan (gitleaks) first: core.hooksPath=hooks means git never reaches the global pre-push.
+# A finding refuses the push; GITLEAKS_PREPUSH=off skips it for one push. Missing script: warn and allow,
+# because this tracked hook also runs on machines without personal-file-infra.
+SECRET_SCAN="${SECRET_SCAN_HOOK:-$HOME/code2/personal-file-infra/git-hooks/secret-scan.sh}"
+if [[ -z "${_GIT_HOOK_CHAIN_ACTIVE:-}" ]]; then
+    if [[ -x "$SECRET_SCAN" ]]; then
+        printf '%s\n' "$REFS" | "$SECRET_SCAN" "$@" || exit 1
+    else
+        echo "pre-push: warning: secret scan $SECRET_SCAN not found; push not scanned for secrets." >&2
+    fi
+fi
+
 find_push_check() {
     if [[ -f "$REPO_ROOT/scripts/meta/check_push_safety.py" ]]; then
         printf '%s\n' "$REPO_ROOT/scripts/meta/check_push_safety.py"
@@ -60,6 +75,6 @@ while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
         --repo-root "$REPO_ROOT" \
         --branch "$BRANCH"
     VALIDATED_BRANCH="$BRANCH"
-done
+done <<<"$REFS"
 
 exit 0

@@ -13,6 +13,13 @@ SEMANTIC_REVIEW_JSON ?= $(REPO)/docs/ops/semantic_truth_surface_review.json
 SEMANTIC_REVIEW_HISTORY ?= $(REPO)/docs/ops/semantic_truth_surface_review_history.json
 RUNTIME_REVISION ?=
 
+# The npx-backed checks (`lockstep check arch`, knip) fetch their pinned tool from the registry.
+# npm's cache is keyed on HOME, not on the user, so a cache another user already populated under
+# the same HOME — root, in the nightly container — leaves root-owned directories this user cannot
+# mkdir into. npm then fails with EACCES/EEXIST, and `arch check` reports that as an invalid
+# diagram. One cache per uid keeps the two users from colliding.
+NPM_CACHE ?= $(HOME)/.cache/enforced-planning/npm-$(shell id -u)
+
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*##' '{printf "%-20s %s\n", $$1, $$2}'
 
@@ -47,13 +54,13 @@ docs-specs:  ## Link the OpenSpec contract into docs/
 
 check: docs-specs fast lint  ## Fast check: lockstep (check project) + lint + scoped tests
 	uv run pytest tests/test_worktree_paths.py -q -p no:cacheprovider
-	uv run lockstep check arch check
+	npm_config_cache="$(NPM_CACHE)" uv run lockstep check arch check
 
 lint:  ## Run ruff linter
 	$(PYTHON) -m ruff check scripts/ tests/ --ignore=F401
 
 dead-code:  ## Run dead code detection
-	$(PYTHON) scripts/check_dead_code.py
+	npm_config_cache="$(NPM_CACHE)" $(PYTHON) scripts/check_dead_code.py
 
 dead-code-audit:  ## Refresh reviewed dead-code audit file
 	$(PYTHON) scripts/audit_dead_code.py --write

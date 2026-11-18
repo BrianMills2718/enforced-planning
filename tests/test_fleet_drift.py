@@ -572,7 +572,11 @@ def test_makefile_exposes_fleet_drift() -> None:
     makefile = (SCRIPTS_DIR.parent / "Makefile").read_text(encoding="utf-8")
     assert "fleet-drift:" in makefile
     assert "scripts/fleet_drift.py" in makefile
-    assert "fleet-drift" in makefile.splitlines()[2]  # declared .PHONY
+    # Find the .PHONY line rather than a fixed line number: the intent is that the target is
+    # declared phony, not that the declaration sits on any particular line.
+    phony = [line for line in makefile.splitlines() if line.startswith(".PHONY:")]
+    assert phony, "no .PHONY declaration found"
+    assert any("fleet-drift" in line for line in phony)
     assert (SCRIPTS_DIR / "fleet_drift.py").is_file()
 
 

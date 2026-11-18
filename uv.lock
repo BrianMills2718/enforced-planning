@@ -8,8 +8,8 @@ resolution-markers = [
 
 [[package]]
 name = "agentic-engineering-system"
-version = "0.1.dev1263+g05ee80c1a"
-source = { git = "https://github.com/BrianMills2718/agentic-engineering-system-canonical?rev=05ee80c1a9cc77f692954b6de09a81ab0d9bdb0a#05ee80c1a9cc77f692954b6de09a81ab0d9bdb0a" }
+version = "0.1.dev1516+gf2c745e8e"
+source = { git = "https://github.com/BrianMills2718/agentic-engineering-system-canonical?rev=f2c745e8e0fc88f11830c13ab2feddaf78a3c391#f2c745e8e0fc88f11830c13ab2feddaf78a3c391" }
 dependencies = [
     { name = "cogapp" },
     { name = "import-linter" },
@@ -160,7 +160,7 @@ provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "agentic-engineering-system", git = "https://github.com/BrianMills2718/agentic-engineering-system-canonical?rev=05ee80c1a9cc77f692954b6de09a81ab0d9bdb0a" },
+    { name = "agentic-engineering-system", git = "https://github.com/BrianMills2718/agentic-engineering-system-canonical?rev=f2c745e8e0fc88f11830c13ab2feddaf78a3c391" },
     { name = "import-linter", specifier = ">=2.15" },
     { name = "pytest", specifier = ">=9.1" },
     { name = "pytest-xdist" },
